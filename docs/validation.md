@@ -67,3 +67,15 @@
 - 새 회귀 테스트는 editable 경로 설정을 읽지 않는 별도 프로세스에서 프로젝트가 import되지 않는 상태를 확인하고, 저장소 외부 디렉터리에서 공개 화면·백테스트·모의거래·설정 저장을 실행합니다.
 - 독립 런타임 환경의 실제 배포 검사와 전체 **84개 테스트**, offline integration, Ruff lint/format을 검증합니다. GitHub CI에도 런타임 전용 의존성 설치와 공개 UI 실행 작업을 추가했습니다.
 - Streamlit Cloud의 실제 재빌드 결과와 공개 화면 복구는 별도 확인이 필요합니다. 로컬 회귀 검사 성공만으로 사용자의 공개 앱 오류가 해결됐다고 단정하지 않습니다.
+
+### 추가 traceback으로 확인한 배포 파일 누락
+
+사용자가 `app.py` 22행의 `from btc_analyzer.data.service ...`에서 멈춘 traceback을 공유했습니다. 수정된 진입점의 행 번호와 일치하므로 새 코드가 반영된 상태입니다.
+
+Git 추적 파일을 확인한 결과 `src/btc_analyzer/data/`의 Python 파일 5개가 모두 빠져 있었습니다. `.gitignore`의 `data/` 패턴은 프로젝트 루트의 실행 데이터뿐 아니라 소스 패키지 안의 같은 이름 디렉터리도 무시했습니다. 개발 머신에는 소스가 남아 있어 이전 검사는 이 누락을 잡지 못했습니다.
+
+- 생성 데이터와 로그는 루트의 `/data/`, `/logs/`만 무시하도록 범위를 제한했습니다.
+- 데이터 수집 패키지의 `__init__.py`, `base_provider.py`, `binance_provider.py`, `upbit_provider.py`, `service.py`를 Git에 포함합니다.
+- 배포 회귀 검사는 Git 인덱스에 등록된 파일만 새 디렉터리에 복사하고, 프로젝트가 설치되지 않은 별도 프로세스에서 공개 화면·백테스트·모의거래·설정 저장을 실행하도록 강화했습니다. 작업 폴더에만 존재하는 누락 코드를 사용할 수 없습니다.
+- 기존 GitHub 커밋 `499871c`의 파일만 복원해 `app.py` 22행에서 `No module named 'btc_analyzer.data'`가 발생함을 확인했습니다. 사용자가 공유한 traceback과 일치합니다.
+- 수정 후 Git 추적 파일만 사용한 공개 앱 검사 및 전체 84개 테스트, offline integration, Ruff lint/format이 통과했습니다. CI 런타임 검사에는 Python 3.12와 3.13을 사용합니다.

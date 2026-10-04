@@ -19,8 +19,17 @@ from btc_analyzer.ui.web_runtime import ResearchBusy, ResearchGate, runtime_path
 
 
 def test_public_checkout_runs_without_project_installation(tmp_path):
-    """Disable editable .pth loading while keeping installed third-party libraries."""
+    """Deploy only Git-tracked files, without the developer's editable install."""
     root = Path(__file__).resolve().parents[1]
+    snapshot = tmp_path / "published-source"
+    exported = subprocess.run(
+        ["git", "checkout-index", "--all", f"--prefix={snapshot}/"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert exported.returncode == 0, exported.stdout + exported.stderr
     program = """
 import json
 import runpy
@@ -38,7 +47,7 @@ runpy.run_path(sys.argv[1], run_name='__main__')
             "-S",
             "-c",
             program,
-            str(root / "scripts/check_deployment.py"),
+            str(snapshot / "scripts/check_deployment.py"),
             json.dumps(libraries),
         ],
         cwd=tmp_path,
