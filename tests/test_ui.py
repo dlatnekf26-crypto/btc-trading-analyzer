@@ -69,3 +69,46 @@ def test_corrupt_database_is_preserved_and_explained(monkeypatch, tmp_path):
     assert not app.exception
     assert any("데이터베이스" in x.value for x in app.error)
     assert path.read_bytes() == original
+
+
+def test_five_horizon_chart_switch_keeps_composite_decision(monkeypatch, tmp_path):
+    monkeypatch.setenv("BTC_DB_PATH", str(tmp_path / "five-horizon.sqlite"))
+    app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
+    assert not app.exception and not app.error
+    original = next(x.value for x in app.markdown if 'aria-label="분석 요약"' in x.value)
+    for timeframe, label in (("4h", "4시간"), ("1d", "일봉"), ("1w", "주봉"), ("1M", "월봉")):
+        next(x for x in app.get("button_group") if x.label == "차트 시간대").set_value(timeframe).run()
+        assert not app.exception and not app.error
+        assert next(x.value for x in app.markdown if 'aria-label="분석 요약"' in x.value) == original
+        assert any(item.value.startswith(label + " · ") for item in app.caption)
+    assert any("월봉 EMA200" in item.value for item in app.caption)
+    from btc_analyzer.storage.database import Database
+
+    signals = Database(tmp_path / "five-horizon.sqlite").history("signals")
+    assert (signals.timeframe == "ALL").sum() == 1
+
+
+def test_optional_monthly_failure_keeps_dashboard_but_vetoes_signal(monkeypatch, tmp_path):
+    from btc_analyzer.data.service import demo_bundle, DataService
+
+    monkeypatch.setenv("BTC_DB_PATH", str(tmp_path / "missing-month.sqlite"))
+    monkeypatch.setenv("BTC_DEFAULT_SOURCE", "live")
+
+    def missing_month(self, exchange, symbol, tf, start, end, **kwargs):
+        bundle = demo_bundle(tf, 800, end=end, include_macro=True)
+        bundle["1M"] = bundle["1M"].iloc[:0]
+        bundle["1M"].attrs["error"] = "Monthly endpoint temporarily unavailable"
+        return bundle
+
+    monkeypatch.setattr(DataService, "bundle", missing_month)
+    monkeypatch.setattr(
+        "btc_analyzer.data.binance_provider.BinanceProvider.quote",
+        lambda self, symbol: {"price": 90000, "change_24h": 0, "observed_at": "2026-10-04T12:00Z"},
+    )
+    app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
+    assert not app.exception and not app.error
+    assert any("관망 · 종합 신호" in item.value for item in app.markdown)
+    assert any("Monthly endpoint" in item.value for item in app.markdown)
+    next(x for x in app.get("button_group") if x.label == "차트 시간대").set_value("1M").run()
+    assert not app.exception and not app.error
+    assert any("월봉 데이터를 받지 못했습니다" in item.value for item in app.info)

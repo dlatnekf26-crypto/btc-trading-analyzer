@@ -7,8 +7,9 @@ import time
 from pathlib import Path
 import numpy as np
 import pandas as pd
-from btc_analyzer.config import TIMEFRAMES, MTF_MAP
-from btc_analyzer.data.base_provider import normalize, utc
+from btc_analyzer.config import TIMEFRAMES, MTF_MAP, COMPOSITE_TIMEFRAMES
+from btc_analyzer.candles import candle_close, history_start, resample_candles
+from btc_analyzer.data.base_provider import DataError, normalize, utc
 from btc_analyzer.data.binance_provider import BinanceProvider
 from btc_analyzer.data.upbit_provider import UpbitProvider
 
@@ -61,19 +62,37 @@ class DataService:
         end: object,
         warmup: int = 240,
         refresh: bool = False,
+        include_macro: bool = False,
     ) -> dict[str, pd.DataFrame]:
         """Each timeframe gets its own warmup; avoid downloading a year of minute bars."""
-        return {
+        result = {
             tf: self.fetch(
                 exchange,
                 symbol,
                 tf,
-                utc(start) - pd.Timedelta(seconds=TIMEFRAMES[tf] * warmup),
+                history_start(utc(start), tf, warmup),
                 end,
                 refresh=refresh,
             )
             for tf in MTF_MAP[timeframe]
         }
+        if include_macro:
+            for tf in COMPOSITE_TIMEFRAMES:
+                if tf in result:
+                    continue
+                # A latest snapshot needs a bounded window, not years of hourly
+                # candles just because a monthly chart is being viewed.
+                since = history_start(utc(end), tf, max(warmup, 260))
+                if exchange == "Binance":
+                    since = max(since, utc("2017-08-01"))
+                try:
+                    result[tf] = self.fetch(exchange, symbol, tf, since, end, refresh=refresh)
+                except DataError as exc:
+                    # An absent macro frame is explicit and disables composite
+                    # recommendations; the successfully fetched chart stays usable.
+                    result[tf] = pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
+                    result[tf].attrs["error"] = str(exc)
+        return result
 
 
 def demo_bundle(
@@ -82,14 +101,20 @@ def demo_bundle(
     seed: int = 42,
     end: object = "2026-01-01T00:00:00Z",
     price: float = 90_000,
+    include_macro: bool = False,
 ) -> dict[str, pd.DataFrame]:
     """Synthetic, NOT live prices. All timeframes resample the SAME seeded price path.
 
     Higher-timeframe warmup requires 250 daily bars. Only the selected lower
     history window is exposed. Time is fixed by default for reproducible tests.
     """
+    requested = tuple(dict.fromkeys((*MTF_MAP[timeframe], *(COMPOSITE_TIMEFRAMES if include_macro else ()))))
     base_seconds = min(TIMEFRAMES[t] for t in MTF_MAP[timeframe])
     total = max(260 * 86400 // base_seconds, (bars + 250) * TIMEFRAMES[timeframe] // base_seconds)
+    if include_macro or timeframe in ("1w", "1M"):
+        # Same path for all macro views; mirror Binance's actual history length.
+        base_seconds = min(base_seconds, 900)
+        total = max(1, int((utc(end) - utc("2017-09-01")).total_seconds() // base_seconds))
     index = pd.date_range(end=utc(end), periods=total + 1, freq=pd.Timedelta(seconds=base_seconds))[:-1]
     rng = np.random.default_rng(seed)
     x = np.arange(total)
@@ -110,17 +135,13 @@ def demo_bundle(
     )
     raw.index.name = "timestamp"
     result = {}
-    start = utc(end) - pd.Timedelta(seconds=TIMEFRAMES[timeframe] * bars)
-    for tf in MTF_MAP[timeframe]:
-        freq = pd.Timedelta(seconds=TIMEFRAMES[tf])
-        df = (
-            raw.resample(freq, origin="epoch")
-            .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
-            .dropna()
-        )
-        df = df.loc[
-            (df.index + freq <= utc(end)) & (df.index >= start - pd.Timedelta(seconds=TIMEFRAMES[tf] * 240))
-        ]
+    start = history_start(utc(end), timeframe, bars)
+    for tf in requested:
+        df = resample_candles(raw, tf)
+        since = history_start(start, tf, 240)
+        if tf not in MTF_MAP[timeframe]:
+            since = history_start(utc(end), tf, 260)
+        df = df.loc[(candle_close(df.index, tf) <= utc(end)) & (df.index >= since)]
         df.attrs.update(
             {
                 "timeframe": tf,

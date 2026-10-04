@@ -2,7 +2,8 @@
 
 import numpy as np
 import pandas as pd
-from btc_analyzer.config import IndicatorConfig, TIMEFRAMES
+from btc_analyzer.config import IndicatorConfig
+from btc_analyzer.candles import candle_close
 
 
 def ema(series: pd.Series, length: int) -> pd.Series:
@@ -112,8 +113,8 @@ def indicators(
     if df.empty:
         raise ValueError("No closed candles to analyze")
     tf = timeframe or df.attrs.get("timeframe", "1h")
-    delta = pd.Timedelta(seconds=TIMEFRAMES[tf])
-    groups = (df.index.to_series().diff() != delta).cumsum()
+    previous_close = candle_close(df.index.to_series().shift(), tf)
+    groups = (df.index.to_series() != previous_close).cumsum()
     out = pd.concat([_segment(group, cfg) for _, group in df.groupby(groups)], axis=0)
     out.attrs = dict(df.attrs)
     return out

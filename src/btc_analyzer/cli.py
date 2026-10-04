@@ -55,7 +55,7 @@ def main() -> None:
             bundle = demo_bundle(
                 args.timeframe, args.bars, price=90_000 if args.exchange == "Binance" else 130_000_000
             )
-            return bundle, bundle[args.timeframe].index[-args.bars]
+            return bundle, bundle[args.timeframe].index[-min(args.bars, len(bundle[args.timeframe]))]
         end = pd.Timestamp.now(tz="UTC") if args.paper_watch else args.end or pd.Timestamp.now(tz="UTC")
         start = args.start or pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=30)
         return DataService(args.db, ttl=45).bundle(args.exchange, symbol, args.timeframe, start, end), start

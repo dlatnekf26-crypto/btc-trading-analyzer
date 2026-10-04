@@ -5,6 +5,7 @@ import math
 import pandas as pd
 from typing import Callable
 from btc_analyzer.config import TIMEFRAMES
+from btc_analyzer.candles import candle_close
 from btc_analyzer.data.base_provider import BaseExchangeProvider, DataError, normalize, retry, utc
 
 
@@ -76,7 +77,6 @@ class BinanceProvider(BaseExchangeProvider):
         cursor, until = int(utc(start).timestamp() * 1000), int(utc(end).timestamp() * 1000)
         if cursor >= until:
             raise ValueError("Start must precede end")
-        step = TIMEFRAMES[timeframe] * 1000
         rows: list = []
         while cursor < until:
             batch = retry(
@@ -91,7 +91,9 @@ class BinanceProvider(BaseExchangeProvider):
             if latest < cursor:
                 raise DataError("Binance pagination did not advance")
             rows.extend(r for r in batch if cursor <= int(r[0]) < until)
-            cursor = latest + step
-            if latest >= until - step:
+            cursor = int(
+                candle_close(pd.Timestamp(latest, unit="ms", tz="UTC"), timeframe).timestamp() * 1000
+            )
+            if cursor >= until:
                 break
         return normalize(rows, timeframe)

@@ -5,7 +5,8 @@ import numpy as np
 import pandas as pd
 from btc_analyzer.analysis.multi_timeframe import prepare
 from btc_analyzer.backtest.engine import BacktestEngine, BacktestResult
-from btc_analyzer.config import AppConfig, TIMEFRAMES
+from btc_analyzer.config import AppConfig
+from btc_analyzer.candles import candle_close
 
 
 def objective(result: BacktestResult) -> float:
@@ -53,11 +54,10 @@ def split_evaluation(
         raise ValueError("Need at least 30 evaluation bars to split")
     boundaries = [0, int(len(index) * fractions[0]), int(len(index) * sum(fractions[:2])), len(index)]
     results = {}
-    step = pd.Timedelta(seconds=TIMEFRAMES[timeframe])
     for j, label in enumerate(("In-Sample", "Validation", "Out-of-Sample")):
         a, b = boundaries[j : j + 2]
         results[label] = BacktestEngine(cfg).run(
-            bundle, timeframe, start=index[a], end=index[b - 1] + step, features=features
+            bundle, timeframe, start=index[a], end=candle_close(index[b - 1], timeframe), features=features
         )
     return results
 
@@ -88,7 +88,6 @@ def walk_forward(
     total = train_bars + validation_bars + test_bars
     if len(index) < total:
         raise ValueError(f"Need {total} evaluation bars for one complete walk-forward fold")
-    step = pd.Timedelta(seconds=TIMEFRAMES[timeframe])
     rows = []
     for offset in range(0, len(index) - total + 1, test_bars):
         train_end = offset + train_bars
@@ -96,27 +95,39 @@ def walk_forward(
         test_end = val_end + test_bars
         training = [
             BacktestEngine(c).run(
-                bundle, timeframe, start=index[offset], end=index[train_end - 1] + step, features=f
+                bundle,
+                timeframe,
+                start=index[offset],
+                end=candle_close(index[train_end - 1], timeframe),
+                features=f,
             )
             for c, f in zip(candidates, prepared)
         ]
         chosen = int(np.argmax([objective(r) for r in training]))
         candidate, features = candidates[chosen], prepared[chosen]
         validation = BacktestEngine(candidate).run(
-            bundle, timeframe, start=index[train_end], end=index[val_end - 1] + step, features=features
+            bundle,
+            timeframe,
+            start=index[train_end],
+            end=candle_close(index[val_end - 1], timeframe),
+            features=features,
         )
         test = BacktestEngine(candidate).run(
-            bundle, timeframe, start=index[val_end], end=index[test_end - 1] + step, features=features
+            bundle,
+            timeframe,
+            start=index[val_end],
+            end=candle_close(index[test_end - 1], timeframe),
+            features=features,
         )
         veto = validation.metrics["number_of_trades"] < 5 or (validation.metrics["expectancy"] or 0) <= 0
         rows.append(
             {
                 "fold": len(rows) + 1,
                 "train_start": str(index[offset]),
-                "train_end": str(index[train_end - 1] + step),
+                "train_end": str(candle_close(index[train_end - 1], timeframe)),
                 "validation_start": str(index[train_end]),
                 "test_start": str(index[val_end]),
-                "test_end": str(index[test_end - 1] + step),
+                "test_end": str(candle_close(index[test_end - 1], timeframe)),
                 "selected_settings": candidate.to_dict(),
                 "train_objective": objective(training[chosen]),
                 "validation_return": validation.metrics["total_return"],

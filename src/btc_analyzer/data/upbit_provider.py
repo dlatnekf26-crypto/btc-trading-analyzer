@@ -38,7 +38,9 @@ class UpbitProvider(BaseExchangeProvider):
         if since >= until:
             raise ValueError("Start must precede end")
         endpoint = "https://api.upbit.com/v1/candles/" + (
-            "days" if timeframe == "1d" else f"minutes/{TIMEFRAMES[timeframe] // 60}"
+            {"1d": "days", "1w": "weeks", "1M": "months"}.get(
+                timeframe, f"minutes/{TIMEFRAMES[timeframe] // 60}"
+            )
         )
         cursor = until
         rows = []

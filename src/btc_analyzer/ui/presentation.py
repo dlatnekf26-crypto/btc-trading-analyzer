@@ -3,6 +3,7 @@
 from html import escape
 
 from btc_analyzer.strategy.signal_engine import Analysis
+from btc_analyzer.strategy.composite import CompositeSignal, FRAME_LABELS, FRAME_WEIGHTS
 
 
 CSS = """
@@ -61,6 +62,13 @@ p, li { line-height: 1.7; }
 .btc-meter { height: 4px; background: #24334b; border-radius: 10px; margin-top: 16px; overflow: hidden; }
 .btc-meter span { height: 100%; display: block; background: linear-gradient(90deg, #3baab2, #6eebc9); }
 .btc-section-label { font-size: 11px; color: #83bdb6; letter-spacing: .16em; margin: 14px 0 4px; }
+.btc-horizons { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 22px; }
+.btc-horizon { background: #101827; border: 1px solid #233047; border-radius: 16px; padding: 15px; }
+.btc-horizon strong { display: block; font-size: 22px; margin: 6px 0; }
+.btc-horizon p { margin: 3px 0; font-size: 12px; color: #a0aec4; }
+.btc-signal { border: 1px solid #355265; border-radius: 20px; background: #112333; padding: 20px 24px; margin: 16px 0; }
+.btc-signal h2 { margin: 0 0 8px; padding: 0; font-size: 27px; }
+.btc-signal p { margin: 0; color: #c3d0e2; }
 @media (max-width: 760px) {
     .block-container { padding: 4.1rem 1rem 2rem; }
     .btc-brand-tag { display: none; }
@@ -68,6 +76,9 @@ p, li { line-height: 1.7; }
     .btc-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
     .btc-card { padding: 15px; }
     .btc-card-value { font-size: 22px; }
+    .btc-horizons { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .btc-horizon:last-child { grid-column: 1 / -1; }
+    .btc-signal { padding: 18px; }
     [data-baseweb="tab"] { padding: 10px 12px; font-size: 13px; }
     [data-testid="stMetricValue"] { font-size: 1.6rem; }
 }
@@ -188,3 +199,40 @@ def summary_cards(analysis: Analysis) -> str:
             f'<div class="btc-card"><div class="btc-card-label">{label}</div><div class="btc-card-value">{value}</div><div class="btc-card-hint">{escape(hint)}</div>{meter}</div>'
         )
     return '<section class="btc-summary" aria-label="분석 요약">' + "".join(rendered) + "</section>"
+
+
+def composite_cards(signal: CompositeSignal) -> str:
+    """Display five-horizon judgment; data coverage is never a success probability."""
+    color = "btc-up" if signal.action == "매수" else "btc-down" if signal.action == "매도" else ""
+    explanation = {
+        "매수": "방향과 진입 조건 충족 · 1시간봉 진입 영역 확인",
+        "매도": "현물 보유분 축소 검토 · 신규 숏 진입 신호 아님",
+        "관망": "방향·거래량·데이터·진입 조건이 갖춰질 때까지 관찰",
+    }[signal.action]
+    cards = [
+        ("5개 시간대 종합 판단", f'<span class="{color}">{signal.action}</span>', explanation),
+        ("종합 상승 우위", f"{signal.score.overall:.1f}<small> / 100</small>", korean(signal.score.label)),
+        ("방향 일치", f"{signal.agreement}<small> / 5개 시간대</small>", "60 이상 상승 · 40 이하 하락"),
+        (
+            "지표 데이터 충족",
+            f"{signal.quality:.0f}<small> %</small>",
+            f"핵심 지표 준비 {signal.ready_frames}/5 · 성공 확률 아님",
+        ),
+    ]
+    html = '<section class="btc-summary" aria-label="분석 요약">'
+    for label, value, hint in cards:
+        html += f'<div class="btc-card"><div class="btc-card-label">{escape(label)}</div><div class="btc-card-value">{value}</div><div class="btc-card-hint">{escape(hint)}</div></div>'
+    html += '</section><section class="btc-horizons" aria-label="다섯 시간대 방향">'
+    for tf, frame in signal.frames.items():
+        label = "상승 우위" if frame.score >= 60 else "하락 우위" if frame.score <= 40 else "중립"
+        color = "btc-up" if frame.score >= 60 else "btc-down" if frame.score <= 40 else ""
+        value = f"{frame.score:.1f}" if frame.ready else "대기"
+        status = (
+            "핵심 지표 대기"
+            if not frame.ready
+            else "일부 장기 지표 부족"
+            if frame.missing
+            else "지표 준비 완료"
+        )
+        html += f'<div class="btc-horizon"><span class="btc-card-label">{FRAME_LABELS[tf]}</span><strong class="{color}">{value}</strong><p>{label if frame.ready else "미반영"} · 비중 {FRAME_WEIGHTS[tf]:.0%}</p><p>{status}</p></div>'
+    return html + "</section>"

@@ -3,6 +3,7 @@
 import numpy as np
 import pandas as pd
 from btc_analyzer.config import AppConfig, TIMEFRAMES, MTF_MAP
+from btc_analyzer.candles import candle_close
 from btc_analyzer.indicators.core import indicators
 from btc_analyzer.analysis.market_structure import market_structure
 from btc_analyzer.analysis.regime import regimes
@@ -30,7 +31,7 @@ def prepare(bundle: dict[str, pd.DataFrame], timeframe: str, cfg: AppConfig | No
     if timeframe not in frames:
         raise ValueError("No closed candles for current timeframe")
     base = frames[timeframe].copy()
-    out = base.assign(available_at=base.index + pd.Timedelta(seconds=TIMEFRAMES[timeframe]))
+    out = base.assign(available_at=candle_close(base.index, timeframe))
     out = out.reset_index()
     for tf, frame in frames.items():
         if tf == timeframe:
@@ -38,7 +39,8 @@ def prepare(bundle: dict[str, pd.DataFrame], timeframe: str, cfg: AppConfig | No
         period = pd.Timedelta(seconds=TIMEFRAMES[tf])
         higher = pd.DataFrame(
             {
-                "available_at": frame.index + period,
+                "available_at": candle_close(frame.index, tf),
+                "_valid_until": candle_close(candle_close(frame.index, tf), tf),
                 f"trend_{tf}": frame.trend_direction.to_numpy(),
                 f"regime_{tf}": frame.regime.to_numpy(),
                 f"close_{tf}": frame.close.to_numpy(),
@@ -49,8 +51,12 @@ def prepare(bundle: dict[str, pd.DataFrame], timeframe: str, cfg: AppConfig | No
             higher.sort_values("available_at"),
             on="available_at",
             direction="backward",
-            tolerance=period,
+            tolerance=pd.Timedelta(days=32) if tf == "1M" else period,
         )
+        expired = out.available_at >= out._valid_until
+        for column in (f"trend_{tf}", f"regime_{tf}", f"close_{tf}"):
+            out.loc[expired, column] = None if column.startswith("regime_") else np.nan
+        out = out.drop(columns="_valid_until")
     # Missing higher frames still count in the denominator. Otherwise absent
     # macro data falsely reports 100% coverage, or the current trend confirms itself.
     higher_tfs = sorted(

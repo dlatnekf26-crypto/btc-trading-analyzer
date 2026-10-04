@@ -140,6 +140,26 @@ def test_next_open_execution_and_no_future_access(features, plan, cfg):
     assert r.equity.equity.iloc[-1] == pytest.approx(cfg.risk.capital + r.trades.pnl.sum())
 
 
+def test_monthly_execution_uses_calendar_close_without_false_gap(features, plan, cfg):
+    df = features.tail(3).copy()
+    df.index = pd.date_range("2024-01-01", periods=3, freq="MS", tz="UTC", name="timestamp")
+    df[["open", "close"]] = 100.0
+    df.high, df.low = 101.0, 99.0
+    df.iloc[1, df.columns.get_loc("high")] = 145
+    base = analyze(features, cfg)
+
+    def signal(history, settings):
+        return replace(base, eligible=len(history) == 1, plan=plan, risk_multiplier=1)
+
+    result = BacktestEngine(cfg).run({}, "1M", start=df.index[0], features=df, signal_fn=signal)
+    assert len(result.trades) == 1
+    trade = result.trades.iloc[0]
+    assert pd.Timestamp(trade.entry_time) == pd.Timestamp("2024-02-01T00:00Z")
+    assert pd.Timestamp(trade.exit_time) == pd.Timestamp("2024-03-01T00:00Z")
+    assert result.equity.index[-1] == pd.Timestamp("2024-04-01T00:00Z")
+    assert all("gap" not in warning.lower() for warning in result.warnings)
+
+
 def test_risk_protection():
     cfg = RiskConfig()
     guard = RiskGuard(cfg)

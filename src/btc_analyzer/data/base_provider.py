@@ -8,6 +8,7 @@ from typing import TypeVar
 import numpy as np
 import pandas as pd
 from btc_analyzer.config import TIMEFRAMES
+from btc_analyzer.candles import candle_close, candle_grid, missing_intervals
 
 log = logging.getLogger(__name__)
 COLUMNS = ["open", "high", "low", "close", "volume"]
@@ -62,20 +63,20 @@ def normalize(
     df["timestamp"] = pd.to_datetime(df["timestamp"], unit=timestamp_unit, utc=True, errors="coerce")
     for name in COLUMNS:
         df[name] = pd.to_numeric(df[name], errors="coerce")
-    duration = pd.Timedelta(seconds=TIMEFRAMES[timeframe])
     current = utc(now) if now is not None else pd.Timestamp.now(tz="UTC")
     valid = df["timestamp"].notna() & np.isfinite(df[COLUMNS]).all(axis=1)
     valid &= (df[["open", "high", "low", "close"]] > 0).all(axis=1) & (df.volume >= 0)
     valid &= df.high >= df[["open", "close", "low"]].max(axis=1)
     valid &= df.low <= df[["open", "close", "high"]].min(axis=1)
-    on_grid = df.timestamp.map(lambda t: False if pd.isna(t) else t.value % duration.value == 0)
+    on_grid = candle_grid(df.timestamp, timeframe)
     invalid_count = int((~(valid & on_grid)).sum())
     df = df.loc[valid & on_grid]
-    unfinished_count = int((df.timestamp + duration > current).sum())
-    df = df.loc[df.timestamp + duration <= current]
+    closed_at = candle_close(df.timestamp, timeframe)
+    unfinished_count = int((closed_at > current).sum())
+    df = df.loc[closed_at <= current]
     duplicates = int(df.timestamp.duplicated().sum())
     df = df.drop_duplicates("timestamp", keep="last").sort_values("timestamp").set_index("timestamp")
-    gaps = df.index.to_series().diff().div(duration).sub(1).clip(lower=0).fillna(0)
+    gaps = missing_intervals(df.index, timeframe)
     df.attrs["quality"] = {
         "raw_rows": raw_count,
         "invalid_rows": invalid_count,

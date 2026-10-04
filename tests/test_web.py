@@ -103,6 +103,9 @@ def test_research_gate_is_bounded_and_releases_after_failure():
 
 
 def test_public_default_live_binance_and_usdt_quote(monkeypatch, tmp_path):
+    import streamlit as st
+
+    st.cache_data.clear()
     monkeypatch.setenv("BTC_WEB_DATA_DIR", str(tmp_path / "web"))
     monkeypatch.delenv("BTC_DEFAULT_SOURCE", raising=False)
     monkeypatch.delenv("BTC_DEFAULT_EXCHANGE", raising=False)
@@ -110,9 +113,18 @@ def test_public_default_live_binance_and_usdt_quote(monkeypatch, tmp_path):
     captured = {}
 
     def bundle(self, exchange, symbol, timeframe, start, end, **kwargs):
-        captured.update(exchange=exchange, symbol=symbol, cache=self.path, start=start, end=end)
+        captured.update(
+            exchange=exchange,
+            symbol=symbol,
+            cache=self.path,
+            start=start,
+            end=end,
+            include_macro=kwargs.get("include_macro"),
+        )
         # Fixture is placed at the requested live boundary; no network calls in tests.
-        return demo_bundle(timeframe, 800, end=end, price=90_000)
+        return demo_bundle(
+            timeframe, 800, end=end, price=90_000, include_macro=kwargs.get("include_macro", False)
+        )
 
     monkeypatch.setattr(DataService, "bundle", bundle)
     monkeypatch.setattr(
@@ -125,6 +137,7 @@ def test_public_default_live_binance_and_usdt_quote(monkeypatch, tmp_path):
     assert len(app.tabs) == 9
     assert captured["exchange"] == "Binance"
     assert captured["symbol"] == "BTC/USDT"
+    assert captured["include_macro"] is True
     assert any(
         "123,456.78" in item.value and "USDT" in item.value and "24시간 변동" in item.value
         for item in app.markdown
@@ -182,7 +195,7 @@ def test_public_live_history_limit_prevents_large_download(monkeypatch, tmp_path
 
     def bundle(self, exchange, symbol, timeframe, start, end, **kwargs):
         calls.append(timeframe)
-        return demo_bundle(timeframe, 800, end=end)
+        return demo_bundle(timeframe, 800, end=end, include_macro=kwargs.get("include_macro", False))
 
     monkeypatch.setattr(DataService, "bundle", bundle)
     app = AppTest.from_file(Path(__file__).resolve().parents[1] / "web_app.py", default_timeout=30).run()
@@ -206,7 +219,7 @@ def test_binance_ticker_failure_is_labeled_as_candle_close(monkeypatch, tmp_path
     monkeypatch.setenv("BTC_DEFAULT_SOURCE", "live")
 
     def bundle(self, exchange, symbol, timeframe, start, end, **kwargs):
-        return demo_bundle(timeframe, 800, end=end)
+        return demo_bundle(timeframe, 800, end=end, include_macro=kwargs.get("include_macro", False))
 
     def unavailable(self, symbol):
         raise DataError("Ticker temporarily unavailable")

@@ -5,7 +5,8 @@ import hashlib
 import json
 import pandas as pd
 from btc_analyzer.backtest.execution import Position, open_position, advance_position, completed_trade
-from btc_analyzer.config import AppConfig, TIMEFRAMES
+from btc_analyzer.config import AppConfig
+from btc_analyzer.candles import candle_close
 from btc_analyzer.data.base_provider import utc
 from btc_analyzer.risk.risk_manager import RiskGuard
 from btc_analyzer.storage.database import Database, dumps
@@ -77,9 +78,8 @@ class PaperTrader:
 
     def tick(self, features: pd.DataFrame, now: object | None = None, allow_new_entries: bool = True) -> dict:
         """Only process candles that have actually closed by now; transaction is idempotent."""
-        period = pd.Timedelta(seconds=TIMEFRAMES[self.timeframe])
         now = utc(now) if now is not None else pd.Timestamp.now(tz="UTC")
-        features = features.loc[features.index + period <= now]
+        features = features.loc[candle_close(features.index, self.timeframe) <= now]
         if features.empty:
             raise ValueError("Paper trading needs closed candles")
         with self.db.connect(write=True) as conn:
@@ -98,7 +98,10 @@ class PaperTrader:
                 indices = [i for i, t in enumerate(features.index) if t > utc(state["last_bar"])]
             for i in indices:
                 t, row = features.index[i], features.iloc[i]
-                gap = state["last_bar"] is not None and t - utc(state["last_bar"]) != period
+                closed_at = candle_close(t, self.timeframe)
+                gap = state["last_bar"] is not None and t != candle_close(
+                    utc(state["last_bar"]), self.timeframe
+                )
                 equity = (
                     position.equity(state["balance"], float(row.open), self.cfg.risk.fee)
                     if position
@@ -124,7 +127,7 @@ class PaperTrader:
                 state["pending"] = None
                 if position is not None:
                     closed = advance_position(
-                        position, row, t if gap else t + period, self.cfg, force="data_gap" if gap else None
+                        position, row, t if gap else closed_at, self.cfg, force="data_gap" if gap else None
                     )
                     self._save_trade(conn, position, closed)
                     if closed:
@@ -136,7 +139,7 @@ class PaperTrader:
                     if position
                     else state["balance"]
                 )
-                multiplier, state["protection"] = guard.update(t + period, equity)
+                multiplier, state["protection"] = guard.update(closed_at, equity)
                 history = features.iloc[
                     max(
                         0, i - max(self.cfg.strategy.warmup_bars, self.cfg.indicators.structure_window) - 10
@@ -155,7 +158,7 @@ class PaperTrader:
                 ):
                     state["pending"] = {
                         "plan": a.plan.to_dict(),
-                        "signal_time": str(t + period),
+                        "signal_time": str(closed_at),
                         "risk_multiplier": a.risk_multiplier,
                         "regime": a.regime,
                         "volatility": a.volatility,

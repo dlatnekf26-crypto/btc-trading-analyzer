@@ -42,6 +42,21 @@ def test_paper_baseline_restart_and_unclosed_bar(tmp_path, features):
     assert len(db.history("signals")) == 2
 
 
+def test_monthly_paper_ignores_february_until_actual_march_close(tmp_path, features):
+    frame = features.tail(3).copy()
+    frame.index = pd.date_range("2024-01-01", periods=3, freq="MS", tz="UTC", name="timestamp")
+    trader = PaperTrader(
+        Database(tmp_path / "monthly-paper.sqlite"), AppConfig(), "Binance", "BTC/USDT", "1M", "demo"
+    )
+    first = trader.tick(frame, now="2024-02-01T00:00Z")
+    assert first["last_bar"] == str(frame.index[0])
+    still_january = trader.tick(frame, now="2024-02-29T23:59Z")
+    assert still_january["ordinal"] == 1
+    february = trader.tick(frame, now="2024-03-01T00:00Z")
+    assert february["ordinal"] == 2
+    assert february["last_bar"] == str(frame.index[1])
+
+
 def test_paper_fills_pending_next_open(tmp_path, features):
     db = Database(tmp_path / "paper.sqlite")
     cfg = AppConfig()

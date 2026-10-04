@@ -45,6 +45,25 @@ def test_binance_pagination():
     assert calls == [ms, ms + 7200000, ms + 14400000]
 
 
+def test_binance_monthly_pagination_advances_to_actual_next_month():
+    calls = []
+
+    class Client:
+        def fetch_ohlcv(self, symbol, tf, since, limit):
+            assert tf == "1M"
+            start = pd.Timestamp(since, unit="ms", tz="UTC")
+            calls.append(start)
+            return [
+                [int(t.timestamp() * 1000), 10, 12, 9, 11, 100]
+                for t in pd.date_range(start, periods=2, freq="MS")
+            ]
+
+    result = BinanceProvider(Client()).fetch("BTC/USDT", "1M", "2024-01-01", "2024-04-01")
+    assert len(result) == 3
+    assert calls == [pd.Timestamp("2024-01-01T00:00Z"), pd.Timestamp("2024-03-01T00:00Z")]
+    assert result.attrs["quality"]["missing_candles"] == 0
+
+
 def test_upbit_backwards_pagination():
     records = [
         {

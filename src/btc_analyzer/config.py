@@ -5,13 +5,18 @@ import json
 import math
 from pathlib import Path
 
-TIMEFRAMES = {"5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400}
+# Month seconds are a nominal length for ordering/weights ONLY. Candle closure,
+# pagination and gaps use calendar-aware helpers in candles.py.
+TIMEFRAMES = {"5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400, "1w": 604800, "1M": 2592000}
+COMPOSITE_TIMEFRAMES = ("1h", "4h", "1d", "1w", "1M")
 MTF_MAP = {
     "5m": ("5m", "15m", "1h", "1d"),
     "15m": ("5m", "15m", "1h", "1d"),
     "1h": ("15m", "1h", "4h", "1d"),
     "4h": ("1h", "4h", "1d"),
     "1d": ("4h", "1d"),
+    "1w": ("1d", "1w", "1M"),
+    "1M": ("1w", "1M"),
 }
 
 
