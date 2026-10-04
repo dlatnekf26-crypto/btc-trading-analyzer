@@ -1,6 +1,7 @@
 """Responsive dashboard presentation. Escape market text before rendering HTML."""
 
 from html import escape
+import math
 
 from btc_analyzer.strategy.signal_engine import Analysis
 from btc_analyzer.strategy.composite import CompositeSignal, FRAME_LABELS, FRAME_WEIGHTS
@@ -8,77 +9,93 @@ from btc_analyzer.strategy.composite import CompositeSignal, FRAME_LABELS, FRAME
 
 CSS = """
 <style>
-:root { --btc-muted: #a0aec4; --btc-line: #233047; --btc-mint: #4adeb8; }
-.stApp { background: radial-gradient(ellipse at 78% 0%, #142438 0%, transparent 42%), #080c14; }
+:root { --btc-muted: #66758b; --btc-line: #e7ecf3; --btc-blue: #3182f6; }
+.stApp { background: #f5f7fb; color: #191f28; }
 html, body, [class*="css"], .stApp {
     font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Pretendard', 'Segoe UI', sans-serif;
 }
-[data-testid="stHeader"] { background: rgba(8, 12, 20, .86); }
-.block-container { max-width: 1480px; padding: 4.5rem 2.2rem 3rem; }
-[data-testid="stSidebar"] { background: #0d1421; border-right: 1px solid #233047; }
+[data-testid="stHeader"] { background: rgba(245, 247, 251, .94); }
+.block-container { max-width: 1440px; padding: 4.5rem 2rem 3rem; }
+[data-testid="stSidebar"] { background: #fff; border-right: 1px solid #e7ecf3; }
 [data-testid="stSidebar"] .block-container { padding: 1rem; }
-h1, h2, h3 { letter-spacing: -.04em; }
+h1, h2, h3 { letter-spacing: -.045em; color: #191f28; }
 p, li { line-height: 1.7; }
-[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p { color: #a0aec4; }
+[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p { color: #66758b; }
 [data-testid="stMetric"] {
-    background: #101a2b; padding: 16px; border: 1px solid #233047; border-radius: 16px;
+    background: #fff; padding: 16px; border: 1px solid #e7ecf3; border-radius: 18px;
 }
 [data-testid="stMetricValue"] { font-variant-numeric: tabular-nums; font-size: 1.8rem; }
-[data-testid="stMetricLabel"] { color: #a0aec4; }
+[data-testid="stMetricLabel"] { color: #66758b; }
 [data-testid="stButton"] button, [data-testid="stDownloadButton"] button {
     border-radius: 12px; min-height: 44px; font-weight: 600;
 }
-[data-baseweb="tab-list"] { gap: 5px; border-bottom: 1px solid #233047; padding-bottom: 8px; }
-[data-baseweb="tab"] { padding: 12px 16px; border-radius: 10px; font-weight: 600; }
-[data-baseweb="tab"][aria-selected="true"] { background: #12312e; color: #80f0d5; }
-.btc-brand { display: flex; align-items: center; gap: 13px; margin-bottom: 22px; }
+[data-testid="stButtonGroup"] button { min-height: 44px; }
+[data-baseweb="tab-list"] { gap: 6px; border-bottom: 1px solid #e7ecf3; padding-bottom: 8px; }
+[data-baseweb="tab"] { padding: 10px 14px; border-radius: 12px; font-weight: 600; }
+[data-baseweb="tab"][aria-selected="true"] { background: #eaf2ff; color: #216bdd; }
+[data-testid="stPlotlyChart"] { border-radius: 20px; overflow: hidden; background: #fff; border: 1px solid #e7ecf3; }
+.btc-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
 .btc-logo {
-    display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px;
-    background: #f4b841; color: #101725; font-size: 29px; font-weight: 800;
+    display: grid; place-items: center; width: 42px; height: 42px; border-radius: 15px;
+    background: #3182f6; color: #fff; font-size: 27px; font-weight: 800;
 }
-.btc-brand h1 { font-size: 19px; font-weight: 800; letter-spacing: .035em; margin: 0; padding: 0; color: #eff5fb; }
-.btc-brand p { color: #a0aec4; font-size: 12px; margin: 2px 0 0; }
-.btc-brand-tag { margin-left: auto; color: #a0aec4; font-size: 11px; letter-spacing: .12em; }
+.btc-brand h1 { font-size: 18px; font-weight: 800; letter-spacing: -.02em; margin: 0; padding: 0; color: #191f28; }
+.btc-brand p { color: #66758b; font-size: 12px; margin: 2px 0 0; }
+.btc-brand-tag { margin-left: auto; color: #66758b; font-size: 12px; }
 .btc-hero {
-    padding: 28px 30px; border: 1px solid #29415b; border-radius: 24px; margin-bottom: 16px;
-    background: linear-gradient(120deg, #15253a, #0e1827 65%); position: relative; overflow: hidden;
+    padding: 23px 26px; border: 1px solid #e7ecf3; border-radius: 24px; margin-bottom: 14px;
+    background: #fff; box-shadow: 0 5px 24px #163b6410; position: relative; overflow: hidden;
 }
 .btc-hero-top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .btc-market { font-size: 18px; font-weight: 700; }
-.btc-badge { border: 1px solid #385267; border-radius: 999px; padding: 4px 10px; font-size: 12px; color: #c3d0e2; }
-.btc-badge-live { color: #8bf1d7; background: #15332f; border-color: #285b4f; }
-.btc-badge-demo { color: #ffd98b; background: #382b15; border-color: #6c542a; }
-.btc-price-label { margin-top: 24px; color: #a0aec4; font-size: 12px; }
-.btc-price { font-size: clamp(34px, 5vw, 57px); font-weight: 750; line-height: 1.15; letter-spacing: -.05em; margin-top: 4px; font-variant-numeric: tabular-nums; }
-.btc-price small { font-size: 16px; letter-spacing: 0; color: #a0aec4; font-weight: 500; margin-left: 10px; }
-.btc-price-meta { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 14px; color: #a0aec4; font-size: 13px; }
-.btc-up { color: #76e6c5; } .btc-down { color: #ff98ac; }
-.btc-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 22px; }
-.btc-card { padding: 19px 20px; border-radius: 18px; border: 1px solid #233047; background: #101827; }
-.btc-card-label { font-size: 12px; color: #a0aec4; margin-bottom: 10px; }
-.btc-card-value { font-size: 26px; font-weight: 700; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
-.btc-card-value small { font-size: 13px; color: #a0aec4; font-weight: 400; letter-spacing: 0; }
-.btc-card-hint { font-size: 13px; color: #b7c5d8; margin-top: 5px; }
-.btc-meter { height: 4px; background: #24334b; border-radius: 10px; margin-top: 16px; overflow: hidden; }
-.btc-meter span { height: 100%; display: block; background: linear-gradient(90deg, #3baab2, #6eebc9); }
-.btc-section-label { font-size: 11px; color: #83bdb6; letter-spacing: .16em; margin: 14px 0 4px; }
-.btc-horizons { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 22px; }
-.btc-horizon { background: #101827; border: 1px solid #233047; border-radius: 16px; padding: 15px; }
-.btc-horizon strong { display: block; font-size: 22px; margin: 6px 0; }
-.btc-horizon p { margin: 3px 0; font-size: 12px; color: #a0aec4; }
-.btc-signal { border: 1px solid #355265; border-radius: 20px; background: #112333; padding: 20px 24px; margin: 16px 0; }
-.btc-signal h2 { margin: 0 0 8px; padding: 0; font-size: 27px; }
-.btc-signal p { margin: 0; color: #c3d0e2; }
+.btc-badge { border: 1px solid #e4eaf3; border-radius: 999px; padding: 4px 9px; font-size: 11px; color: #53647b; background: #f8fafc; }
+.btc-badge-live { color: #087855; background: #e9f8f0; border-color: #d0efe1; }
+.btc-badge-demo { color: #8a5c11; background: #fff5df; border-color: #f1dfb5; }
+.btc-price-label { margin-top: 18px; color: #66758b; font-size: 12px; }
+.btc-price { font-size: clamp(34px, 5vw, 52px); font-weight: 780; line-height: 1.15; letter-spacing: -.055em; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.btc-price small { font-size: 14px; letter-spacing: 0; color: #66758b; font-weight: 500; margin-left: 10px; }
+.btc-price-meta { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 12px; color: #66758b; font-size: 12px; }
+.btc-up { color: #09845c; } .btc-down { color: #d63851; }
+.btc-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0 0 14px; }
+.btc-card { padding: 15px 18px; border-radius: 18px; border: 1px solid #e7ecf3; background: #fff; }
+.btc-card-label { font-size: 12px; color: #66758b; margin-bottom: 6px; }
+.btc-card-value { font-size: 24px; font-weight: 750; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.btc-card-value small { font-size: 12px; color: #66758b; font-weight: 400; letter-spacing: 0; }
+.btc-card-hint { font-size: 11px; color: #66758b; margin-top: 4px; }
+.btc-meter { height: 4px; background: #e8eff9; border-radius: 10px; margin-top: 12px; overflow: hidden; }
+.btc-meter span { height: 100%; display: block; background: #3182f6; }
+.btc-section-label { font-size: 12px; font-weight: 650; color: #3182f6; margin: 12px 0 5px; }
+.btc-horizons { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; margin-bottom: 16px; background: #fff; border: 1px solid #e7ecf3; border-radius: 18px; overflow: hidden; }
+.btc-horizon { padding: 13px 15px; border-right: 1px solid #edf1f6; text-align: center; }
+.btc-horizon:last-child { border-right: 0; }
+.btc-horizon strong { display: block; font-size: 19px; margin: 4px 0 2px; }
+.btc-horizon p { margin: 2px 0; font-size: 11px; color: #66758b; }
+.btc-signal { border: 1px solid #d9e8ff; border-radius: 22px; background: #eaf3ff; padding: 20px 24px; margin: 0 0 14px; }
+.btc-signal h2 { margin: 6px 0 8px; padding: 0; font-size: clamp(23px, 3vw, 29px); }
+.btc-signal p { margin: 0; color: #425c7e; font-size: 14px; line-height: 1.65; }
+.btc-signal-label { color: #216bdd; font-size: 11px; font-weight: 750; }
+.btc-signal-sell { background: #fff1f3; border-color: #f4dbe1; }
+.btc-signal-sell .btc-signal-label { color: #bd3150; }
+.btc-ichimoku { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 14px 0; }
+.btc-ichimoku article { border: 1px solid #e7ecf3; border-radius: 16px; background: #fff; padding: 15px 17px; }
+.btc-ichimoku strong { display: block; font-size: 18px; margin: 5px 0; }
+.btc-ichimoku p { color: #66758b; font-size: 12px; margin: 0; }
 @media (max-width: 760px) {
     .block-container { padding: 4.1rem 1rem 2rem; }
     .btc-brand-tag { display: none; }
-    .btc-hero { padding: 22px 20px; border-radius: 20px; }
+    .btc-hero { padding: 18px 20px; border-radius: 20px; }
     .btc-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
-    .btc-card { padding: 15px; }
+    .btc-card { padding: 12px 14px; }
     .btc-card-value { font-size: 22px; }
-    .btc-horizons { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .btc-horizon:last-child { grid-column: 1 / -1; }
-    .btc-signal { padding: 18px; }
+    .btc-card-hint { font-size: 11px; }
+    .btc-horizon { padding: 10px 2px; }
+    .btc-horizon strong { font-size: 17px; }
+    .btc-horizon p { font-size: 10px; }
+    .btc-horizon .btc-card-label { font-size: 11px; }
+    .btc-signal { padding: 16px 18px; }
+    .btc-signal p { font-size: 13px; }
+    .btc-ichimoku { grid-template-columns: 1fr; gap: 8px; }
+    .btc-ichimoku article { padding: 12px 15px; }
     [data-baseweb="tab"] { padding: 10px 12px; font-size: 13px; }
     [data-testid="stMetricValue"] { font-size: 1.6rem; }
 }
@@ -88,8 +105,8 @@ p, li { line-height: 1.7; }
 BRAND = """
 <div class="btc-brand">
   <div class="btc-logo" aria-hidden="true">₿</div>
-  <div><h1>BTC SIGNAL LAB</h1><p>가격부터 근거까지, 한눈에 보는 비트코인 분석</p></div>
-  <span class="btc-brand-tag">SPOT MARKET / RESEARCH</span>
+  <div><h1>BTC SIGNAL LAB</h1><p>지금의 흐름, 근거까지 쉽게</p></div>
+  <span class="btc-brand-tag">가격 · 흐름 · 근거</span>
 </div>
 """
 
@@ -124,6 +141,17 @@ LABELS = {
     "volume": "거래량",
     "volatility": "변동성",
     "structure": "시장 구조",
+    "ichimoku_tenkan": "일목 · 전환선",
+    "ichimoku_kijun": "일목 · 기준선",
+    "ichimoku_span_a": "일목 · 선행스팬 A 계산값",
+    "ichimoku_span_b": "일목 · 선행스팬 B 계산값",
+    "ichimoku_cloud_a": "일목 · 현재 구름 A",
+    "ichimoku_cloud_b": "일목 · 현재 구름 B",
+    "ichimoku_chikou_reference": "일목 · 후행스팬 비교 종가",
+    "ichimoku_cloud_position": "일목 · 구름 위치 (-1/0/1)",
+    "ichimoku_tk_direction": "일목 · 전환선/기준선 방향",
+    "ichimoku_chikou_direction": "일목 · 후행스팬 확인 방향",
+    "ichimoku_bias": "일목 · 방향 합의 (-1~1)",
 }
 
 
@@ -203,20 +231,18 @@ def summary_cards(analysis: Analysis) -> str:
 
 def composite_cards(signal: CompositeSignal) -> str:
     """Display five-horizon judgment; data coverage is never a success probability."""
-    color = "btc-up" if signal.action == "매수" else "btc-down" if signal.action == "매도" else ""
-    explanation = {
-        "매수": "방향과 진입 조건 충족 · 1시간봉 진입 영역 확인",
-        "매도": "현물 보유분 축소 검토 · 신규 숏 진입 신호 아님",
-        "관망": "방향·거래량·데이터·진입 조건이 갖춰질 때까지 관찰",
-    }[signal.action]
     cards = [
-        ("5개 시간대 종합 판단", f'<span class="{color}">{signal.action}</span>', explanation),
-        ("종합 상승 우위", f"{signal.score.overall:.1f}<small> / 100</small>", korean(signal.score.label)),
-        ("방향 일치", f"{signal.agreement}<small> / 5개 시간대</small>", "60 이상 상승 · 40 이하 하락"),
+        ("상승 방향 점수", f"{signal.score.overall:.1f}<small> / 100</small>", korean(signal.score.label)),
+        (
+            "같은 상승 방향" if signal.score.overall >= 50 else "같은 하락 방향",
+            f"{signal.agreement}<small>개 시간대</small>",
+            "상승 60 이상 · 하락 40 이하",
+        ),
+        ("확인한 시간대", f"{signal.ready_frames}<small> / 5</small>", "최신 확정 봉 · 핵심 지표"),
         (
             "지표 데이터 충족",
             f"{signal.quality:.0f}<small> %</small>",
-            f"핵심 지표 준비 {signal.ready_frames}/5 · 성공 확률 아님",
+            "데이터 범위 · 확률 아님",
         ),
     ]
     html = '<section class="btc-summary" aria-label="분석 요약">'
@@ -224,15 +250,80 @@ def composite_cards(signal: CompositeSignal) -> str:
         html += f'<div class="btc-card"><div class="btc-card-label">{escape(label)}</div><div class="btc-card-value">{value}</div><div class="btc-card-hint">{escape(hint)}</div></div>'
     html += '</section><section class="btc-horizons" aria-label="다섯 시간대 방향">'
     for tf, frame in signal.frames.items():
-        label = "상승 우위" if frame.score >= 60 else "하락 우위" if frame.score <= 40 else "중립"
+        label = "상승" if frame.score >= 60 else "하락" if frame.score <= 40 else "중립"
         color = "btc-up" if frame.score >= 60 else "btc-down" if frame.score <= 40 else ""
         value = f"{frame.score:.1f}" if frame.ready else "대기"
-        status = (
-            "핵심 지표 대기"
-            if not frame.ready
-            else "일부 장기 지표 부족"
-            if frame.missing
-            else "지표 준비 완료"
-        )
-        html += f'<div class="btc-horizon"><span class="btc-card-label">{FRAME_LABELS[tf]}</span><strong class="{color}">{value}</strong><p>{label if frame.ready else "미반영"} · 비중 {FRAME_WEIGHTS[tf]:.0%}</p><p>{status}</p></div>'
+        status = "데이터 대기" if not frame.ready else "부분 지표" if frame.missing else "확인 완료"
+        html += f'<div class="btc-horizon" title="반영 비중 {FRAME_WEIGHTS[tf]:.0%}"><span class="btc-card-label">{FRAME_LABELS[tf]}</span><strong class="{color}">{value}</strong><p>{label if frame.ready else "미반영"}</p><p>{status}</p></div>'
     return html + "</section>"
+
+
+def decision_panel(signal: CompositeSignal) -> str:
+    """A plain-language conclusion before technical detail, grounded in gates."""
+    headings = {
+        "매수": "매수 조건이 모였어요",
+        "매도": "하락 흐름을 경계할 때예요",
+        "관망": "지금은 기다릴 때예요",
+    }
+    if signal.action == "매수":
+        reason = "단기·일봉의 상승 방향과 1시간봉 진입 조건을 확인했어요. 아래 진입 영역과 손절 가격을 함께 살펴보세요."
+    elif signal.action == "매도":
+        reason = "단기·일봉의 하락 방향이 일치해요. 현물을 보유 중이라면 보유분 축소를 검토하는 신호예요."
+    elif signal.ready_frames < 5:
+        reason = f"5개 중 {signal.ready_frames}개 시간대만 준비됐어요. 부족한 데이터를 확인할 때까지 판단을 보류해요."
+    elif any("극단적 변동성" in item for item in signal.reasons):
+        reason = "가격 변동이 너무 커요. 방향보다 변동 위험을 먼저 확인할 때예요."
+    elif any("0.8배" in item for item in signal.reasons):
+        reason = "단기 거래량이 충분하지 않아요. 가격 방향을 뒷받침할 거래량을 기다리고 있어요."
+    elif any("RR 조건이 부족" in item for item in signal.reasons):
+        reason = "상승 방향은 모였지만 진입 품질이나 손익비가 부족해요. 추격하기보다 진입 조건을 기다려요."
+    else:
+        bullish = sum(frame.ready and frame.score >= 60 for frame in signal.frames.values())
+        bearish = sum(frame.ready and frame.score <= 40 for frame in signal.frames.values())
+        reason = (
+            f"상승 우위 {bullish}개와 하락 우위 {bearish}개 시간대가 섞여 있어요. 방향이 모일 때까지 관찰해요."
+            if bullish and bearish
+            else "뚜렷한 방향 합의나 종합 점수 기준이 부족해요. 조건이 모일 때까지 관찰해요."
+        )
+    kind = {"매수": "buy", "매도": "sell", "관망": "hold"}[signal.action]
+    return f'<section class="btc-signal btc-signal-{kind}" aria-label="종합 신호 근거"><span class="btc-signal-label">{signal.action} · 종합 신호</span><h2>{headings[signal.action]}</h2><p>{escape(reason)}</p></section>'
+
+
+def ichimoku_cards(values: dict, displacement: int = 26) -> str:
+    """Translate current, causal Ichimoku evidence into three understandable checks."""
+
+    def label(key: str, up: str, down: str, middle: str) -> str:
+        value = values.get(key)
+        return (
+            "이력 부족"
+            if value is None or not math.isfinite(float(value))
+            else up
+            if value > 0
+            else down
+            if value < 0
+            else middle
+        )
+
+    items = [
+        (
+            "가격과 구름",
+            label("ichimoku_cloud_position", "구름 위", "구름 아래", "구름 안"),
+            "구름 위는 상승, 아래는 하락 방향의 근거예요.",
+        ),
+        (
+            "전환선과 기준선",
+            label("ichimoku_tk_direction", "전환선 우위", "기준선 우위", "두 선이 같음"),
+            "빠른 흐름과 중기 흐름이 같은 방향인지 봐요.",
+        ),
+        (
+            "후행스팬 확인",
+            label(
+                "ichimoku_chikou_direction", "과거 종가보다 높음", "과거 종가보다 낮음", "과거 종가와 같음"
+            ),
+            f"현재 종가를 {displacement}봉 전 종가와 비교해요.",
+        ),
+    ]
+    result = '<section class="btc-ichimoku" aria-label="일목균형표 해석">'
+    for title, value, hint in items:
+        result += f'<article><span class="btc-card-label">{escape(title)}</span><strong>{escape(value)}</strong><p>{escape(hint)}</p></article>'
+    return result + "</section>"

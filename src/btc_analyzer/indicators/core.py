@@ -74,6 +74,59 @@ def bollinger(close: pd.Series, length: int = 20, std: float = 2) -> pd.DataFram
     )
 
 
+def ichimoku(
+    df: pd.DataFrame, conversion: int = 9, base: int = 26, span_b: int = 52, displacement: int = 26
+) -> pd.DataFrame:
+    """Causal Ichimoku features. Never shift future closes into past signal rows.
+
+    Raw leading spans are today's calculations, plotted forward by the chart.
+    Current cloud values are those calculated displacement bars AGO. Chikou is
+    drawn backward only by the chart; signal evidence compares current close
+    with an already observed historical close.
+    """
+    if min(conversion, base, span_b, displacement) < 1 or not conversion < base <= span_b:
+        raise ValueError("Invalid Ichimoku periods")
+
+    def midpoint(length: int) -> pd.Series:
+        return (df.high.rolling(length).max() + df.low.rolling(length).min()) / 2
+
+    tenkan, kijun = midpoint(conversion), midpoint(base)
+    raw_a, raw_b = (tenkan + kijun) / 2, midpoint(span_b)
+    cloud_a, cloud_b = raw_a.shift(displacement), raw_b.shift(displacement)
+    known_cloud = cloud_a.notna() & cloud_b.notna()
+    upper = pd.concat([cloud_a, cloud_b], axis=1).max(axis=1)
+    lower = pd.concat([cloud_a, cloud_b], axis=1).min(axis=1)
+    position = pd.Series(
+        np.select([df.close > upper, df.close < lower], [1.0, -1.0], default=0.0), index=df.index
+    ).where(known_cloud)
+    tk_direction = np.sign(tenkan - kijun)
+    projected_direction = np.sign(raw_a - raw_b)
+    reference = df.close.shift(displacement)
+    lag_direction = np.sign(df.close - reference)
+    bias = (
+        0.4 * position.fillna(0)
+        + 0.3 * tk_direction.fillna(0)
+        + 0.2 * projected_direction.fillna(0)
+        + 0.1 * lag_direction.fillna(0)
+    )
+    return pd.DataFrame(
+        {
+            "ichimoku_tenkan": tenkan,
+            "ichimoku_kijun": kijun,
+            "ichimoku_span_a": raw_a,
+            "ichimoku_span_b": raw_b,
+            "ichimoku_cloud_a": cloud_a,
+            "ichimoku_cloud_b": cloud_b,
+            "ichimoku_chikou_reference": reference,
+            "ichimoku_cloud_position": position,
+            "ichimoku_tk_direction": tk_direction,
+            "ichimoku_projected_direction": projected_direction,
+            "ichimoku_chikou_direction": lag_direction,
+            "ichimoku_bias": bias,
+        }
+    )
+
+
 def _segment(df: pd.DataFrame, cfg: IndicatorConfig) -> pd.DataFrame:
     result = df.copy()
     for period in cfg.ema_lengths:
@@ -85,6 +138,11 @@ def _segment(df: pd.DataFrame, cfg: IndicatorConfig) -> pd.DataFrame:
     result["atr"] = atr(df, cfg.atr_length)
     result["atr_pct"] = result.atr / result.close * 100
     result = result.join(bollinger(df.close, cfg.bb_length, cfg.bb_std))
+    result = result.join(
+        ichimoku(
+            df, cfg.ichimoku_conversion, cfg.ichimoku_base, cfg.ichimoku_span_b, cfg.ichimoku_displacement
+        )
+    )
     result["volume_sma"] = df.volume.rolling(cfg.volume_length).mean()
     result["volume_ratio"] = df.volume / result.volume_sma.replace(0, np.nan)
     result["price_change"] = df.close.pct_change(fill_method=None)
@@ -117,4 +175,5 @@ def indicators(
     groups = (df.index.to_series() != previous_close).cumsum()
     out = pd.concat([_segment(group, cfg) for _, group in df.groupby(groups)], axis=0)
     out.attrs = dict(df.attrs)
+    out.attrs["ichimoku_displacement"] = cfg.ichimoku_displacement
     return out

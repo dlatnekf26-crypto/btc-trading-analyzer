@@ -96,11 +96,28 @@ def _snapshot(raw: pd.DataFrame | None, tf: str, as_of: pd.Timestamp, cfg: AppCo
         "volume_sma",
         "volume_ratio",
         "ema_slope",
+        "ichimoku_tenkan",
+        "ichimoku_kijun",
+        "ichimoku_span_a",
+        "ichimoku_span_b",
+        "ichimoku_cloud_a",
+        "ichimoku_cloud_b",
+        "ichimoku_chikou_reference",
     ]
     values = {key: _number(row, key) for key in keys}
     missing = [key for key, value in values.items() if value is None]
     coverage = 1 - len(missing) / len(keys)
-    core = ("rsi", "macd_hist", "macd_hist_slope", "atr", "bb_middle", "volume_ratio", "ema_slope")
+    core = (
+        "rsi",
+        "macd_hist",
+        "macd_hist_slope",
+        "atr",
+        "bb_middle",
+        "volume_ratio",
+        "ema_slope",
+        "ichimoku_cloud_a",
+        "ichimoku_cloud_b",
+    )
     ready = not stale and all(values[key] is not None for key in core) and float(row.atr) > 0
     notes = []
     if stale:
@@ -122,7 +139,8 @@ def _snapshot(raw: pd.DataFrame | None, tf: str, as_of: pd.Timestamp, cfg: AppCo
             first, second = values[f"{prefix}_{a}"], values[f"{prefix}_{b}"]
             pairs.append(0 if first is None or second is None else np.sign(first - second))
     slope = np.tanh((values["ema_slope"] or 0) / 0.25)
-    trend_evidence = 0.4 * np.mean(locations) + 0.4 * np.mean(pairs) + 0.2 * slope
+    trend_evidence = 0.8 * (0.4 * np.mean(locations) + 0.4 * np.mean(pairs) + 0.2 * slope)
+    trend_evidence += 0.2 * (_number(row, "ichimoku_bias") or 0)
     trend = 50 + 50 * trend_evidence
     atr_value = max(values["atr"] or 0, 1e-9)
     momentum = 50 + 50 * (
@@ -171,6 +189,10 @@ def _snapshot(raw: pd.DataFrame | None, tf: str, as_of: pd.Timestamp, cfg: AppCo
         hl=float(bool(row.hl)),
         lh=float(bool(row.lh)),
         ll=float(bool(row.ll)),
+        ichimoku_cloud_position=_number(row, "ichimoku_cloud_position"),
+        ichimoku_tk_direction=_number(row, "ichimoku_tk_direction"),
+        ichimoku_chikou_direction=_number(row, "ichimoku_chikou_direction"),
+        ichimoku_bias=_number(row, "ichimoku_bias"),
     )
     return FrameSnapshot(
         tf,

@@ -37,6 +37,10 @@ class IndicatorConfig:
     pivot_left: int = 3
     pivot_right: int = 3
     structure_window: int = 120
+    ichimoku_conversion: int = 9
+    ichimoku_base: int = 26
+    ichimoku_span_b: int = 52
+    ichimoku_displacement: int = 26
 
     def __post_init__(self) -> None:
         lengths = [
@@ -54,11 +58,17 @@ class IndicatorConfig:
             self.pivot_left,
             self.pivot_right,
             self.structure_window,
+            self.ichimoku_conversion,
+            self.ichimoku_base,
+            self.ichimoku_span_b,
+            self.ichimoku_displacement,
         ]
         if any(not isinstance(x, int) or x < 1 for x in lengths):
             raise ValueError("Indicator periods must be positive integers")
         if not math.isfinite(self.bb_std) or self.bb_std <= 0 or self.macd_fast >= self.macd_slow:
             raise ValueError("Invalid Bollinger or MACD settings")
+        if not self.ichimoku_conversion < self.ichimoku_base <= self.ichimoku_span_b:
+            raise ValueError("Ichimoku requires conversion < base <= span B")
         if self.fast_trend_length not in self.ema_lengths:
             raise ValueError("Fast trend EMA must be available")
         if not {9, 20, 50, 100, 200}.issubset(self.ema_lengths):

@@ -18,13 +18,18 @@ def main() -> None:
         assert not app.error, [item.value for item in app.error]
         assert len(app.tabs) == 9
         assert {item.label for item in app.metric} == {"추세", "모멘텀", "거래량", "변동성", "시장 구조"}
-        assert next(item.value for item in app.selectbox if item.label == "Exchange") == "Binance"
+        assert next(item.value for item in app.selectbox if item.label == "거래소") == "Binance"
         assert any(
             "BTC/USDT" in item.value and 'aria-label="시장 가격"' in item.value for item in app.markdown
         )
         assert any("현재 접속 세션" in item.value for item in app.info)
         assert any("합성" in item.value for item in app.warning)
         assert any('aria-label="다섯 시간대 방향"' in item.value for item in app.markdown)
+        assert any('aria-label="일목균형표 해석"' in item.value for item in app.markdown)
+        next(item for item in app.get("button_group") if item.label == "차트 보기").set_value("상세").run(
+            timeout=45
+        )
+        assert not app.exception and not app.error
         control = next(item for item in app.get("button_group") if item.label == "차트 시간대")
         control.set_value("1M").run(timeout=45)
         assert not app.exception and not app.error
@@ -36,7 +41,7 @@ def main() -> None:
         assert "backtest_result" in app.session_state
         app.session_state["_btc_private_storage"].cleanup()
         print(
-            "PASS: public checkout startup, Binance BTC/USDT, five-horizon signal/monthly chart, 9 tabs, backtest, paper controls and settings"
+            "PASS: public checkout startup, Binance BTC/USDT, Ichimoku/detail/monthly charts, five-horizon signal, 9 tabs, backtest, paper controls and settings"
         )
 
 

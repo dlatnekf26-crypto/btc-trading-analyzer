@@ -200,7 +200,7 @@ def test_public_live_history_limit_prevents_large_download(monkeypatch, tmp_path
     monkeypatch.setattr(DataService, "bundle", bundle)
     app = AppTest.from_file(Path(__file__).resolve().parents[1] / "web_app.py", default_timeout=30).run()
     assert not app.exception
-    next(box for box in app.selectbox if box.label == "Timeframe").select("5m")
+    next(box for box in app.selectbox if box.label == "연구 시간대").select("5m")
     today = datetime.now(timezone.utc).date()
     app.date_input[0].set_value((today - timedelta(days=30), today))
     app.run()

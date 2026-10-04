@@ -12,6 +12,13 @@ def candle_close(value, timeframe: str):
     return value + pd.Timedelta(seconds=TIMEFRAMES[timeframe])
 
 
+def candle_shift(value, timeframe: str, periods: int):
+    """Move plotted candle coordinates, preserving actual month boundaries."""
+    if timeframe == "1M":
+        return value + pd.offsets.MonthBegin(periods)
+    return value + pd.Timedelta(seconds=TIMEFRAMES[timeframe] * periods)
+
+
 def history_start(value: pd.Timestamp, timeframe: str, bars: int) -> pd.Timestamp:
     if timeframe == "1M":
         return value.replace(day=1, hour=0, minute=0, second=0, microsecond=0) - pd.DateOffset(months=bars)

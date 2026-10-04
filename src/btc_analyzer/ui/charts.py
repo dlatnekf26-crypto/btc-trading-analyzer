@@ -4,24 +4,112 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from btc_analyzer.strategy.signal_engine import Analysis
+from btc_analyzer.candles import candle_shift
 
 
 def style_chart(fig: go.Figure, height: int = 540) -> go.Figure:
     fig.update_layout(
         height=height,
-        template="plotly_dark",
+        template="plotly_white",
         paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="#0d1421",
-        colorway=["#5adeb8", "#f4c164", "#83baff", "#b4a1f9", "#f58da3"],
-        font={"family": "Inter, Arial, sans-serif", "color": "#c9d7e9", "size": 12},
-        margin={"t": 65, "b": 40, "l": 8, "r": 8},
+        plot_bgcolor="#ffffff",
+        colorway=["#3182f6", "#dd9b24", "#08a878", "#8c65da", "#e94b65"],
+        font={"family": "Inter, Arial, sans-serif", "color": "#53647b", "size": 11},
+        margin={"t": 55, "b": 40, "l": 8, "r": 8},
         hovermode="x unified",
         legend={"orientation": "h", "y": 1.04, "x": 0, "font": {"size": 11}},
-        hoverlabel={"bgcolor": "#17263a", "font_color": "#f0f5fc"},
+        hoverlabel={"bgcolor": "#ffffff", "font_color": "#191f28"},
+        modebar={"bgcolor": "rgba(255,255,255,0.95)", "color": "#66758b", "activecolor": "#3182f6"},
     )
-    fig.update_xaxes(gridcolor="#1c2a3e", zeroline=False)
-    fig.update_yaxes(gridcolor="#1c2a3e", zeroline=False, tickformat=",.2f")
+    fig.update_xaxes(gridcolor="#edf1f7", zeroline=False)
+    fig.update_yaxes(gridcolor="#edf1f7", zeroline=False, tickformat=",.0f")
     return fig
+
+
+def add_ichimoku(fig: go.Figure, df: pd.DataFrame, frame: pd.DataFrame, timezone: str, detail: bool) -> None:
+    """Plot shifted geometry only; no backward-shifted close enters features."""
+    displacement = int(df.attrs.get("ichimoku_displacement", 26))
+    timeframe = df.attrs.get("timeframe", "1h")
+    recent = df.tail(min(displacement, int(df.bars_since_gap.iloc[-1])))
+    projected = candle_shift(recent.index, timeframe, displacement)
+    future = projected > frame.index[-1]
+    cloud = pd.DataFrame({"a": frame.ichimoku_cloud_a, "b": frame.ichimoku_cloud_b})
+    ahead = pd.DataFrame(
+        {"a": recent.ichimoku_span_a.to_numpy()[future], "b": recent.ichimoku_span_b.to_numpy()[future]},
+        index=projected[future],
+    )
+    cloud = pd.concat([cloud, ahead]).sort_index()
+    valid = cloud.notna().all(axis=1)
+    show_legend = True
+    for bullish in (True, False):
+        mask = valid & ((cloud.a >= cloud.b) == bullish)
+        groups = mask.ne(mask.shift()).cumsum()
+        for _, selected in mask[mask].groupby(groups).groups.items():
+            part = cloud.loc[selected]
+            x = part.index.tz_convert(timezone)
+            color = "rgba(16,168,119,0.15)" if bullish else "rgba(233,75,101,0.13)"
+            edge = "rgba(16,168,119,0.45)" if bullish else "rgba(233,75,101,0.4)"
+            fig.add_trace(
+                go.Scatter(
+                    x=x,
+                    y=part.a,
+                    name="일목 구름",
+                    mode="lines",
+                    legendgroup="ichimoku-cloud",
+                    showlegend=show_legend,
+                    line={"color": edge, "width": 1},
+                    hoverinfo="skip",
+                ),
+                row=1,
+                col=1,
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=x,
+                    y=part.b,
+                    name="일목 구름",
+                    mode="lines",
+                    legendgroup="ichimoku-cloud",
+                    showlegend=False,
+                    fill="tonexty",
+                    fillcolor=color,
+                    line={"color": edge, "width": 1},
+                    hoverinfo="skip",
+                ),
+                row=1,
+                col=1,
+            )
+            show_legend = False
+    if detail:
+        for key, label, color in (
+            ("ichimoku_tenkan", "전환선", "#3182f6"),
+            ("ichimoku_kijun", "기준선", "#dd9b24"),
+        ):
+            fig.add_trace(
+                go.Scatter(
+                    x=frame.index.tz_convert(timezone),
+                    y=frame[key],
+                    name=label,
+                    line={"color": color, "width": 1.5},
+                ),
+                row=1,
+                col=1,
+            )
+        lag_x = candle_shift(df.index, timeframe, -displacement)
+        visible = lag_x >= frame.index[0]
+        fig.add_trace(
+            go.Scatter(
+                x=lag_x[visible].tz_convert(timezone),
+                y=df.close.to_numpy()[visible],
+                name="후행스팬",
+                line={"color": "#8c65da", "width": 1, "dash": "dot"},
+                hovertemplate="%{x}<br>"
+                + str(displacement)
+                + "봉 과거에 표시한 종가 %{y:,.2f}<extra>후행스팬</extra>",
+            ),
+            row=1,
+            col=1,
+        )
 
 
 def price_chart(
@@ -32,9 +120,14 @@ def price_chart(
     bands: bool = True,
     trades: pd.DataFrame | None = None,
     quote: str = "USDT",
+    ichimoku: bool = False,
+    ichimoku_detail: bool = True,
+    zones_visible: bool = True,
+    levels_visible: bool = True,
+    bars: int = 300,
 ) -> go.Figure:
     """Display time in the selected timezone; analysis/storage timestamps remain UTC."""
-    frame = df.tail(300)
+    frame = df.tail(bars)
     x = frame.index.tz_convert(timezone)
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.78, 0.22], vertical_spacing=0.03)
     fig.add_trace(
@@ -45,15 +138,17 @@ def price_chart(
             low=frame.low,
             close=frame.close,
             name="가격",
-            increasing_line_color="#5adeb8",
-            decreasing_line_color="#f58da3",
+            increasing_line_color="#10a878",
+            decreasing_line_color="#e94b65",
         ),
         row=1,
         col=1,
     )
-    average_colors = {"ema_20": "#f4c164", "ema_50": "#83baff", "ema_200": "#b4a1f9"}
+    if ichimoku:
+        add_ichimoku(fig, df, frame, timezone, ichimoku_detail)
+    average_colors = {"ema_20": "#dd9b24", "ema_50": "#3182f6", "ema_200": "#8c65da"}
     for key in averages:
-        if key in frame:
+        if key in frame and frame[key].notna().any():
             fig.add_trace(
                 go.Scatter(
                     x=x,
@@ -89,7 +184,7 @@ def price_chart(
         row=2,
         col=1,
     )
-    for zone in analysis.zones:
+    for zone in analysis.zones if zones_visible else []:
         fig.add_hrect(
             y0=zone.low,
             y1=zone.high,
@@ -99,7 +194,7 @@ def price_chart(
             row=1,
             col=1,
         )
-    if analysis.plan:
+    if analysis.plan and levels_visible:
         p = analysis.plan
         fig.add_hrect(y0=p.entry_low, y1=p.entry_high, fillcolor="#60a5fa", opacity=0.2, row=1, col=1)
         fig.add_hline(y=p.stop, line_dash="dash", line_color="#ef4444", annotation_text="Stop", row=1, col=1)
@@ -130,7 +225,7 @@ def price_chart(
                 row=1,
                 col=1,
             )
-    fig.update_layout(xaxis_rangeslider_visible=False)
+    fig.update_layout(xaxis_rangeslider_visible=False, uirevision=f"btc-{df.attrs.get('timeframe', '1h')}")
     fig.update_xaxes(title_text=f"{timezone} · 봉 시작 시각", row=2, col=1)
     fig.update_yaxes(title_text=quote, row=1, col=1)
     return style_chart(fig, 550)

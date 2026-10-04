@@ -1,7 +1,6 @@
 """Streamlit BTC research dashboard. V1 has no live-order code or credentials."""
 
 from datetime import datetime, timedelta, timezone
-from html import escape
 import hashlib
 import logging
 import os
@@ -43,7 +42,16 @@ from btc_analyzer.strategy.signal_engine import analyze
 from btc_analyzer.strategy.composite import composite_signal, FRAME_LABELS, FRAME_WEIGHTS
 from btc_analyzer.ui.charts import price_chart, indicator_chart, equity_chart, monte_chart
 from btc_analyzer.ui.web_runtime import ResearchBusy, ResearchGate, runtime_paths
-from btc_analyzer.ui.presentation import BRAND, CSS, korean, market_hero, composite_cards
+from btc_analyzer.ui.presentation import (
+    BRAND,
+    CSS,
+    korean,
+    market_hero,
+    composite_cards,
+    decision_panel,
+    ichimoku_cards,
+    LABELS,
+)
 
 load_dotenv(override=False)
 logging.basicConfig(level=os.getenv("BTC_LOG_LEVEL", "INFO"))
@@ -78,20 +86,25 @@ with st.sidebar:
     )
     demo = source.startswith("Demo")
     exchange = st.selectbox(
-        "Exchange", ["Binance", "Upbit"], index=int(app_environment.get("BTC_DEFAULT_EXCHANGE") == "Upbit")
+        "거래소", ["Binance", "Upbit"], index=int(app_environment.get("BTC_DEFAULT_EXCHANGE") == "Upbit")
     )
     symbol = st.text_input(
-        "Symbol", "BTC/USDT" if exchange == "Binance" else "KRW-BTC", key=f"symbol_{exchange}"
+        "거래 페어", "BTC/USDT" if exchange == "Binance" else "KRW-BTC", key=f"symbol_{exchange}"
     )
     quote_currency = symbol.split("/")[-1] if exchange == "Binance" else symbol.split("-")[0]
     st.caption(f"{exchange} 현물 · {quote_currency} 원본 가격 기준")
-    timeframe = st.selectbox("Timeframe", [tf for tf in TIMEFRAMES if tf not in ("1w", "1M")], index=2)
+    timeframe = st.selectbox(
+        "연구 시간대",
+        [tf for tf in TIMEFRAMES if tf not in ("1w", "1M")],
+        index=2,
+        format_func=lambda tf: {"5m": "5분", "15m": "15분", **FRAME_LABELS}.get(tf, tf),
+    )
     st.caption(
         "이 선택은 세부 연구·모의거래 기준입니다. 종합 판단은 항상 1시간·4시간·일봉·주봉·월봉을 사용합니다."
     )
     display_timezone = st.selectbox("표시 시간대", ["Asia/Seoul", "UTC", "America/New_York"])
     today = datetime.now(timezone.utc).date()
-    date_range = st.date_input("Date Range · Live", (today - timedelta(days=7 if PUBLIC else 30), today))
+    date_range = st.date_input("분석 기간 · 실시간", (today - timedelta(days=7 if PUBLIC else 30), today))
     bars = st.slider("Demo 평가 봉 수", 400, 1200 if PUBLIC else 2400, 800, 100, disabled=not demo)
     refresh = st.button("데이터 새로고침")
     auto_refresh = st.checkbox("Live 자동 업데이트 · 60초", value=False, disabled=demo)
@@ -103,9 +116,16 @@ with st.sidebar:
         step=100.0,
         key=f"capital_{exchange}_{quote_currency}",
     )
-    risk_pct = st.number_input("Account Risk %", min_value=0.1, max_value=5.0, value=1.0, step=0.1)
-    fee_pct = st.number_input("Fee %", min_value=0.0, max_value=5.0, value=0.1, step=0.01)
-    slip_pct = st.number_input("Slippage %", min_value=0.0, max_value=5.0, value=0.05, step=0.01)
+    risk_pct = st.number_input("거래당 계좌 위험 %", min_value=0.1, max_value=5.0, value=1.0, step=0.1)
+    fee_pct = st.number_input("수수료 %", min_value=0.0, max_value=5.0, value=0.1, step=0.01)
+    slip_pct = st.number_input(
+        "슬리피지 %",
+        min_value=0.0,
+        max_value=5.0,
+        value=0.05,
+        step=0.01,
+        help="예상 가격보다 불리하게 체결되는 차이를 비용에 반영해요.",
+    )
     st.caption("레버리지 1x · 통화는 선택 시장의 호가 통화")
     with st.expander("차트 · 지표 설정"):
         rsi_period = st.number_input("RSI period", 2, 50, 14)
@@ -260,7 +280,9 @@ def dashboard() -> None:
         source_name = "demo" if demo else "live"
         trader = PaperTrader(database, cfg, exchange, symbol, timeframe, source_name)
         database.record_signal(analysis, exchange, symbol, timeframe, source_name, trader.strategy_key)
-        composite_key = "composite-v1:" + hashlib.sha256(dumps(cfg.to_dict()).encode()).hexdigest()[:16]
+        composite_key = (
+            "composite-v2-ichimoku:" + hashlib.sha256(dumps(cfg.to_dict()).encode()).hexdigest()[:16]
+        )
         database.record_signal(combined, exchange, symbol, "ALL", source_name, composite_key)
     except (DataError, ValueError, OSError, KeyError, sqlite3.Error) as exc:
         logging.exception("Dashboard market data/analysis failed")
@@ -295,7 +317,7 @@ def dashboard() -> None:
         market_hero(
             exchange=exchange,
             symbol=symbol,
-            timeframe="1시간 · 4시간 · 일봉 · 주봉 · 월봉",
+            timeframe="5개 시간대 종합",
             quote=quote_currency,
             price=displayed_price,
             change=change,
@@ -306,6 +328,7 @@ def dashboard() -> None:
         ),
         unsafe_allow_html=True,
     )
+    st.markdown(decision_panel(combined), unsafe_allow_html=True)
     st.markdown(composite_cards(combined), unsafe_allow_html=True)
     if demo:
         st.warning("DEMO · 합성 가격으로 계산한 화면입니다. 실제 Binance 시세는 Live 모드에서 확인하세요.")
@@ -313,15 +336,6 @@ def dashboard() -> None:
         st.caption(quote_note)
     st.caption(
         "종합 판단은 다섯 시간대의 확정 봉과 계산 가능한 지표를 함께 반영합니다. 점수는 성공 확률이 아닙니다."
-    )
-    decisions = [reason for reason in combined.reasons if not reason.startswith(tuple(FRAME_LABELS.values()))]
-    st.markdown(
-        '<section class="btc-signal" aria-label="종합 신호 근거"><h2>'
-        + combined.action
-        + " · 종합 신호</h2><p>"
-        + escape(" ".join(decisions))
-        + "</p></section>",
-        unsafe_allow_html=True,
     )
     if combined.action == "매수" and combined.plan:
         plan = combined.plan
@@ -350,12 +364,23 @@ def dashboard() -> None:
         ]
     )
     with tabs[0]:
-        st.markdown('<p class="btc-section-label">PRICE ACTION</p>', unsafe_allow_html=True)
-        st.subheader("가격 흐름")
+        st.markdown('<p class="btc-section-label">필요한 만큼, 자유롭게</p>', unsafe_allow_html=True)
+        st.subheader("차트로 확인하기")
         chart_tf = st.segmented_control(
             "차트 시간대", COMPOSITE_TIMEFRAMES, default="1h", format_func=FRAME_LABELS.get
         )
         chart_tf = chart_tf or "1h"
+        chart_view = st.segmented_control("차트 보기", ["간편", "상세"], default="간편") or "간편"
+        overlays = st.pills(
+            "겹쳐 볼 지표",
+            ["일목균형표", "이동평균선", "볼린저밴드", "가격 영역"],
+            selection_mode="multi",
+            default=["일목균형표"],
+        )
+        detailed_chart = chart_view == "상세"
+        chart_bars = 120
+        if detailed_chart:
+            chart_bars = st.select_slider("표시할 봉 수", options=[60, 120, 240, 400], value=240)
         chart_raw = bundle.get(chart_tf)
         if chart_raw is not None and not chart_raw.empty:
             chart_features = prepare(
@@ -369,17 +394,58 @@ def dashboard() -> None:
                     chart_features.tail(420),
                     chart_analysis,
                     display_timezone,
-                    tuple(average_lines),
-                    show_bands,
+                    tuple(average_lines) if "이동평균선" in overlays else (),
+                    "볼린저밴드" in overlays,
                     quote=quote_currency,
+                    ichimoku="일목균형표" in overlays,
+                    ichimoku_detail=detailed_chart,
+                    zones_visible="가격 영역" in overlays,
+                    levels_visible="가격 영역" in overlays,
+                    bars=chart_bars,
                 ),
                 width="stretch",
                 key="chart_01",
                 theme=None,
+                config={
+                    "displaylogo": False,
+                    "displayModeBar": detailed_chart,
+                    "scrollZoom": False,
+                    "modeBarButtonsToAdd": ["drawline", "drawrect", "eraseshape"] if detailed_chart else [],
+                    "toImageButtonOptions": {"format": "png", "filename": "btc-signal-lab"},
+                },
             )
             st.caption(
                 f"{FRAME_LABELS[chart_tf]} · {len(chart_features):,}개 확정 봉. 이 차트의 관찰용 가격선은 종합 매수·매도 신호와 별개입니다."
             )
+            if "일목균형표" in overlays:
+                st.caption(
+                    "앞으로 그려진 일목 구름은 지금까지의 데이터로 계산한 표시 영역이에요. 미래 가격 예측이 아니에요."
+                )
+                st.subheader(f"일목균형표, 이렇게 읽어요 · {FRAME_LABELS[chart_tf]}")
+                st.markdown(
+                    ichimoku_cards(
+                        combined.frames[chart_tf].indicators,
+                        displacement=cfg.indicators.ichimoku_displacement,
+                    ),
+                    unsafe_allow_html=True,
+                )
+                with st.expander("일목균형표 사용법"):
+                    st.write(
+                        "간편 보기에서는 구름을 먼저 확인해요. 상세 보기에서는 전환선·기준선·후행스팬을 함께 볼 수 있어요."
+                    )
+                    st.write(
+                        "선행 구름은 지금까지의 고가·저가로 계산한 값을 미래 축에 옮겨 그린 영역이에요. 미래 가격 예측이 아니에요."
+                    )
+                    st.write(
+                        "후행스팬은 현재 종가를 과거 축에 그려요. 신호는 현재 종가와 이미 확정된 과거 종가를 비교하므로 미래 가격을 참조하지 않아요."
+                    )
+                    st.write(
+                        "일목 하나만으로 신호를 만들지 않고 기존 지표와 다섯 시간대의 조건을 함께 확인해요."
+                    )
+            if detailed_chart:
+                st.caption(
+                    "상세 차트의 도구로 확대, 선·영역 그리기, 이미지 저장을 할 수 있어요. 그린 도형은 분석 신호를 바꾸지 않아요."
+                )
         else:
             st.info(
                 f"{FRAME_LABELS[chart_tf]} 데이터를 받지 못했습니다. 다중 시간대 탭에서 수집 상태를 확인하세요."
@@ -430,10 +496,18 @@ def dashboard() -> None:
                 "목표는 각각 1/3 청산. 표시 RR은 비용 전이며 실제 체결은 비용 후 평균 RR을 다시 검사합니다."
             )
     with tabs[1]:
+        st.subheader(f"일목균형표 · 연구 시간대 {timeframe}")
+        st.markdown(
+            ichimoku_cards(features.iloc[-1].to_dict(), displacement=cfg.indicators.ichimoku_displacement),
+            unsafe_allow_html=True,
+        )
+        st.caption("전환선 9 · 기준선 26 · 선행스팬 B 52 · 표시 이동 26봉이 기본이에요.")
+        st.subheader("모멘텀과 변동성")
         st.plotly_chart(
             indicator_chart(features, display_timezone), width="stretch", key="chart_02", theme=None
         )
-        st.dataframe(features.drop(columns=["available_at"]).tail(100), width="stretch")
+        with st.expander("전체 지표 원본 값"):
+            st.dataframe(features.drop(columns=["available_at"]).tail(100), width="stretch")
         with st.expander("데이터 품질 상세"):
             st.json({tf: df.attrs.get("quality", {}) for tf, df in bundle.items()})
     with tabs[2]:
@@ -459,7 +533,7 @@ def dashboard() -> None:
         indicator_rows = [
             {"시간대": FRAME_LABELS[tf], **frame.indicators} for tf, frame in combined.frames.items()
         ]
-        st.dataframe(pd.DataFrame(indicator_rows).set_index("시간대").T, width="stretch")
+        st.dataframe(pd.DataFrame(indicator_rows).set_index("시간대").T.rename(index=LABELS), width="stretch")
         st.caption(
             "빈칸은 이력이 부족해 계산할 수 없는 지표입니다. 월봉 EMA200·SMA200 등은 임의로 채우지 않습니다."
         )
@@ -506,7 +580,7 @@ def dashboard() -> None:
         )
     with tabs[3]:
         st.caption(
-            f"이 탭은 연구 시간대 {timeframe}의 기존 전략을 검증합니다. 상단의 새 종합 신호에 대한 성과 검증 결과는 아닙니다."
+            f"이 탭은 연구 시간대 {timeframe}의 지표 전략을 검증합니다. 상단의 새 종합 신호에 대한 성과 검증 결과는 아닙니다."
         )
         if st.button("백테스트 실행", type="primary"):
             try:
@@ -564,7 +638,7 @@ def dashboard() -> None:
             st.info("백테스트를 실행하면 순자산·Buy & Hold·낙폭·거래 체결 결과가 표시됩니다.")
     with tabs[4]:
         st.caption(
-            f"연구 시간대 {timeframe}의 기존 전략 검증입니다. 새 종합 신호의 성과를 검증한 결과는 아닙니다."
+            f"연구 시간대 {timeframe}의 지표 전략 검증입니다. 새 종합 신호의 성과를 검증한 결과는 아닙니다."
         )
         st.write("IS 60% / Validation 20% / OOS 20% · IS 내 주변 파라미터 · 비용 1x/1.5x/2x · Walk Forward")
         compact = st.checkbox("빠른 검증 · ATR 3개 조합 (해제: RSI×EMA×ATR 27개)", PUBLIC)
@@ -654,7 +728,7 @@ def dashboard() -> None:
         )
     with tabs[6]:
         st.caption(
-            f"모의거래는 연구 시간대 {timeframe}의 기존 전략으로 동작합니다. 상단 종합 신호와 별도입니다."
+            f"모의거래는 연구 시간대 {timeframe}의 지표 전략으로 동작합니다. 상단 종합 신호와 별도입니다."
         )
         st.write(
             "실제 돈이나 주문 API를 사용하지 않습니다. 활성화 이후 닫힌 봉만 가상 체결하며 새 계정의 과거 거래를 만들지 않습니다."

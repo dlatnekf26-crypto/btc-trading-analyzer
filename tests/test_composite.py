@@ -90,6 +90,18 @@ def test_monthly_partial_history_uses_real_indicators_without_ema200():
     json.loads(dumps(signal))
 
 
+def test_monthly_ichimoku_cloud_requires_actual_warmup():
+    bundle = scenario()
+    bundle["1M"] = bundle["1M"].tail(50)
+    signal = composite_signal(bundle, AS_OF)
+    monthly = signal.frames["1M"]
+    assert monthly.indicators["rsi"] is not None
+    assert monthly.indicators["macd_hist"] is not None
+    assert monthly.indicators["ichimoku_cloud_b"] is None
+    assert not monthly.ready and signal.ready_frames == 4
+    assert signal.action == "관망"
+
+
 @pytest.mark.parametrize("tf", COMPOSITE_TIMEFRAMES)
 def test_missing_horizon_vetoes_and_retains_fixed_weights(tf):
     bundle = scenario()

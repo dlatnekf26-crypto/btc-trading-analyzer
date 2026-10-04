@@ -10,8 +10,8 @@ maxMessageSize = 50
 gatherUsageStats = false
 
 [theme]
-base = "dark"
-primaryColor = "#4ADEB8"
-backgroundColor = "#080C14"
-secondaryBackgroundColor = "#111A2B"
-textColor = "#E8EEF8"
+base = "light"
+primaryColor = "#3182F6"
+backgroundColor = "#F5F7FB"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#191F28"

@@ -60,6 +60,7 @@ def scoring(row: pd.Series, cfg: StrategyConfig | None = None) -> Score:
     price_trend = np.tanh(_finite(row, "price_vs_ema200") / 0.03)
     higher = _finite(row, "higher_trend")
     trend = 50 + 50 * (0.3 * alignment + 0.2 * slope + 0.2 * price_trend + 0.3 * higher)
+    trend = 0.85 * trend + 0.15 * (50 + 50 * _finite(row, "ichimoku_bias"))
     rsi = _finite(row, "rsi", 50)
     # RSI trend strength is directional; 75 in an uptrend contributes bullish momentum.
     momentum = 50 + 50 * (
@@ -122,6 +123,10 @@ def scoring(row: pd.Series, cfg: StrategyConfig | None = None) -> Score:
         (higher > 0.3, "상위 타임프레임이 상승 추세를 확인합니다."),
         (_finite(row, "macd_hist_slope") > 0, "MACD 히스토그램이 개선 중입니다."),
         (
+            _finite(row, "ichimoku_cloud_position") > 0 and _finite(row, "ichimoku_tk_direction") > 0,
+            "일목 구름 위에서 전환선이 기준선보다 높습니다.",
+        ),
+        (
             volume_ratio >= 1.2 and _finite(row, "price_change") > 0,
             f"상승 봉 거래량이 평균의 {volume_ratio:.2f}배입니다.",
         ),
@@ -131,6 +136,7 @@ def scoring(row: pd.Series, cfg: StrategyConfig | None = None) -> Score:
     for condition, text in [
         (higher < -0.3, "상위 타임프레임은 하락 우위입니다."),
         (_finite(row, "price_vs_ema200") < 0, "가격이 EMA200 아래에 있습니다."),
+        (_finite(row, "ichimoku_cloud_position") < 0, "일목 구름 아래로 하락 흐름이 우세합니다."),
         (rsi > 70, "RSI 과열: 즉시 매도 규칙이 아닌 추격 진입 위험입니다."),
         (rsi < 30, "RSI 과매도: 단독 매수 근거로 사용하지 않습니다."),
         (row.volatility_regime in ("Extreme Volatility", "High Volatility"), "변동성이 높습니다."),
