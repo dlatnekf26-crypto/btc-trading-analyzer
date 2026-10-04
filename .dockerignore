@@ -1,0 +1,16 @@
+.git
+.venv
+__pycache__
+*.pyc
+*.egg-info
+.env
+.env.*
+.streamlit/secrets.toml
+.pytest_cache
+.ruff_cache
+data
+logs
+tests
+docs
+build
+dist

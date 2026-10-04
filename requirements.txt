@@ -1,0 +1,2 @@
+# Streamlit Community Cloud automatically installs this frozen runtime environment.
+-r requirements-runtime.lock
