@@ -6,7 +6,7 @@
 |---|---|
 | lock 의존성 설치 / 재실행 | 성공; scripts/install_cloud.sh 반복 실행 |
 | dependency imports / pip check | 성공; 충돌 없음 |
-| pytest | 84 passed; skipped/xfail 없음 |
+| pytest | 91 passed; skipped/xfail 없음 |
 | Ruff lint / formatting / compileall | 성공 |
 | Streamlit HTTP health / 앱 shell | 실제 서버 실행 후 200 및 ok 확인 |
 | Streamlit AppTest | 9개 탭, 백테스트, Monte Carlo, 모의 활성/중지, 설정 저장 버튼 검증 |
@@ -79,3 +79,12 @@ Git 추적 파일을 확인한 결과 `src/btc_analyzer/data/`의 Python 파일 
 - 배포 회귀 검사는 Git 인덱스에 등록된 파일만 새 디렉터리에 복사하고, 프로젝트가 설치되지 않은 별도 프로세스에서 공개 화면·백테스트·모의거래·설정 저장을 실행하도록 강화했습니다. 작업 폴더에만 존재하는 누락 코드를 사용할 수 없습니다.
 - 기존 GitHub 커밋 `499871c`의 파일만 복원해 `app.py` 22행에서 `No module named 'btc_analyzer.data'`가 발생함을 확인했습니다. 사용자가 공유한 traceback과 일치합니다.
 - 수정 후 Git 추적 파일만 사용한 공개 앱 검사 및 전체 84개 테스트, offline integration, Ruff lint/format이 통과했습니다. CI 런타임 검사에는 Python 3.12와 3.13을 사용합니다.
+
+## Binance 기본 시장과 화면 개선
+
+- 기본 공개 시장을 Binance BTC/USDT로 변경했습니다. 모의 자본과 차트 단위는 USDT이며 현재가를 KRW 가격이나 환율로 계산하지 않습니다.
+- Binance 공식 문서의 공개 시장 데이터 전용 서비스 `data-api.binance.vision`을 CCXT의 공개 요청 주소로 사용합니다. 개인 API는 변경하지 않습니다. TLS/프록시 검증과 HTTP 451 거부 처리는 유지합니다.
+- 현재가·24시간 변동을 따로 조회해 표시하고, 신호·백테스트는 확정 봉을 계속 사용합니다. 현재가가 실패하면 ‘마지막 확정 봉 종가’로 표시하는 UI를 검사했습니다.
+- 1440px 데스크톱과 390px 모바일의 실제 Chromium에서 요약 카드 4개와 가로 넘침 없음, 상단 제목이 툴바 아래에 표시됨을 확인했습니다. 브라우저 검사는 명시적인 Demo 데이터로 수행했습니다.
+- 기본 시장·원본 USDT 현재가·잘못된 ticker 값 거부·HTML 입력 escaping·현재가 지연 표시를 포함한 91개 회귀 검사를 사용합니다. Git에 포함된 파일만 내보내는 배포 검사도 유지합니다.
+- 일반 Binance API는 이 머신에서 HTTP 451을 반환했습니다. 시장 데이터 전용 도메인 허용 초안 저장 후에도 실행 중 프록시는 CONNECT 요청을 HTTP 403으로 거부했습니다. 실제 Binance 실데이터 연결과 사용자의 배포 화면은 아직 검증되지 않았습니다. 도메인 허용 초안 저장은 실행 중 정책 변경을 의미하지 않습니다.

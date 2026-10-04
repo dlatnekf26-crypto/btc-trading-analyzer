@@ -31,7 +31,9 @@ python -I scripts/check_deployment.py
 
 이 검사는 오프라인 Demo로 공개 화면의 9개 탭·백테스트·모의거래·설정 저장을 실행합니다. CI에서도 개발 패키지 설치와 별개로 검증합니다.
 
-무료 호스팅은 유휴 상태에서 잠들 수 있으며 첫 접속에 시간이 걸립니다. 무중단 서비스나 백그라운드 모의거래 실행을 보장하지 않습니다. Binance가 호스팅 지역에서 HTTP 451을 반환하면 Upbit 또는 명시적인 Demo 모드를 이용하세요. Live 오류는 화면에 표시하며 합성 가격으로 대체하지 않습니다.
+공개 화면의 기본 시장은 Binance BTC/USDT입니다. 필요한 외부 주소는 Binance 공식 시장 데이터 전용 호스트 `data-api.binance.vision`입니다. 기본 모의 자본은 10,000 USDT이며 원화로 환산하지 않습니다. 현재가와 확정 봉 분석 시각은 구분해 표시합니다.
+
+무료 호스팅은 유휴 상태에서 잠들 수 있으며 첫 접속에 시간이 걸립니다. 무중단 서비스나 백그라운드 모의거래 실행을 보장하지 않습니다. 호스팅 서버가 시장 데이터 호스트에 접근할 수 있어야 합니다. Binance가 HTTP 451을 반환하면 해당 서버에서 실데이터를 제공할 수 없습니다. Live 오류는 화면에 표시하며 합성 가격으로 대체하지 않습니다.
 
 ## 방문자 기록
 
@@ -68,7 +70,7 @@ docker run --rm -p 8501:8501 btc-trading-analyzer:web
 | `PORT` | `8501` · 호스팅 포트 |
 | `BTC_WEB_DATA_DIR` | `data/web` · 쓰기 가능한 임시 데이터 루트 |
 | `BTC_DEFAULT_SOURCE` | `live` · `demo`로 바꾸면 오프라인 시작 |
-| `BTC_DEFAULT_EXCHANGE` | `Upbit` · 지원 값 `Upbit` / `Binance` |
+| `BTC_DEFAULT_EXCHANGE` | `Binance` · 지원 값 `Binance` / `Upbit` |
 | `BTC_LOG_LEVEL` | `INFO` · 서버 로그 |
 
 공개 진입점 `web_app.py`는 항상 사용자 기록을 분리합니다. 일반 개인 연구용 실행은 `python -m streamlit run app.py`를 사용합니다.

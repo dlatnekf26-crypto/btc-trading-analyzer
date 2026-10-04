@@ -155,3 +155,27 @@ def test_binance_uses_environment_networking_and_keeps_tls_verification():
     assert provider.client.session.trust_env is True
     assert provider.client.verify is True
     assert provider.client.validateServerSsl is True
+    assert provider.client.urls["api"]["public"] == "https://data-api.binance.vision/api/v3"
+    assert "data-api.binance.vision" not in provider.client.urls["api"]["private"]
+
+
+def test_binance_ticker_uses_original_quote_price():
+    class Client:
+        def fetch_ticker(self, symbol):
+            assert symbol == "BTC/USDT"
+            return {"last": 92345.67, "percentage": -1.25}
+
+    result = BinanceProvider(Client()).quote("BTC/USDT")
+    assert result["price"] == 92345.67
+    assert result["change_24h"] == -1.25
+    assert pd.Timestamp(result["observed_at"]).tz is not None
+
+
+@pytest.mark.parametrize("ticker", [{}, {"last": -1}, {"last": "nan"}, {"last": 95000, "percentage": "inf"}])
+def test_binance_ticker_rejects_invalid_values(ticker):
+    class Client:
+        def fetch_ticker(self, symbol):
+            return ticker
+
+    with pytest.raises(DataError, match="현재가 응답"):
+        BinanceProvider(Client()).quote("BTC/USDT")

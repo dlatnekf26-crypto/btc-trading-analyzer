@@ -102,7 +102,7 @@ def test_research_gate_is_bounded_and_releases_after_failure():
         pass
 
 
-def test_public_default_live_upbit(monkeypatch, tmp_path):
+def test_public_default_live_binance_and_usdt_quote(monkeypatch, tmp_path):
     monkeypatch.setenv("BTC_WEB_DATA_DIR", str(tmp_path / "web"))
     monkeypatch.delenv("BTC_DEFAULT_SOURCE", raising=False)
     monkeypatch.delenv("BTC_DEFAULT_EXCHANGE", raising=False)
@@ -112,15 +112,24 @@ def test_public_default_live_upbit(monkeypatch, tmp_path):
     def bundle(self, exchange, symbol, timeframe, start, end, **kwargs):
         captured.update(exchange=exchange, symbol=symbol, cache=self.path, start=start, end=end)
         # Fixture is placed at the requested live boundary; no network calls in tests.
-        return demo_bundle(timeframe, 800, end=end, price=130_000_000)
+        return demo_bundle(timeframe, 800, end=end, price=90_000)
 
     monkeypatch.setattr(DataService, "bundle", bundle)
+    monkeypatch.setattr(
+        "btc_analyzer.data.binance_provider.BinanceProvider.quote",
+        lambda self, symbol: {"price": 123456.78, "change_24h": 2.15, "observed_at": "2026-10-04T00:00:00Z"},
+    )
     app = AppTest.from_file(Path(__file__).resolve().parents[1] / "web_app.py", default_timeout=30).run()
     assert not app.exception
     assert not app.error
     assert len(app.tabs) == 9
-    assert captured["exchange"] == "Upbit"
-    assert captured["symbol"] == "KRW-BTC"
+    assert captured["exchange"] == "Binance"
+    assert captured["symbol"] == "BTC/USDT"
+    assert any(
+        "123,456.78" in item.value and "USDT" in item.value and "24시간 변동" in item.value
+        for item in app.markdown
+    )
+    assert next(item.value for item in app.number_input if item.label == "모의 자본 · USDT") == 10_000.0
     assert captured["cache"] == tmp_path / "web" / "market-cache.sqlite3"
     assert any("현재 접속 세션" in item.value for item in app.info)
     assert not app.warning
@@ -185,3 +194,49 @@ def test_public_live_history_limit_prevents_large_download(monkeypatch, tmp_path
     assert not app.exception
     assert any("3,000" in item.value for item in app.info)
     assert calls == ["1h"]
+
+
+def test_binance_ticker_failure_is_labeled_as_candle_close(monkeypatch, tmp_path):
+    import streamlit as st
+    from btc_analyzer.data.base_provider import DataError
+
+    st.cache_data.clear()
+    monkeypatch.setenv("BTC_WEB_DATA_DIR", str(tmp_path / "web"))
+    monkeypatch.setenv("BTC_DEFAULT_EXCHANGE", "Binance")
+    monkeypatch.setenv("BTC_DEFAULT_SOURCE", "live")
+
+    def bundle(self, exchange, symbol, timeframe, start, end, **kwargs):
+        return demo_bundle(timeframe, 800, end=end)
+
+    def unavailable(self, symbol):
+        raise DataError("Ticker temporarily unavailable")
+
+    monkeypatch.setattr(DataService, "bundle", bundle)
+    monkeypatch.setattr("btc_analyzer.data.binance_provider.BinanceProvider.quote", unavailable)
+    app = AppTest.from_file(Path(__file__).resolve().parents[1] / "web_app.py", default_timeout=30).run()
+    assert not app.exception
+    assert not app.error
+    hero = next(item.value for item in app.markdown if 'aria-label="시장 가격"' in item.value)
+    assert "마지막 확정 봉 종가" in hero
+    assert "현재가 · 최근 조회" not in hero
+    assert any("현재가 조회가 지연" in item.value for item in app.caption)
+
+
+def test_market_hero_escapes_user_supplied_symbols():
+    from btc_analyzer.ui.presentation import market_hero
+
+    result = market_hero(
+        exchange="Binance",
+        symbol='<img src=x onerror="alert(1)">',
+        timeframe="1h",
+        quote="USDT",
+        price=90000,
+        change=None,
+        change_label="",
+        price_label="확정 봉 종가",
+        confirmed_at="10.04 15:00",
+        demo=True,
+    )
+    assert "<img" not in result
+    assert "&lt;img" in result
+    assert "DEMO · 합성 데이터" in result

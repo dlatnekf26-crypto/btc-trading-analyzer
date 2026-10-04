@@ -1,4 +1,4 @@
-"""Public deployment entry point: isolated anonymous sessions, Upbit live defaults."""
+"""Public deployment entry point: isolated sessions and Binance BTC/USDT live defaults."""
 
 from pathlib import Path
 import runpy

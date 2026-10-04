@@ -21,6 +21,7 @@ from dotenv import load_dotenv
 from btc_analyzer.config import AppConfig, IndicatorConfig, StrategyConfig, RiskConfig, TIMEFRAMES
 from btc_analyzer.data.service import DataService, demo_bundle
 from btc_analyzer.data.base_provider import DataError
+from btc_analyzer.data.binance_provider import BinanceProvider
 from btc_analyzer.analysis.multi_timeframe import prepare, enrich
 from btc_analyzer.backtest.engine import BacktestEngine
 from btc_analyzer.backtest.robustness import run_robustness
@@ -31,16 +32,17 @@ from btc_analyzer.storage.database import Database, dumps
 from btc_analyzer.strategy.signal_engine import analyze
 from btc_analyzer.ui.charts import price_chart, indicator_chart, equity_chart, monte_chart
 from btc_analyzer.ui.web_runtime import ResearchBusy, ResearchGate, runtime_paths
+from btc_analyzer.ui.presentation import BRAND, CSS, korean, market_hero, summary_cards
 
 load_dotenv(override=False)
 logging.basicConfig(level=os.getenv("BTC_LOG_LEVEL", "INFO"))
-st.set_page_config(page_title="BTC 분석 대시보드", page_icon="₿", layout="wide")
-st.title("₿ BTC Trading Analyzer")
-st.caption("BTC 시장 분석 · 백테스트 · 모의거래 · 신호 기록 | 실제 주문 기능 없음")
+st.set_page_config(page_title="BTC Signal Lab · Binance 시장 분석", page_icon="₿", layout="wide")
+st.markdown(CSS, unsafe_allow_html=True)
+st.markdown(BRAND, unsafe_allow_html=True)
 app_environment = dict(os.environ)
 if globals().get("PUBLIC_DEPLOYMENT"):
     app_environment["BTC_APP_MODE"] = "public"
-    app_environment.setdefault("BTC_DEFAULT_EXCHANGE", "Upbit")
+    app_environment.setdefault("BTC_DEFAULT_EXCHANGE", "Binance")
     app_environment.setdefault("BTC_DEFAULT_SOURCE", "live")
 try:
     runtime = runtime_paths(st.session_state, app_environment)
@@ -49,11 +51,6 @@ except OSError:
     st.stop()
 PUBLIC = runtime.public
 DB_PATH = runtime.database
-if PUBLIC:
-    st.info(
-        "모의거래·설정·결과는 현재 접속 세션에만 저장됩니다. "
-        "새로고침·접속 종료·서버 재시작 후 유지되지 않을 수 있으니 필요한 결과를 다운로드하세요."
-    )
 
 
 @st.cache_resource
@@ -62,7 +59,7 @@ def research_gate() -> ResearchGate:
 
 
 with st.sidebar:
-    st.header("시장 / 데이터")
+    st.subheader("시장 설정")
     source = st.selectbox(
         "데이터 모드",
         ["Demo · 합성 데이터", "Live · 공개 거래소 데이터"],
@@ -75,6 +72,8 @@ with st.sidebar:
     symbol = st.text_input(
         "Symbol", "BTC/USDT" if exchange == "Binance" else "KRW-BTC", key=f"symbol_{exchange}"
     )
+    quote_currency = symbol.split("/")[-1] if exchange == "Binance" else symbol.split("-")[0]
+    st.caption(f"{exchange} 현물 · {quote_currency} 원본 가격 기준")
     timeframe = st.selectbox("Timeframe", list(TIMEFRAMES), index=2)
     display_timezone = st.selectbox("표시 시간대", ["Asia/Seoul", "UTC", "America/New_York"])
     today = datetime.now(timezone.utc).date()
@@ -82,18 +81,19 @@ with st.sidebar:
     bars = st.slider("Demo 평가 봉 수", 400, 1200 if PUBLIC else 2400, 800, 100, disabled=not demo)
     refresh = st.button("데이터 새로고침")
     auto_refresh = st.checkbox("Live 자동 업데이트 · 60초", value=False, disabled=demo)
-    st.header("계좌 / 비용")
+    st.subheader("모의계좌 / 비용")
     capital = st.number_input(
-        "Capital · USDT / KRW",
+        f"모의 자본 · {quote_currency}",
         min_value=100.0,
         value=10_000.0 if exchange == "Binance" else 10_000_000.0,
         step=100.0,
+        key=f"capital_{exchange}_{quote_currency}",
     )
     risk_pct = st.number_input("Account Risk %", min_value=0.1, max_value=5.0, value=1.0, step=0.1)
     fee_pct = st.number_input("Fee %", min_value=0.0, max_value=5.0, value=0.1, step=0.01)
     slip_pct = st.number_input("Slippage %", min_value=0.0, max_value=5.0, value=0.05, step=0.01)
     st.caption("레버리지 1x · 통화는 선택 시장의 호가 통화")
-    with st.expander("Indicator Settings"):
+    with st.expander("차트 · 지표 설정"):
         rsi_period = st.number_input("RSI period", 2, 50, 14)
         atr_period = st.number_input("ATR period", 2, 50, 14)
         bb_length = st.number_input("BB length", 5, 100, 20)
@@ -109,7 +109,7 @@ with st.sidebar:
             default=["ema_20", "ema_50", "ema_200"],
         )
         show_bands = st.checkbox("Bollinger bands", True)
-    with st.expander("Strategy / Risk Settings"):
+    with st.expander("전략 · 리스크 설정"):
         min_score = st.slider("Minimum directional score", 50, 95, 65)
         min_quality = st.slider("Minimum signal quality", 50, 95, 75)
         min_rr = st.number_input("Minimum net average ladder RR", 0.5, 5.0, 1.5, step=0.1)
@@ -131,6 +131,13 @@ with st.sidebar:
         weights = {}
         for key, value in StrategyConfig().weights.items():
             weights[key] = st.number_input(f"{key.title()} weight", 0.0, 1.0, value, step=0.05)
+    if PUBLIC:
+        with st.expander("기록 보관 안내"):
+            st.info(
+                "모의거래·설정·결과는 현재 접속 세션에만 저장됩니다. "
+                "새로고침·접속 종료·서버 재시작 후 유지되지 않을 수 있으니 필요한 결과를 다운로드하세요."
+            )
+    st.caption("공개 시장 데이터 · 실제 주문 기능 없음")
 
 try:
     cfg = AppConfig(
@@ -192,14 +199,16 @@ def get_demo(tf: str, count: int, quote_price: float) -> dict:
     return demo_bundle(tf, count, price=quote_price)
 
 
+@st.cache_data(ttl=30, show_spinner=False)
+def get_binance_quote(market: str) -> dict:
+    return BinanceProvider().quote(market)
+
+
 @st.fragment(run_every=60 if auto_refresh and not demo else None)
 def dashboard() -> None:
     """Periodic live data refresh uses the same idempotent SQLite paper engine."""
     try:
         if demo:
-            st.warning(
-                "DEMO · 모든 가격·거래량은 재현 가능한 합성 데이터입니다. 실제 BTC 시장 분석 결과가 아닙니다."
-            )
             bundle = get_demo(timeframe, bars, 90_000.0 if exchange == "Binance" else 130_000_000.0)
             start = bundle[timeframe].index[-bars]
         else:
@@ -244,47 +253,94 @@ def dashboard() -> None:
     paper_state = trader.state()
     if paper_state.get("enabled") or paper_state.get("position"):
         trader.tick(features, allow_new_entries=paper_state.get("enabled", False))
-    metrics = st.columns(5)
-    metrics[0].metric(f"{symbol} · Current Price", f"{features.close.iloc[-1]:,.2f}")
-    metrics[1].metric("Overall Score", f"{analysis.score.overall:.1f} / 100", analysis.score.label)
-    metrics[2].metric("Signal Quality", f"{analysis.quality:.1f} / 100", analysis.quality_label)
-    metrics[3].metric("Market Regime", analysis.regime)
-    metrics[4].metric("현재 후보", analysis.direction.upper() if analysis.eligible else "No Trade")
-    st.caption(
-        f"마지막 확정 봉: {features.index[-1].tz_convert(display_timezone)} · Confidence {analysis.confidence} (규칙 기반 품질, 성공 확률 아님)"
+    displayed_price = float(features.close.iloc[-1])
+    change = float(features.close.iloc[-1] / features.close.iloc[-2] - 1) * 100 if len(features) > 1 else None
+    price_label = "합성 데이터 종가" if demo else "마지막 확정 봉 종가"
+    change_label = "직전 확정 봉 대비"
+    quote_note = ""
+    if not demo and exchange == "Binance":
+        try:
+            if refresh:
+                get_binance_quote.clear()
+            current_quote = get_binance_quote(symbol)
+            displayed_price = current_quote["price"]
+            change = current_quote["change_24h"]
+            change_label = "24시간 변동"
+            observed = pd.Timestamp(current_quote["observed_at"]).tz_convert(display_timezone)
+            price_label = f"현재가 · 최근 조회 {observed:%H:%M:%S}"
+        except (DataError, ValueError, OSError, KeyError) as exc:
+            logging.warning("Public Binance ticker unavailable: %s", exc)
+            quote_note = "현재가 조회가 지연되어 마지막 확정 봉 종가를 표시합니다."
+    confirmed = (features.index[-1] + pd.Timedelta(seconds=TIMEFRAMES[timeframe])).tz_convert(
+        display_timezone
     )
+    st.markdown(
+        market_hero(
+            exchange=exchange,
+            symbol=symbol,
+            timeframe=timeframe,
+            quote=quote_currency,
+            price=displayed_price,
+            change=change,
+            change_label=change_label,
+            price_label=price_label,
+            confirmed_at=f"{confirmed:%m.%d %H:%M} · {display_timezone}",
+            demo=demo,
+        ),
+        unsafe_allow_html=True,
+    )
+    st.markdown(summary_cards(analysis), unsafe_allow_html=True)
+    if demo:
+        st.warning("DEMO · 합성 가격으로 계산한 화면입니다. 실제 Binance 시세는 Live 모드에서 확인하세요.")
+    if quote_note:
+        st.caption(quote_note)
+    st.caption("분석은 확정 봉 기준입니다. 상승 우위와 진입 품질은 규칙 점수이며 성공 확률이 아닙니다.")
     tabs = st.tabs(
         [
-            "Overview",
-            "Indicators",
-            "Multi-Timeframe",
-            "Backtest",
-            "Robustness",
-            "Monte Carlo",
-            "Paper Trading",
-            "Signal History",
-            "Settings",
+            "시장 개요",
+            "기술 지표",
+            "다중 시간대",
+            "백테스트",
+            "전략 검증",
+            "몬테카를로",
+            "모의거래",
+            "신호 기록",
+            "설정",
         ]
     )
     with tabs[0]:
+        st.markdown('<p class="btc-section-label">PRICE ACTION</p>', unsafe_allow_html=True)
+        st.subheader("가격 흐름")
         st.plotly_chart(
-            price_chart(features, analysis, display_timezone, tuple(average_lines), show_bands),
+            price_chart(
+                features, analysis, display_timezone, tuple(average_lines), show_bands, quote=quote_currency
+            ),
             width="stretch",
             key="chart_01",
+            theme=None,
         )
-        st.write(analysis.narrative)
-        score_columns = st.columns(5)
-        for column, (name, value) in zip(score_columns, analysis.score.categories.items()):
-            column.metric(name.title(), f"{value:.1f}")
+        st.subheader("지금 주목할 근거")
         left, right = st.columns(2)
-        left.write("**Positive Factors**")
-        for text in analysis.score.positive:
-            left.write(f"+ {text}")
-        right.write("**Risk Factors**")
-        for text in analysis.reasons:
-            right.write(f"• {text}")
+        with left.container(border=True):
+            st.markdown("**상승을 뒷받침하는 요인**")
+            for text in list(dict.fromkeys(analysis.score.positive))[:3]:
+                st.write(f"• {text}")
+            if not analysis.score.positive:
+                st.caption("강한 상승 근거가 확인되지 않았습니다.")
+        with right.container(border=True):
+            st.markdown("**진입 전 확인할 위험**")
+            for text in list(dict.fromkeys(analysis.reasons))[:3]:
+                st.write(f"• {text}")
+            if not analysis.reasons:
+                st.caption("규칙상 추가 위험 요인이 없습니다. 시장 변동 위험은 남습니다.")
+        with st.expander("세부 점수 · 분석 근거 전체"):
+            score_columns = st.columns(5)
+            for column, (name, value) in zip(score_columns, analysis.score.categories.items()):
+                column.metric(korean(name), f"{value:.1f}")
+            st.write(analysis.narrative)
         if analysis.plan:
             p = analysis.plan
+            st.subheader("진입 시나리오" if analysis.eligible else "관찰용 가격 영역")
             st.write(f"**진입 영역** {p.entry_low:,.2f} ~ {p.entry_high:,.2f} · **손절** {p.stop:,.2f}")
             st.dataframe(
                 pd.DataFrame({"Target": ["TP1", "TP2", "TP3"], "Price": p.targets, "Gross R": p.rr}),
@@ -305,9 +361,12 @@ def dashboard() -> None:
                 "목표는 각각 1/3 청산. 표시 RR은 비용 전이며 실제 체결은 비용 후 평균 RR을 다시 검사합니다."
             )
     with tabs[1]:
-        st.plotly_chart(indicator_chart(features, display_timezone), width="stretch", key="chart_02")
+        st.plotly_chart(
+            indicator_chart(features, display_timezone), width="stretch", key="chart_02", theme=None
+        )
         st.dataframe(features.drop(columns=["available_at"]).tail(100), width="stretch")
-        st.json({tf: df.attrs.get("quality", {}) for tf, df in bundle.items()})
+        with st.expander("데이터 품질 상세"):
+            st.json({tf: df.attrs.get("quality", {}) for tf, df in bundle.items()})
     with tabs[2]:
         rows = []
         for tf, raw in bundle.items():
@@ -326,9 +385,9 @@ def dashboard() -> None:
                 {
                     "Role": role,
                     "Timeframe": tf,
-                    "Regime": r.regime,
-                    "Structure": r.structure,
-                    "Volatility": r.volatility_regime,
+                    "시장 흐름": korean(r.regime),
+                    "시장 구조": korean(r.structure),
+                    "변동성": korean(r.volatility_regime),
                     "Close": r.close,
                     "RSI": r.rsi,
                     "Confirmed at (UTC)": str(f.index[-1] + pd.Timedelta(seconds=TIMEFRAMES[tf])),
@@ -364,13 +423,22 @@ def dashboard() -> None:
             )
             for warning in result.warnings:
                 st.warning(warning)
-            st.plotly_chart(equity_chart(result.equity), width="stretch", key="chart_03")
+            st.plotly_chart(
+                equity_chart(result.equity, quote_currency), width="stretch", key="chart_03", theme=None
+            )
             st.plotly_chart(
                 price_chart(
-                    features, analysis, display_timezone, tuple(average_lines), show_bands, result.trades
+                    features,
+                    analysis,
+                    display_timezone,
+                    tuple(average_lines),
+                    show_bands,
+                    result.trades,
+                    quote_currency,
                 ),
                 width="stretch",
                 key="chart_04",
+                theme=None,
             )
             st.dataframe(result.trades.drop(columns=["exits"], errors="ignore"), width="stretch")
             st.dataframe(result.regimes, hide_index=True)
@@ -462,7 +530,12 @@ def dashboard() -> None:
                 st.json({k: v for k, v in mc.items() if k not in ("equity_bands", "drawdowns")})
                 if mc.get("evidence_warning"):
                     st.warning(mc["evidence_warning"])
-                st.plotly_chart(monte_chart(mc["equity_bands"]), width="stretch", key="chart_07")
+                st.plotly_chart(
+                    monte_chart(mc["equity_bands"], quote_currency),
+                    width="stretch",
+                    key="chart_07",
+                    theme=None,
+                )
                 st.plotly_chart(
                     px.histogram(x=mc["drawdowns"] * 100, labels={"x": "Maximum drawdown %"}),
                     width="stretch",
@@ -488,7 +561,8 @@ def dashboard() -> None:
             trader.reset_protection()
         st.write(f"현재 상태: {'활성' if enabled else '중지'}")
         state = trader.state()
-        st.json({k: v for k, v in state.items() if k not in ("guard", "gate")})
+        with st.expander("모의계좌 상세 상태"):
+            st.json({k: v for k, v in state.items() if k not in ("guard", "gate")})
         st.dataframe(
             database.history("paper_trades", account=trader.account).drop(
                 columns=["payload"], errors="ignore"
@@ -515,7 +589,8 @@ def dashboard() -> None:
             hide_index=True,
         )
     with tabs[8]:
-        st.json(cfg.to_dict())
+        with st.expander("현재 설정 상세"):
+            st.json(cfg.to_dict())
         if st.button("현재 설정 SQLite에 저장"):
             database.save_settings("default", cfg.to_dict())
             st.success("설정을 저장했습니다.")
