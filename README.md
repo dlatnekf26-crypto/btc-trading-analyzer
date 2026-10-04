@@ -48,7 +48,7 @@ uv pip sync requirements.lock --python .venv/bin/python
 
 ```bash
 uv pip compile requirements-dev.in -o requirements.lock --python .venv/bin/python --python-version 3.11 --universal --no-emit-index-url
-uv pip compile requirements-runtime.in -o requirements-runtime.lock --python .venv/bin/python --python-version 3.11 --universal --no-emit-index-url
+uv pip compile pyproject.toml -o requirements.txt --python .venv/bin/python --python-version 3.11 --universal --no-emit-index-url
 ```
 
 ## 대시보드 사용
@@ -142,6 +142,7 @@ Windows는 `.venv/bin/python`을 `.\.venv\Scripts\python`으로 바꿉니다. �
 ## 자주 발생하는 오류
 
 - `ModuleNotFoundError`: 가상환경 Python으로 설치·실행했는지 확인하세요. 저장소 루트에서 `pip install -r requirements.lock`을 다시 실행하세요.
+- Streamlit Cloud의 `ModuleNotFoundError`: `main` / `web_app.py`로 배포했는지 확인하고 Manage app의 로그에서 빠진 모듈 이름을 확인합니다. 최신 버전은 `requirements.txt`에 런타임 라이브러리를 직접 고정하며 앱이 `src/`를 직접 읽으므로 로컬 프로젝트의 별도 설치가 필요하지 않습니다. 업데이트가 반영되지 않으면 Reboot app을 사용하세요.
 - `streamlit` 명령이 없음: `.venv/bin/python -m streamlit run app.py`를 사용하세요.
 - `403 / ProxyError`: 클라우드 네트워크 설정에서 `api.binance.com`, `api.upbit.com` 접근을 허용해야 합니다. 초안 저장은 실행 중 네트워크 정책을 즉시 바꾸지 않습니다. Binance는 서비스 지역 제한이 추가로 있을 수 있습니다.
 - `429 / timeout`: 제공자가 제한·네트워크 오류를 지수 지연으로 최대 4회 재시도합니다. 짧은 기간으로 확인하고, 자동 폴링 간격을 늘리세요.

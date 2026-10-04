@@ -6,7 +6,7 @@
 |---|---|
 | lock 의존성 설치 / 재실행 | 성공; scripts/install_cloud.sh 반복 실행 |
 | dependency imports / pip check | 성공; 충돌 없음 |
-| pytest | 83 passed; skipped/xfail 없음 |
+| pytest | 84 passed; skipped/xfail 없음 |
 | Ruff lint / formatting / compileall | 성공 |
 | Streamlit HTTP health / 앱 shell | 실제 서버 실행 후 200 및 ok 확인 |
 | Streamlit AppTest | 9개 탭, 백테스트, Monte Carlo, 모의 활성/중지, 설정 저장 버튼 검증 |
@@ -54,4 +54,16 @@
 - `requirements-runtime.lock`으로 새 가상환경을 설치하고 공개 UI를 실행했습니다. 런타임 환경에는 pytest/ruff가 설치되지 않습니다.
 - 전체 테스트 **83 passed**, Ruff lint/format, offline integration 및 클라우드 설치 스크립트 재실행이 통과했습니다.
 - Docker 기본 이미지 다운로드는 성공했으나 내부 빌드 컨테이너가 DNS를 사용할 수 없어 PyPI 설치가 실패했습니다. 호스트 네트워크/제공된 프록시 적용 후에도 컨테이너의 프록시 DNS 해석이 실패했습니다. Docker 이미지 전체 빌드와 컨테이너 구동은 검증되지 않았습니다. Streamlit 런타임 설치 및 서버 구동 검증과 구분합니다.
-- 공개 호스팅 계정은 이 환경에 연결되어 있지 않습니다. 여기서 수행한 서버 검증은 인터넷 공개 배포 또는 공개 HTTPS 주소 발급을 의미하지 않습니다.
+- 이 시점에는 공개 호스팅 계정이 연결되어 있지 않았습니다. 서버 검증은 인터넷 공개 배포 또는 공개 HTTPS 주소 발급을 의미하지 않습니다.
+
+## Streamlit Cloud 모듈 오류 대응
+
+사용자가 Streamlit Cloud의 `ModuleNotFoundError` 화면을 공유했습니다. 스크린샷에 누락된 모듈 이름은 표시되지 않아 실제 서버 오류 원인은 아직 확정할 수 없습니다.
+
+개발 설치와 별개인 런타임 가상환경에서 프로젝트를 설치하지 않고 기존 `web_app.py`를 실행하면 `No module named 'btc_analyzer'`를 재현했습니다. 개발 테스트는 editable 프로젝트 설치와 pytest의 `src` 경로 설정으로 이 배포 전제의 실패를 놓칠 수 있었습니다.
+
+- 앱이 `__file__`을 기준으로 저장소 `src`를 읽어 프로젝트 설치·작업 디렉터리의 차이를 견딥니다.
+- `requirements.txt`는 pyproject.toml에서 생성한 고정 런타임 라이브러리를 직접 나열합니다. 재귀 lock 참조와 editable 프로젝트 설치를 배포 경로에서 제거했습니다. 개발용 `requirements.lock`은 그대로 유지합니다.
+- 새 회귀 테스트는 editable 경로 설정을 읽지 않는 별도 프로세스에서 프로젝트가 import되지 않는 상태를 확인하고, 저장소 외부 디렉터리에서 공개 화면·백테스트·모의거래·설정 저장을 실행합니다.
+- 독립 런타임 환경의 실제 배포 검사와 전체 **84개 테스트**, offline integration, Ruff lint/format을 검증합니다. GitHub CI에도 런타임 전용 의존성 설치와 공개 UI 실행 작업을 추가했습니다.
+- Streamlit Cloud의 실제 재빌드 결과와 공개 화면 복구는 별도 확인이 필요합니다. 로컬 회귀 검사 성공만으로 사용자의 공개 앱 오류가 해결됐다고 단정하지 않습니다.

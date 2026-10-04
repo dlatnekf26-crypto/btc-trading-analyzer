@@ -16,7 +16,20 @@
 
 3. **Deploy**를 누릅니다. 빌드 후 서비스가 제공하는 `https://…streamlit.app` 주소를 휴대폰/PC에서 엽니다. 공유하려면 앱의 공개 접근 설정도 확인합니다.
 
-`requirements.txt`가 고정된 런타임 의존성 `requirements-runtime.lock`을 설치합니다. 분석에는 거래소 API 키가 필요하지 않습니다. 자동 설치 실패 시 앱 로그에서 Python 버전과 설치 오류를 확인합니다. 저장소 파일이 GitHub의 `main`에 올라 있어야 배포할 수 있습니다.
+`requirements.txt`에 런타임 라이브러리의 정확한 버전을 직접 나열합니다. 앱은 진입점 위치를 기준으로 `src/`를 읽으므로 프로젝트의 별도 editable 설치나 서버 작업 디렉터리에 의존하지 않습니다. 분석에는 거래소 API 키가 필요하지 않습니다. 자동 설치 실패 시 앱 로그에서 Python 버전과 설치 오류를 확인합니다. 저장소 파일이 GitHub의 `main`에 올라 있어야 배포할 수 있습니다.
+
+## 이미 배포된 앱에 수정 반영하기
+
+연결된 GitHub 브랜치의 변경 사항은 Community Cloud가 자동 반영합니다. 코드나 의존성 변경 후 빌드가 완료될 때까지 기다린 뒤 새로고침하세요. 같은 오류 화면이 계속되면 **Manage app → Reboot app**을 사용합니다. 새 앱을 만들 필요는 없습니다.
+
+`ModuleNotFoundError`가 계속되면 Manage app의 로그에서 마지막 `No module named '…'`와 의존성 설치 오류를 확인합니다. 개발 환경과 같은 설치 상태라는 가정 없이 검증하려면 아래를 새 가상환경에서 실행합니다.
+
+```bash
+python -m pip install -r requirements.txt
+python -I scripts/check_deployment.py
+```
+
+이 검사는 오프라인 Demo로 공개 화면의 9개 탭·백테스트·모의거래·설정 저장을 실행합니다. CI에서도 개발 패키지 설치와 별개로 검증합니다.
 
 무료 호스팅은 유휴 상태에서 잠들 수 있으며 첫 접속에 시간이 걸립니다. 무중단 서비스나 백그라운드 모의거래 실행을 보장하지 않습니다. Binance가 호스팅 지역에서 HTTP 451을 반환하면 Upbit 또는 명시적인 Demo 모드를 이용하세요. Live 오류는 화면에 표시하며 합성 가격으로 대체하지 않습니다.
 

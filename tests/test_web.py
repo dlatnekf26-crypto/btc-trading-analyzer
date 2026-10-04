@@ -2,7 +2,12 @@
 
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
+import json
+import os
 import sqlite3
+import subprocess
+import sys
+import sysconfig
 
 import pytest
 from streamlit.testing.v1 import AppTest
@@ -11,6 +16,39 @@ from btc_analyzer.config import AppConfig
 from btc_analyzer.data.service import DataService, demo_bundle
 from btc_analyzer.storage.database import Database
 from btc_analyzer.ui.web_runtime import ResearchBusy, ResearchGate, runtime_paths
+
+
+def test_public_checkout_runs_without_project_installation(tmp_path):
+    """Disable editable .pth loading while keeping installed third-party libraries."""
+    root = Path(__file__).resolve().parents[1]
+    program = """
+import json
+import runpy
+import sys
+from importlib.util import find_spec
+sys.path.extend(json.loads(sys.argv[2]))
+assert find_spec('btc_analyzer') is None, 'regression must start without the local project installed'
+runpy.run_path(sys.argv[1], run_name='__main__')
+"""
+    libraries = list({sysconfig.get_path("purelib"), sysconfig.get_path("platlib")})
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-S",
+            "-c",
+            program,
+            str(root / "scripts/check_deployment.py"),
+            json.dumps(libraries),
+        ],
+        cwd=tmp_path,
+        env=dict(os.environ),
+        capture_output=True,
+        text=True,
+        timeout=90,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "PASS: public checkout startup" in result.stdout
 
 
 def test_private_records_are_separate_and_market_cache_is_shared(tmp_path):
@@ -101,8 +139,6 @@ def test_two_public_visitors_do_not_share_accounts_backtests_or_settings(monkeyp
     with first_db.connect() as conn:
         first_states = conn.execute("SELECT state FROM paper_accounts").fetchall()
     assert len(first_states) == 1
-    import json
-
     assert json.loads(first_states[0][0])["enabled"]
     second = AppTest.from_file(entry, default_timeout=30).run()
     assert not second.exception

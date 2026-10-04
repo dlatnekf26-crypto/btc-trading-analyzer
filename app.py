@@ -4,7 +4,14 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import logging
 import os
+from pathlib import Path
 import sqlite3
+import sys
+
+# Streamlit runs the checkout directly; importing the app must not require an
+# editable project installation or a particular server working directory.
+if str(Path(__file__).resolve().parent / "src") not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 import pandas as pd
 import plotly.express as px

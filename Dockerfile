@@ -7,7 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     BTC_WEB_DATA_DIR=/app/data/web
 
 WORKDIR /app
-COPY pyproject.toml README.md requirements.txt requirements-runtime.lock ./
+COPY requirements.txt ./
 COPY src ./src
 RUN python -m pip install --no-cache-dir -r requirements.txt \
     && useradd --create-home --uid 10001 appuser \
