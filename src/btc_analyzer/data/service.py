@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from btc_analyzer.config import TIMEFRAMES, MTF_MAP, COMPOSITE_TIMEFRAMES
-from btc_analyzer.candles import candle_close, history_start, resample_candles
+from btc_analyzer.candles import candle_boundary, candle_close, history_start, resample_candles
 from btc_analyzer.data.base_provider import DataError, normalize, utc
 from btc_analyzer.data.binance_provider import BinanceProvider
 from btc_analyzer.data.upbit_provider import UpbitProvider
@@ -19,12 +19,13 @@ class DataService:
 
     def __init__(self, db_path: str | Path, ttl: int = 300) -> None:
         self.path, self.ttl = Path(db_path), ttl
+        self._providers = {}
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with sqlite3.connect(self.path) as conn:
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS market_cache (key TEXT PRIMARY KEY, created REAL, payload TEXT)"
             )
-            conn.execute("DELETE FROM market_cache WHERE created < ?", (time.time() - max(ttl, 300),))
+            conn.execute("DELETE FROM market_cache WHERE created < ?", (time.time() - max(ttl, 86400),))
 
     def fetch(
         self, exchange: str, symbol: str, timeframe: str, start: object, end: object, *, refresh: bool = False
@@ -33,18 +34,26 @@ class DataService:
         if exchange not in ("Binance", "Upbit"):
             raise ValueError("Unsupported exchange")
         start, end = utc(start), utc(end)
+        # The same closed weekly/monthly history does not change every minute.
+        # A new closing boundary changes the key immediately, regardless of TTL.
+        end = candle_boundary(end, timeframe)
+        if start >= end:
+            return normalize([], timeframe)
         key = hashlib.sha256(f"{exchange}:{symbol}:{timeframe}:{start}:{end}".encode()).hexdigest()
         with sqlite3.connect(self.path) as conn:
             item = conn.execute("SELECT created,payload FROM market_cache WHERE key=?", (key,)).fetchone()
-        if not refresh and item and time.time() - item[0] < self.ttl:
+        cache_ttl = max(self.ttl, min(TIMEFRAMES[timeframe], 86400))
+        if not refresh and item and time.time() - item[0] < cache_ttl:
             data = json.loads(item[1])
             result = normalize(data["rows"], timeframe)
             result.attrs["quality"] = data["quality"]
             result.attrs["cached"] = True
             return result
-        provider = BinanceProvider() if exchange == "Binance" else UpbitProvider()
+        if exchange not in self._providers:
+            self._providers[exchange] = BinanceProvider() if exchange == "Binance" else UpbitProvider()
+        provider = self._providers[exchange]
         result = provider.fetch(symbol, timeframe, start, end)
-        if not result.empty:
+        if not result.empty and candle_close(result.index[-1], timeframe) == end:
             rows = [[int(t.timestamp() * 1000), *r] for t, r in zip(result.index, result.to_numpy().tolist())]
             with sqlite3.connect(self.path) as conn:
                 conn.execute(
@@ -82,7 +91,7 @@ class DataService:
                     continue
                 # A latest snapshot needs a bounded window, not years of hourly
                 # candles just because a monthly chart is being viewed.
-                since = history_start(utc(end), tf, max(warmup, 260))
+                since = history_start(candle_boundary(utc(end), tf), tf, max(warmup, 260))
                 if exchange == "Binance":
                     since = max(since, utc("2017-08-01"))
                 try:

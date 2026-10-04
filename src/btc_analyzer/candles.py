@@ -5,6 +5,15 @@ import pandas as pd
 from btc_analyzer.config import TIMEFRAMES
 
 
+def candle_boundary(value: pd.Timestamp, timeframe: str) -> pd.Timestamp:
+    """Latest closed-candle boundary, including calendar weeks and months."""
+    if timeframe == "1M":
+        return value.normalize().replace(day=1)
+    if timeframe == "1w":
+        return value.normalize() - pd.Timedelta(days=value.dayofweek)
+    return value.floor(pd.Timedelta(seconds=TIMEFRAMES[timeframe]))
+
+
 def candle_close(value, timeframe: str):
     """Next opening boundary, not an approximate 30-day month."""
     if timeframe == "1M":

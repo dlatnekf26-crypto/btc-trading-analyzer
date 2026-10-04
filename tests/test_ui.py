@@ -5,8 +5,23 @@ from streamlit.testing.v1 import AppTest
 
 
 def press(app, label):
+    tab = {
+        "백테스트 실행": "백테스트",
+        "Monte Carlo 실행": "몬테카를로",
+        "모의거래 활성화": "모의거래",
+        "신규 모의거래 중지": "모의거래",
+        "현재 설정 SQLite에 저장": "설정",
+    }.get(label)
+    if tab:
+        app.session_state["dashboard_tab"] = tab
+        app.run(timeout=45)
     button = next(b for b in app.button if b.label == label)
-    return button.click().run(timeout=45)
+    button.click()
+    # AppTest does not serialize the new stateful tab-container widget yet.
+    # Supply its state along with the button; browser tests exercise native clicks.
+    if tab:
+        app.session_state["dashboard_tab"] = tab
+    return app.run(timeout=45)
 
 
 def test_dashboard_and_backtest_paper(monkeypatch, tmp_path):
@@ -57,6 +72,8 @@ def test_invalid_uploaded_json_shows_validation_error(monkeypatch, tmp_path):
     monkeypatch.setattr(st, "file_uploader", lambda *args, **kwargs: io.BytesIO(b"[]"))
     app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
     assert not app.exception
+    app.session_state["dashboard_tab"] = "설정"
+    app.run()
     assert any("JSON object" in x.value for x in app.error)
 
 
@@ -81,6 +98,8 @@ def test_five_horizon_chart_switch_keeps_composite_decision(monkeypatch, tmp_pat
         assert not app.exception and not app.error
         assert next(x.value for x in app.markdown if 'aria-label="분석 요약"' in x.value) == original
         assert any(item.value.startswith(label + " · ") for item in app.caption)
+    app.session_state["dashboard_tab"] = "다중 시간대"
+    app.run()
     assert any("월봉 EMA200" in item.value for item in app.caption)
     from btc_analyzer.storage.database import Database
 

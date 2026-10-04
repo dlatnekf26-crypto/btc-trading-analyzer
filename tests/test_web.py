@@ -159,9 +159,21 @@ def test_two_public_visitors_do_not_share_accounts_backtests_or_settings(monkeyp
     entry = Path(__file__).resolve().parents[1] / "web_app.py"
     first = AppTest.from_file(entry, default_timeout=30).run()
     assert not first.exception
-    next(b for b in first.button if b.label == "모의거래 활성화").click().run()
-    next(b for b in first.button if b.label == "현재 설정 SQLite에 저장").click().run()
-    next(b for b in first.button if b.label == "백테스트 실행").click().run(timeout=45)
+    first.session_state["dashboard_tab"] = "모의거래"
+    first.run()
+    next(b for b in first.button if b.label == "모의거래 활성화").click()
+    first.session_state["dashboard_tab"] = "모의거래"
+    first.run()
+    first.session_state["dashboard_tab"] = "설정"
+    first.run()
+    next(b for b in first.button if b.label == "현재 설정 SQLite에 저장").click()
+    first.session_state["dashboard_tab"] = "설정"
+    first.run()
+    first.session_state["dashboard_tab"] = "백테스트"
+    first.run()
+    next(b for b in first.button if b.label == "백테스트 실행").click()
+    first.session_state["dashboard_tab"] = "백테스트"
+    first.run(timeout=45)
     assert not first.exception
     first_path = Path(first.session_state["_btc_private_storage"].name) / "analyzer.sqlite3"
     first_db = Database(first_path)
@@ -206,7 +218,7 @@ def test_public_live_history_limit_prevents_large_download(monkeypatch, tmp_path
     app.run()
     assert not app.exception
     assert any("3,000" in item.value for item in app.info)
-    assert calls == ["1h"]
+    assert calls == ["1d"]
 
 
 def test_binance_ticker_failure_is_labeled_as_candle_close(monkeypatch, tmp_path):

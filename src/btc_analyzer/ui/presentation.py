@@ -232,13 +232,29 @@ def summary_cards(analysis: Analysis) -> str:
 def composite_cards(signal: CompositeSignal) -> str:
     """Display five-horizon judgment; data coverage is never a success probability."""
     cards = [
-        ("상승 방향 점수", f"{signal.score.overall:.1f}<small> / 100</small>", korean(signal.score.label)),
+        ("중장기 방향", f"{signal.score.overall:.1f}<small> / 100</small>", "일봉·주봉·월봉 85%"),
         (
-            "같은 상승 방향" if signal.score.overall >= 50 else "같은 하락 방향",
-            f"{signal.agreement}<small>개 시간대</small>",
-            "상승 60 이상 · 하락 40 이하",
+            "가격 매력",
+            f"{signal.position.value_score:.0f}<small> / 100</small>"
+            if signal.position.price is not None
+            else "대기",
+            f"중기 기준 대비 {signal.position.discount_pct:+.1f}% 할인"
+            if signal.position.discount_pct is not None and signal.position.discount_pct >= 0
+            else f"중기 기준 대비 {-signal.position.discount_pct:.1f}% 높음"
+            if signal.position.discount_pct is not None
+            else "계산할 이력 부족",
         ),
-        ("확인한 시간대", f"{signal.ready_frames}<small> / 5</small>", "최신 확정 봉 · 핵심 지표"),
+        (
+            "하락 진정",
+            f"{signal.position.stability_score:.0f}<small> / 100</small>"
+            if signal.position.price is not None
+            else "대기",
+            "급락 진행"
+            if signal.position.falling_fast
+            else "지지 이탈"
+            if signal.position.broken_support
+            else "일봉·4시간 압력과 지지",
+        ),
         (
             "지표 데이터 충족",
             f"{signal.quality:.0f}<small> %</small>",
@@ -265,28 +281,44 @@ def decision_panel(signal: CompositeSignal) -> str:
         "매도": "하락 흐름을 경계할 때예요",
         "관망": "지금은 기다릴 때예요",
     }
-    if signal.action == "매수":
-        reason = "단기·일봉의 상승 방향과 1시간봉 진입 조건을 확인했어요. 아래 진입 영역과 손절 가격을 함께 살펴보세요."
+    if signal.mode == "눌림목 분할매수":
+        headings["매수"] = "조정된 가격에서 나눠 살 조건이에요"
+        reason = "가격 할인과 하락 압력 둔화를 확인했어요. 단기 상승 전에도 검토할 수 있어요. 일봉 기준 진입 영역과 손절을 함께 살펴보세요."
+    elif signal.action == "매수":
+        reason = "일봉·주봉·월봉이 상승 방향을 지지해요. 단기 봉의 상승 여부보다 일봉 진입 영역과 비용 후 손익비를 먼저 확인해요."
+    elif signal.mode == "과열 분할매도":
+        headings["매도"] = "과열 구간에서 나눠 팔 때예요"
+        reason = "일봉 RSI와 중기 기준 대비 가격 이격이 커요. 현물 보유 중이라면 분할 이익 실현을 검토하는 신호예요."
     elif signal.action == "매도":
-        reason = "단기·일봉의 하락 방향이 일치해요. 현물을 보유 중이라면 보유분 축소를 검토하는 신호예요."
+        reason = "일봉·주봉의 하락 방향이 일치해요. 현물을 보유 중이라면 보유분 축소를 검토하는 신호예요."
     elif signal.ready_frames < 5:
         reason = f"5개 중 {signal.ready_frames}개 시간대만 준비됐어요. 부족한 데이터를 확인할 때까지 판단을 보류해요."
     elif any("극단적 변동성" in item for item in signal.reasons):
         reason = "가격 변동이 너무 커요. 방향보다 변동 위험을 먼저 확인할 때예요."
-    elif any("0.8배" in item for item in signal.reasons):
-        reason = "단기 거래량이 충분하지 않아요. 가격 방향을 뒷받침할 거래량을 기다리고 있어요."
+    elif signal.position.broken_support:
+        reason = "확정 지지 구간이 깨졌어요. 낮은 가격만 보고 진입하기보다 하락이 진정되는지 먼저 확인해요."
+    elif any("0.6배" in item for item in signal.reasons):
+        reason = "일봉·4시간 거래량이 충분하지 않아요. 신규 매수는 잠시 보류해요."
     elif any("RR 조건이 부족" in item for item in signal.reasons):
-        reason = "상승 방향은 모였지만 진입 품질이나 손익비가 부족해요. 추격하기보다 진입 조건을 기다려요."
-    else:
-        bullish = sum(frame.ready and frame.score >= 60 for frame in signal.frames.values())
-        bearish = sum(frame.ready and frame.score <= 40 for frame in signal.frames.values())
+        reason = "가격이나 방향은 관심 구간이지만 비용 후 손익비가 부족해요. 일봉 진입 조건을 기다려요."
+    elif signal.position.value_score >= 65:
+        headings["관망"] = "가격은 관심 구간, 진정은 더 확인해요"
         reason = (
-            f"상승 우위 {bullish}개와 하락 우위 {bearish}개 시간대가 섞여 있어요. 방향이 모일 때까지 관찰해요."
-            if bullish and bearish
-            else "뚜렷한 방향 합의나 종합 점수 기준이 부족해요. 조건이 모일 때까지 관찰해요."
+            "중기 기준보다 낮은 가격이에요. 장기 방향과 하락 압력 둔화가 함께 확인될 때 분할매수를 검토해요."
+        )
+    else:
+        supported = (
+            signal.frames["1w"].score >= 48
+            and signal.frames["1M"].score >= 45
+            and signal.position.macro_score >= 50
+        )
+        reason = (
+            "장기 흐름은 버티고 있어요. 가격 매력과 하락 진정 조건이 함께 맞을 때 분할매수를 검토해요."
+            if supported
+            else "주봉·월봉 방향의 지지가 아직 부족해요. 낮아진 가격만으로 새 매수 신호를 내지 않아요."
         )
     kind = {"매수": "buy", "매도": "sell", "관망": "hold"}[signal.action]
-    return f'<section class="btc-signal btc-signal-{kind}" aria-label="종합 신호 근거"><span class="btc-signal-label">{signal.action} · 종합 신호</span><h2>{headings[signal.action]}</h2><p>{escape(reason)}</p></section>'
+    return f'<section class="btc-signal btc-signal-{kind}" aria-label="종합 신호 근거"><span class="btc-signal-label">{signal.action} · 종합 신호 · {escape(signal.mode)}</span><h2>{headings[signal.action]}</h2><p>{escape(reason)}</p></section>'
 
 
 def ichimoku_cards(values: dict, displacement: int = 26) -> str:

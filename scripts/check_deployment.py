@@ -34,14 +34,22 @@ def main() -> None:
         control.set_value("1M").run(timeout=45)
         assert not app.exception and not app.error
         assert any(item.value.startswith("월봉 · ") for item in app.caption)
-        for label in ("백테스트 실행", "모의거래 활성화", "현재 설정 SQLite에 저장"):
-            next(button for button in app.button if button.label == label).click().run(timeout=45)
+        for tab, label in (
+            ("백테스트", "백테스트 실행"),
+            ("모의거래", "모의거래 활성화"),
+            ("설정", "현재 설정 SQLite에 저장"),
+        ):
+            app.session_state["dashboard_tab"] = tab
+            app.run(timeout=45)
+            next(button for button in app.button if button.label == label).click()
+            app.session_state["dashboard_tab"] = tab
+            app.run(timeout=45)
             assert not app.exception, [item.message for item in app.exception]
             assert not app.error, [item.value for item in app.error]
         assert "backtest_result" in app.session_state
         app.session_state["_btc_private_storage"].cleanup()
         print(
-            "PASS: public checkout startup, Binance BTC/USDT, Ichimoku/detail/monthly charts, five-horizon signal, 9 tabs, backtest, paper controls and settings"
+            "PASS: public checkout startup, Binance BTC/USDT, Ichimoku/detail/monthly charts, medium/long-term signal, 9 lazy tabs, backtest, paper controls and settings"
         )
 
 

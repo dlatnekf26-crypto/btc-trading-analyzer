@@ -15,7 +15,13 @@ def enrich(df: pd.DataFrame, timeframe: str, cfg: AppConfig | None = None) -> pd
     return regimes(market_structure(indicators(df, cfg.indicators, timeframe), cfg.indicators))
 
 
-def prepare(bundle: dict[str, pd.DataFrame], timeframe: str, cfg: AppConfig | None = None) -> pd.DataFrame:
+def prepare(
+    bundle: dict[str, pd.DataFrame],
+    timeframe: str,
+    cfg: AppConfig | None = None,
+    *,
+    enriched: dict[str, pd.DataFrame] | None = None,
+) -> pd.DataFrame:
     """Join higher/lower trends available by each current candle close.
 
     No backfill. Max age = one higher period, so missing/stale higher candles
@@ -27,7 +33,11 @@ def prepare(bundle: dict[str, pd.DataFrame], timeframe: str, cfg: AppConfig | No
         raise ValueError("Unsupported timeframe")
     if timeframe not in bundle:
         raise ValueError("Current timeframe missing")
-    frames = {tf: enrich(data, tf, cfg) for tf, data in bundle.items() if not data.empty}
+    frames = {
+        tf: enriched[tf] if enriched is not None and tf in enriched else enrich(data, tf, cfg)
+        for tf, data in bundle.items()
+        if not data.empty
+    }
     if timeframe not in frames:
         raise ValueError("No closed candles for current timeframe")
     base = frames[timeframe].copy()

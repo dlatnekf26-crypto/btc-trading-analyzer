@@ -10,15 +10,16 @@ import math
 import numpy as np
 import pandas as pd
 
-from btc_analyzer.analysis.multi_timeframe import enrich, prepare
+from btc_analyzer.analysis.multi_timeframe import enrich
+from btc_analyzer.analysis.support_resistance import zones
 from btc_analyzer.candles import candle_close
 from btc_analyzer.config import AppConfig, COMPOSITE_TIMEFRAMES
 from btc_analyzer.data.base_provider import utc
 from btc_analyzer.strategy.scoring import Score, score_label
-from btc_analyzer.strategy.signal_engine import analyze
-from btc_analyzer.strategy.entry_engine import TradePlan
+from btc_analyzer.strategy.entry_engine import TradePlan, entry_plan
+from btc_analyzer.strategy.position_view import PositionView, price_context, pullback_plan, net_ladder_rr
 
-FRAME_WEIGHTS = {"1h": 0.15, "4h": 0.20, "1d": 0.30, "1w": 0.25, "1M": 0.10}
+FRAME_WEIGHTS = {"1h": 0.05, "4h": 0.10, "1d": 0.40, "1w": 0.30, "1M": 0.15}
 FRAME_LABELS = {"1h": "1시간", "4h": "4시간", "1d": "일봉", "1w": "주봉", "1M": "월봉"}
 
 
@@ -53,6 +54,8 @@ class CompositeSignal:
     reasons: list[str]
     frames: dict[str, FrameSnapshot]
     plan: TradePlan | None
+    mode: str
+    position: PositionView
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -63,7 +66,13 @@ def _number(row: pd.Series, key: str) -> float | None:
     return float(value) if value is not None and pd.notna(value) and math.isfinite(float(value)) else None
 
 
-def _snapshot(raw: pd.DataFrame | None, tf: str, as_of: pd.Timestamp, cfg: AppConfig) -> FrameSnapshot:
+def _snapshot(
+    raw: pd.DataFrame | None,
+    tf: str,
+    as_of: pd.Timestamp,
+    cfg: AppConfig,
+    enriched: pd.DataFrame | None = None,
+) -> FrameSnapshot:
     neutral = dict.fromkeys(cfg.strategy.weights, 50.0)
     if raw is None or raw.empty:
         note = (
@@ -73,7 +82,11 @@ def _snapshot(raw: pd.DataFrame | None, tf: str, as_of: pd.Timestamp, cfg: AppCo
     closed = raw.loc[candle_close(raw.index, tf) <= as_of]
     if closed.empty:
         return _snapshot(None, tf, as_of, cfg)
-    frame = enrich(closed, tf, cfg)
+    frame = (
+        enriched.loc[candle_close(enriched.index, tf) <= as_of]
+        if enriched is not None
+        else enrich(closed, tf, cfg)
+    )
     row = frame.iloc[-1]
     confirmed_at = candle_close(frame.index[-1], tf)
     stale = as_of >= candle_close(confirmed_at, tf)
@@ -212,12 +225,27 @@ def _snapshot(raw: pd.DataFrame | None, tf: str, as_of: pd.Timestamp, cfg: AppCo
 
 
 def composite_signal(
-    bundle: dict[str, pd.DataFrame], as_of: object, cfg: AppConfig | None = None
+    bundle: dict[str, pd.DataFrame],
+    as_of: object,
+    cfg: AppConfig | None = None,
+    *,
+    enriched: dict[str, pd.DataFrame] | None = None,
 ) -> CompositeSignal:
-    """Missing/stale horizons and lower-vs-macro conflict veto buy/sell signals."""
+    """Medium/long-term spot view: trend entries, stabilized discounts and exits."""
     cfg = cfg or AppConfig()
     cutoff = utc(as_of)
-    frames = {tf: _snapshot(bundle.get(tf), tf, cutoff, cfg) for tf in COMPOSITE_TIMEFRAMES}
+    features = {}
+    for tf in COMPOSITE_TIMEFRAMES:
+        raw = bundle.get(tf)
+        if raw is not None and not raw.empty:
+            closed = raw.loc[candle_close(raw.index, tf) <= cutoff]
+            if not closed.empty:
+                features[tf] = (
+                    enriched[tf].loc[candle_close(enriched[tf].index, tf) <= cutoff]
+                    if enriched is not None and tf in enriched
+                    else enrich(closed, tf, cfg)
+                )
+    frames = {tf: _snapshot(bundle.get(tf), tf, cutoff, cfg, features.get(tf)) for tf in COMPOSITE_TIMEFRAMES}
     scores = {tf: (frame.score if frame.ready else 50.0) for tf, frame in frames.items()}
     total = 50 + sum(FRAME_WEIGHTS[tf] * frame.coverage * (scores[tf] - 50) for tf, frame in frames.items())
     categories = {
@@ -241,47 +269,67 @@ def composite_signal(
     agreement = bullish if sign == 1 else bearish
     quality = sum(FRAME_WEIGHTS[tf] * frame.coverage for tf, frame in frames.items() if frame.ready) * 100
     action = "관망"
+    mode = "중장기 관망"
     plan = None
-    buy_alignment = (
-        scores["1h"] >= 60
-        and scores["4h"] >= 60
-        and scores["1d"] >= 60
-        and scores["1w"] >= 50
-        and scores["1M"] >= 45
+    view = price_context(features, frames)
+    macro_favorable = scores["1w"] >= 48 and scores["1M"] >= 45 and view.macro_score >= 50
+    buy_alignment = scores["1d"] >= 60 and macro_favorable
+    sell_alignment = scores["1d"] <= 40 and scores["1w"] <= 45
+    volume_confirmed = all((frames[tf].indicators.get("volume_ratio") or 0) >= 0.6 for tf in ("4h", "1d"))
+    extreme = any(frames[tf].volatility == "Extreme Volatility" for tf in ("4h", "1d", "1w"))
+    attractive = (
+        view.value_score >= 65
+        and view.discount_pct is not None
+        and view.discount_pct > 0
+        and view.drawdown_pct is not None
+        and view.drawdown_pct >= 5
+        and view.price is not None
+        and view.reference is not None
+        and view.reference - view.price >= (frames["1d"].indicators.get("atr") or float("inf"))
     )
-    sell_alignment = (
-        scores["1h"] <= 40
-        and scores["4h"] <= 40
-        and scores["1d"] <= 40
-        and scores["1w"] <= 50
-        and scores["1M"] <= 55
-    )
-    volume_confirmed = all((frames[tf].indicators.get("volume_ratio") or 0) >= 0.8 for tf in ("1h", "4h"))
-    extreme = any(frame.volatility == "Extreme Volatility" for frame in frames.values())
     if ready_count < 5:
         reasons.append("다섯 시간대의 핵심 지표와 최신 확정 봉이 갖춰질 때까지 관망합니다.")
-    elif extreme:
-        reasons.append("극단적 변동성이 있어 종합 매수·매도 신호를 보류합니다.")
+    elif sell_alignment:
+        action = "매도"
+        mode = "중장기 위험 축소"
+        reasons.append("일봉·주봉의 하락 방향이 일치합니다. 현물 보유분 축소를 검토하는 신호입니다.")
+    elif view.overheated and macro_favorable:
+        action = "매도"
+        mode = "과열 분할매도"
+        reasons.append(
+            "일봉 RSI 72 이상이며 중기 기준에서 2.5 ATR 이상 이격되어, 현물 보유분의 분할 이익 실현을 검토합니다."
+        )
+    elif extreme or view.falling_fast:
+        reasons.append("극단적 변동성 또는 빠른 하락이 진행 중이라 가격 할인만으로 매수하지 않습니다.")
+    elif view.broken_support:
+        reasons.append("일봉 확정 지지점이 0.5 ATR 넘게 깨져 하락 진정을 기다립니다.")
     elif not volume_confirmed:
-        reasons.append("1시간·4시간 거래량이 평균의 0.8배 미만이어서 신호를 보류합니다.")
-    elif total >= cfg.strategy.min_score and buy_alignment:
-        current = {
-            tf: raw.loc[candle_close(raw.index, tf) <= cutoff]
-            for tf, raw in bundle.items()
-            if tf in ("1h", "4h", "1d")
-        }
-        entry = analyze(prepare(current, "1h", cfg), cfg)
-        if entry.eligible and entry.direction == "long":
-            action = "매수"
-            plan = entry.plan
+        reasons.append("4시간·일봉 거래량이 평균의 0.6배 미만이어서 신규 매수를 보류합니다.")
+    elif macro_favorable and attractive and view.stability_score >= 60:
+        candidate = pullback_plan(features["1d"], view, cfg)
+        if net_ladder_rr(candidate, cfg) >= cfg.strategy.min_rr:
+            action, mode, plan = "매수", "눌림목 분할매수", candidate
             reasons.append(
-                "단기·일봉 상승과 장기 방향이 일치하고 1시간봉 진입 품질·손절·목표 RR 조건을 충족합니다."
+                "가격이 중기 기준보다 할인되어 있고 하락 압력이 둔화됐습니다. 단기 상승 전에도 일봉 손절과 비용 후 RR을 확인해 분할매수를 검토합니다."
             )
         else:
-            reasons.append("상승 방향은 일치하지만 1시간봉 진입 품질·RR 조건이 부족하여 관망합니다.")
-    elif total <= 100 - cfg.strategy.min_score and sell_alignment:
-        action = "매도"
-        reasons.append("단기·일봉 하락과 장기 방향이 일치합니다. 현물 보유분 축소를 검토하는 신호입니다.")
+            reasons.append(
+                "할인과 하락 진정은 확인했지만 일봉 지지·실제 관찰 목표의 비용 후 RR 조건이 부족합니다."
+            )
+    elif total >= cfg.strategy.min_score and buy_alignment:
+        daily = features["1d"]
+        row = daily.iloc[-1].copy()
+        row["close"] = view.price
+        candidate = entry_plan(row, zones(daily), "long", cfg.strategy)
+        if net_ladder_rr(candidate, cfg) >= cfg.strategy.min_rr:
+            action, mode, plan = "매수", "중장기 추세 매수", candidate
+            reasons.append(
+                "일봉·주봉·월봉 방향이 지지하고 일봉 진입 영역의 비용 후 RR을 충족합니다. 단기 상승 합의는 필수가 아닙니다."
+            )
+        else:
+            reasons.append("중장기 상승 방향은 지지하지만 일봉 진입 영역의 비용 후 RR 조건이 부족합니다.")
+    elif attractive:
+        reasons.append("중기 기준 대비 가격은 낮지만 장기 방향 또는 하락 진정이 부족해 관망합니다.")
     else:
         reasons.append("시간대 방향이 충돌하거나 종합 점수가 기준에 미달하여 관망합니다.")
     for tf, frame in frames.items():
@@ -306,4 +354,6 @@ def composite_signal(
         reasons,
         frames,
         plan,
+        mode,
+        view,
     )
