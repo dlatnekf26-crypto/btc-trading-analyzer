@@ -137,11 +137,12 @@ def render_history_view(
 ):
     st.subheader("지금 차트, 과거엔 언제 비슷했을까요?")
     st.write("가격 흐름·변동성·거래량이 닮은 과거를 찾아, 그 뒤 실제 움직임을 함께 봐요.")
+    if "similarity_timeframe" not in st.session_state:
+        st.session_state["similarity_timeframe"] = st.session_state.get("price_chart_timeframe", "1d")
     tf = (
         st.segmented_control(
             "비교 시간대",
             COMPOSITE_TIMEFRAMES,
-            default=st.session_state.get("price_chart_timeframe", "1d"),
             format_func=FRAME_LABELS.get,
             key="similarity_timeframe",
         )
