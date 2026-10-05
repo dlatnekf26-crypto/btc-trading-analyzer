@@ -80,6 +80,11 @@ def request_market_refresh() -> None:
     st.session_state["market_refresh_sequence"] = st.session_state.get("market_refresh_sequence", 0) + 1
 
 
+def open_history_comparison() -> None:
+    st.session_state["dashboard_tab"] = "과거 유사성"
+    st.session_state["similarity_timeframe"] = st.session_state.get("price_chart_timeframe", "1d")
+
+
 with st.sidebar:
     st.subheader("시장 설정")
     source = st.selectbox(
@@ -399,6 +404,7 @@ def dashboard() -> None:
             "시장 개요",
             "기술 지표",
             "다중 시간대",
+            "과거 유사성",
             "백테스트",
             "전략 검증",
             "몬테카를로",
@@ -414,7 +420,11 @@ def dashboard() -> None:
             st.markdown('<p class="btc-section-label">필요한 만큼, 자유롭게</p>', unsafe_allow_html=True)
             st.subheader("차트로 확인하기")
             chart_tf = st.segmented_control(
-                "차트 시간대", COMPOSITE_TIMEFRAMES, default="1d", format_func=FRAME_LABELS.get
+                "차트 시간대",
+                COMPOSITE_TIMEFRAMES,
+                default="1d",
+                format_func=FRAME_LABELS.get,
+                key="price_chart_timeframe",
             )
             chart_tf = chart_tf or "1d"
             chart_view = st.segmented_control("차트 보기", ["간편", "상세"], default="간편") or "간편"
@@ -502,6 +512,7 @@ def dashboard() -> None:
             with st.expander("종합 판단의 전체 근거"):
                 for reason in combined.reasons:
                     st.write(f"• {reason}")
+            st.button("과거와 비슷한 차트 찾기", on_click=open_history_comparison)
             st.caption(f"아래 세부 근거·가격 영역은 연구 시간대 {timeframe} 기준입니다.")
             st.subheader("지금 주목할 근거")
             left, right = st.columns(2)
@@ -639,6 +650,20 @@ def dashboard() -> None:
             )
     if tabs[3].open:
         with tabs[3]:
+            from btc_analyzer.ui.history_view import render_history_view
+
+            render_history_view(
+                cache_path=str(runtime.market_cache),
+                exchange=exchange,
+                symbol=symbol,
+                cutoff=available_cutoff,
+                demo=demo,
+                demo_frames=bundle,
+                timezone=display_timezone,
+                refresh=refresh,
+            )
+    if tabs[4].open:
+        with tabs[4]:
             st.caption(
                 f"이 탭은 연구 시간대 {timeframe}의 지표 전략을 검증합니다. 상단의 새 종합 신호에 대한 성과 검증 결과는 아닙니다."
             )
@@ -716,8 +741,8 @@ def dashboard() -> None:
                 )
             else:
                 st.info("백테스트를 실행하면 순자산·Buy & Hold·낙폭·거래 체결 결과가 표시됩니다.")
-    if tabs[4].open:
-        with tabs[4]:
+    if tabs[5].open:
+        with tabs[5]:
             st.caption(
                 f"연구 시간대 {timeframe}의 지표 전략 검증입니다. 새 종합 신호의 성과를 검증한 결과는 아닙니다."
             )
@@ -780,8 +805,8 @@ def dashboard() -> None:
             st.caption(
                 "Production Candidate는 연구 평가 이름입니다. V1에서 실제 주문을 활성화하지 않습니다. 거래가 없는 결과는 검증 통과로 취급하지 않습니다."
             )
-    if tabs[5].open:
-        with tabs[5]:
+    if tabs[6].open:
+        with tabs[6]:
             count = st.number_input("Simulations", 1000, 5000 if PUBLIC else 20000, 1000, 1000)
             seed = st.number_input("Seed", 0, 1_000_000, 42)
             if st.button("Monte Carlo 실행"):
@@ -828,8 +853,8 @@ def dashboard() -> None:
             st.caption(
                 "수수료를 반영한 거래 R을 복원 추출합니다. 미관측 시장·유동성·상관 변화에 대한 보장은 제공하지 않습니다."
             )
-    if tabs[6].open:
-        with tabs[6]:
+    if tabs[7].open:
+        with tabs[7]:
             st.caption(
                 f"모의거래는 연구 시간대 {timeframe}의 지표 전략으로 동작합니다. 상단 종합 신호와 별도입니다."
             )
@@ -860,8 +885,8 @@ def dashboard() -> None:
             st.caption(
                 "수동 새로고침 또는 Live 자동 업데이트로 진행합니다. 설정·거래소·시장·데이터 모드 변경 시 별도 계정을 사용합니다."
             )
-    if tabs[7].open:
-        with tabs[7]:
+    if tabs[8].open:
+        with tabs[8]:
             history = database.history("signals")
             if not history.empty:
                 history = history[
@@ -886,8 +911,8 @@ def dashboard() -> None:
                 database.history("backtest_runs").drop(columns=["equity", "settings"], errors="ignore"),
                 hide_index=True,
             )
-    if tabs[8].open:
-        with tabs[8]:
+    if tabs[9].open:
+        with tabs[9]:
             with st.expander("현재 설정 상세"):
                 st.json(cfg.to_dict())
             if st.button("현재 설정 SQLite에 저장"):

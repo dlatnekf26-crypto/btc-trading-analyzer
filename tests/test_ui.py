@@ -29,7 +29,7 @@ def test_dashboard_and_backtest_paper(monkeypatch, tmp_path):
     app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
     assert not app.exception
     assert not app.error
-    assert len(app.tabs) == 9
+    assert len(app.tabs) == 10
     assert {item.label for item in app.metric} == {"추세", "모멘텀", "거래량", "변동성", "시장 구조"}
     assert any('aria-label="분석 요약"' in item.value for item in app.markdown)
     assert any("합성" in x.value for x in app.warning)

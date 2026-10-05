@@ -29,7 +29,7 @@ python -m pip install -r requirements.txt
 python -I scripts/check_deployment.py
 ```
 
-이 검사는 오프라인 Demo로 공개 화면의 9개 탭·백테스트·모의거래·설정 저장을 실행합니다. CI에서도 개발 패키지 설치와 별개로 검증합니다.
+이 검사는 오프라인 Demo로 공개 화면의 10개 탭·과거 유사성·백테스트·모의거래·설정 저장을 실행합니다. CI에서도 개발 패키지 설치와 별개로 검증합니다.
 
 `ImportError`가 `from btc_analyzer.candles import candle_boundary`에서 발생하면, 이전 버전의 Python 모듈이 서버 메모리에 남아 있는 경우를 확인합니다. 소스에 함수가 있어도 `sys.modules`의 이전 모듈에는 없을 수 있습니다. 현재 진입점은 프로젝트 코드의 내용과 로딩 경로를 확인하고 버전이 달라진 경우에만 자체 패키지·공개 계산 캐시를 갱신합니다. 같은 버전의 일반 새로고침에서는 모듈과 계산 캐시를 유지합니다. 계좌 DB나 개인 기록 파일을 삭제하지 않습니다.
 

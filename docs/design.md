@@ -52,7 +52,8 @@ BaseExchangeProvider는 공개 OHLCV interface만 정의합니다. Private execu
 | 1000+ Monte Carlo·seed·낙폭/연속손실/자산 범위 | backtest/monte_carlo.py |
 | 모의거래·멱등성·재시작·polling | paper/, cli.py |
 | SQLite audit, migrations 초기화 | storage/database.py |
-| Plotly/9개 탭/설정/CSV | app.py, ui/charts.py |
+| Plotly/10개 탭/설정/CSV | app.py, ui/charts.py |
+| 과거 유사 구간 자동 수집·비교 | analysis/historical_similarity.py, ui/history_view.py |
 | 알려진 값/causality/체결/모의/UI 테스트 | tests/ |
 | Windows/macOS/Linux·초보자 설치·문제 해결 | README.md |
 

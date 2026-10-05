@@ -31,7 +31,7 @@ def main() -> None:
         assert hasattr(candle_module, "candle_boundary")
         if legacy is not None:
             assert candle_module is not legacy
-        assert len(app.tabs) == 9
+        assert len(app.tabs) == 10
         assert {item.label for item in app.metric} == {"추세", "모멘텀", "거래량", "변동성", "시장 구조"}
         assert next(item.value for item in app.selectbox if item.label == "거래소") == "Binance"
         assert any(
@@ -41,6 +41,16 @@ def main() -> None:
         assert any("합성" in item.value for item in app.warning)
         assert any('aria-label="다섯 시간대 방향"' in item.value for item in app.markdown)
         assert any('aria-label="일목균형표 해석"' in item.value for item in app.markdown)
+        decision = next(item.value for item in app.markdown if 'aria-label="분석 요약"' in item.value)
+        app.session_state["dashboard_tab"] = "과거 유사성"
+        app.run(timeout=45)
+        assert not app.exception and not app.error
+        assert any("가장 닮은 과거" in item.value for item in app.success)
+        assert any("예측선이 아닙니다" in item.value for item in app.caption)
+        assert len(app.get("plotly_chart")) == 1
+        assert next(item.value for item in app.markdown if 'aria-label="분석 요약"' in item.value) == decision
+        app.session_state["dashboard_tab"] = "시장 개요"
+        app.run(timeout=45)
         next(item for item in app.get("button_group") if item.label == "차트 보기").set_value("상세").run(
             timeout=45
         )
@@ -65,7 +75,7 @@ def main() -> None:
         assert sys.modules["btc_analyzer.candles"] is candle_module
         app.session_state["_btc_private_storage"].cleanup()
         print(
-            "PASS: public checkout startup, Binance BTC/USDT, Ichimoku/detail/monthly charts, medium/long-term signal, 9 lazy tabs, backtest, paper controls and settings"
+            "PASS: public checkout startup, Binance BTC/USDT, Ichimoku/detail/monthly charts, medium/long-term signal, historical analogues, 10 lazy tabs, backtest, paper controls and settings"
         )
         if legacy is not None:
             print("PASS: retained legacy candles recovered; ordinary reruns preserve module identity")

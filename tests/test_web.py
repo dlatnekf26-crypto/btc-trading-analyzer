@@ -134,7 +134,7 @@ def test_public_default_live_binance_and_usdt_quote(monkeypatch, tmp_path):
     app = AppTest.from_file(Path(__file__).resolve().parents[1] / "web_app.py", default_timeout=30).run()
     assert not app.exception
     assert not app.error
-    assert len(app.tabs) == 9
+    assert len(app.tabs) == 10
     assert captured["exchange"] == "Binance"
     assert captured["symbol"] == "BTC/USDT"
     assert captured["include_macro"] is True
