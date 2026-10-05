@@ -80,7 +80,30 @@ p, li { line-height: 1.7; }
 .btc-ichimoku article { border: 1px solid #e7ecf3; border-radius: 16px; background: #fff; padding: 15px 17px; }
 .btc-ichimoku strong { display: block; font-size: 18px; margin: 5px 0; }
 .btc-ichimoku p { color: #66758b; font-size: 12px; margin: 0; }
+[data-testid="stTabs"] [role="tablist"] { gap: 6px; padding: 6px; border-radius: 16px; background: #eef2f8; }
+[data-testid="stTabs"] [role="tab"] { min-height: 44px; border-radius: 11px; padding: 10px 14px; }
+[data-testid="stTabs"] [role="tab"][aria-selected="true"] { background: white; color: #216bdd; box-shadow: 0 2px 8px #163b6410; }
+[data-testid="stButton"] button, [data-testid="stButtonGroup"] button, [role="tab"] {
+    transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+[data-testid="stButton"] button:hover { transform: translateY(-1px); box-shadow: 0 3px 10px #163b6415; }
+[data-testid="stButton"] button:active { transform: scale(.985); }
+button:focus-visible { outline: 3px solid #3182f666; outline-offset: 3px; }
+.btc-forecast-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 12px 0 18px; }
+.btc-forecast-cards article { border-radius: 20px; padding: 20px; border: 1px solid #e7ecf3; background: #fff; }
+.btc-forecast-cards article:first-child { background: #eaf3ff; border-color: #d9e8ff; }
+.btc-forecast-cards p { margin: 0 0 8px; color: #66758b; font-size: 12px; }
+.btc-forecast-cards strong { display: block; font-size: clamp(19px, 2vw, 26px); letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+.btc-forecast-cards span { display: block; margin-top: 8px; color: #66758b; font-size: 11px; }
+@media (prefers-reduced-motion: reduce) {
+    [data-testid="stButton"] button, [data-testid="stButtonGroup"] button, [role="tab"] { transition: none; }
+    [data-testid="stButton"] button:hover, [data-testid="stButton"] button:active { transform: none; }
+}
 @media (max-width: 760px) {
+    .btc-forecast-cards { grid-template-columns: 1fr; gap: 8px; }
+    .btc-forecast-cards article { padding: 14px 17px; }
+    .btc-forecast-cards strong { font-size: 23px; }
+    [data-testid="stTabs"] [role="tab"] { padding: 10px 12px; font-size: 13px; }
     .block-container { padding: 4.1rem 1rem 2rem; }
     .btc-brand-tag { display: none; }
     .btc-hero { padding: 18px 20px; border-radius: 20px; }

@@ -42,11 +42,17 @@ def main() -> None:
         assert any('aria-label="다섯 시간대 방향"' in item.value for item in app.markdown)
         assert any('aria-label="일목균형표 해석"' in item.value for item in app.markdown)
         decision = next(item.value for item in app.markdown if 'aria-label="분석 요약"' in item.value)
-        app.session_state["dashboard_tab"] = "과거 유사성"
+        app.session_state["dashboard_tab"] = "미래 예측"
         app.run(timeout=45)
         assert not app.exception and not app.error
         assert any("가장 닮은 과거" in item.value for item in app.success)
-        assert any("예측선이 아닙니다" in item.value for item in app.caption)
+        assert any('aria-label="예측 요약"' in item.value for item in app.markdown)
+        assert not app.get("dataframe") and not app.get("download_button")
+        assert any("모델 예상" in item.value for item in app.caption)
+        next(item for item in app.get("button_group") if item.label == "분석 보기").set_value("과거 비교")
+        app.session_state["dashboard_tab"] = "미래 예측"
+        app.run(timeout=45)
+        assert not app.exception and any("예측선이 아닙니다" in item.value for item in app.caption)
         assert len(app.get("plotly_chart")) == 1
         assert next(item.value for item in app.markdown if 'aria-label="분석 요약"' in item.value) == decision
         app.session_state["dashboard_tab"] = "시장 개요"
@@ -75,7 +81,7 @@ def main() -> None:
         assert sys.modules["btc_analyzer.candles"] is candle_module
         app.session_state["_btc_private_storage"].cleanup()
         print(
-            "PASS: public checkout startup, Binance BTC/USDT, Ichimoku/detail/monthly charts, medium/long-term signal, historical analogues, 10 lazy tabs, backtest, paper controls and settings"
+            "PASS: public checkout startup, Binance BTC/USDT, Ichimoku/detail/monthly charts, medium/long-term signal, forecast/uncertainty/validation, historical analogues, 10 lazy tabs, backtest, paper controls and settings"
         )
         if legacy is not None:
             print("PASS: retained legacy candles recovered; ordinary reruns preserve module identity")

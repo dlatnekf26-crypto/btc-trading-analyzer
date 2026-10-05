@@ -25,7 +25,7 @@ def flat_history(tf, end, count=3000):
 
 
 def choose_history(app):
-    app.session_state["dashboard_tab"] = "과거 유사성"
+    app.session_state["dashboard_tab"] = "미래 예측"
     return app.run(timeout=45)
 
 
@@ -95,7 +95,7 @@ def test_live_tab_collects_only_when_open_and_controls_and_refresh_reuse_work(mo
     assert any("Binance 공개 시세 API" in x.value for x in app.caption)
     assert any("가장 닮은 과거" in x.value for x in app.success)
     assert len(app.get("plotly_chart")) == 1
-    next(item for item in app.select_slider if item.label == "그 뒤 얼마나 볼까요?").set_value(90)
+    next(item for item in app.select_slider if item.label == "예측 기간").set_value(90)
     choose_history(app)
     assert len(calls) == 1
     next(item for item in app.button if item.label == "비교 자료 새로고침").click()
@@ -163,7 +163,7 @@ def test_demo_comparison_reuses_the_exact_displayed_path_and_five_timeframes(mon
     )
     app = AppTest.from_file(ROOT / "app.py", default_timeout=45).run()
     next(item for item in app.get("button_group") if item.label == "차트 시간대").set_value("4h").run()
-    next(item for item in app.button if item.label == "과거와 비슷한 차트 찾기").click()
+    next(item for item in app.button if item.label == "예측과 과거 차트 함께 보기").click()
     choose_history(app)
     assert app.session_state["similarity_timeframe"] == "4h"
     assert not app.exception and not app.error
@@ -188,3 +188,46 @@ def test_calculation_cache_invalidates_actual_price_changes_without_changing_oth
     assert history_view.history_comparison(original, "1d", end.isoformat(), 30, 30, 60) == first
     assert second == find_similar_history(changed, "1d", end, 30, 30)
     history_view.history_comparison.clear()
+
+
+def test_default_prediction_and_lazy_details_show_measured_error_and_keep_private_decision(
+    monkeypatch, tmp_path
+):
+    st.cache_data.clear()
+    monkeypatch.setenv("BTC_DB_PATH", str(tmp_path / "demo.sqlite"))
+    monkeypatch.setenv("BTC_DEFAULT_SOURCE", "demo")
+    app = AppTest.from_file(ROOT / "app.py", default_timeout=45).run()
+    decision = next(item.value for item in app.markdown if 'aria-label="분석 요약"' in item.value)
+    next(item for item in app.button if item.label == "미래 예측 보기 →").click()
+    choose_history(app)
+    assert not app.exception and not app.error
+    assert any('aria-label="예측 요약"' in item.value for item in app.markdown)
+    assert len(app.get("plotly_chart")) == 1
+    assert not app.get("dataframe") and not app.get("download_button")
+    app.session_state["forecast_validation_details"] = True
+    choose_history(app)
+    assert not app.exception and not app.error
+    assert {item.label for item in app.metric} >= {"평균 변화율 오차", "가격 유지 가정 오차", "방향 적중률"}
+    assert {item.label for item in app.get("download_button")} >= {"과거 예측 검증 CSV", "예상 가격 경로 CSV"}
+    assert any("자료 모드" in column for item in app.dataframe for column in item.value.columns)
+    assert next(item.value for item in app.markdown if 'aria-label="분석 요약"' in item.value) == decision
+    next(item for item in app.get("button_group") if item.label == "분석 보기").set_value("과거 비교")
+    choose_history(app)
+    assert any("예측선이 아닙니다" in item.value for item in app.caption)
+    assert not app.exception and len(app.get("plotly_chart")) == 1
+    st.cache_data.clear()
+
+
+def test_forecast_cache_tracks_price_changes_and_returned_forecasts_are_isolated():
+    history_view.forecast_analysis.clear()
+    end = pd.Timestamp("2024-01-01T00:00Z")
+    original = flat_history("1d", end, 1000)
+    first = history_view.forecast_analysis(original, "1d", end.isoformat(), 30, 30, 60)
+    changed = original.copy()
+    changed.iloc[-1, :4] *= 1.01
+    second = history_view.forecast_analysis(changed, "1d", end.isoformat(), 30, 30, 60)
+    assert first.history.anchor_price != second.history.anchor_price
+    assert first.prediction is not None and second.prediction is not None
+    assert first.prediction.center[0] != second.prediction.center[0]
+    assert history_view.forecast_analysis(original, "1d", end.isoformat(), 30, 30, 60) == first
+    history_view.forecast_analysis.clear()

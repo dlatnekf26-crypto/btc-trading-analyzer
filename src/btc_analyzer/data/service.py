@@ -1,5 +1,6 @@
 """SQLite TTL cache and explicit, reproducible OFFLINE demonstration data."""
 
+from functools import lru_cache
 import hashlib
 import json
 import sqlite3
@@ -25,7 +26,11 @@ class DataService:
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS market_cache (key TEXT PRIMARY KEY, created REAL, payload TEXT)"
             )
-            conn.execute("DELETE FROM market_cache WHERE created < ?", (time.time() - max(ttl, 86400),))
+            conn.execute(
+                "DELETE FROM market_cache WHERE (key NOT LIKE 'history:%' AND created < ?) "
+                "OR (key LIKE 'history:%' AND created < ?)",
+                (time.time() - max(ttl, 86400), time.time() - max(ttl, 7 * 86400)),
+            )
 
     def fetch(
         self, exchange: str, symbol: str, timeframe: str, start: object, end: object, *, refresh: bool = False
@@ -59,6 +64,65 @@ class DataService:
                 conn.execute(
                     "INSERT OR REPLACE INTO market_cache VALUES(?,?,?)",
                     (key, time.time(), json.dumps({"rows": rows, "quality": result.attrs["quality"]})),
+                )
+        return result
+
+    def history(self, exchange, symbol, timeframe, end, bars, *, refresh=False):
+        """Reuse closed history across boundaries; fetch just the revised/new tail.
+
+        Forced refresh and expired same-boundary data perform a full request.
+        Missing latest candles or provider failures never pass as fresh history.
+        """
+        if exchange not in ("Binance", "Upbit") or timeframe not in COMPOSITE_TIMEFRAMES:
+            raise ValueError("Unsupported historical market")
+        if not isinstance(bars, int) or not 1 <= bars <= 3000:
+            raise ValueError("History must contain 1–3000 candles")
+        end = candle_boundary(utc(end), timeframe)
+        start = history_start(end, timeframe, bars)
+        if exchange == "Binance":
+            start = max(start, utc("2017-08-01"))
+        key = "history:" + hashlib.sha256(f"{exchange}:{symbol}:{timeframe}:{bars}".encode()).hexdigest()
+        with sqlite3.connect(self.path) as conn:
+            item = conn.execute("SELECT created,payload FROM market_cache WHERE key=?", (key,)).fetchone()
+        previous = None
+        if item and not refresh:
+            payload = json.loads(item[1])
+            previous_end = utc(payload["end"])
+            previous = normalize(payload["rows"], timeframe, now=previous_end)
+            previous.attrs["quality"] = payload["quality"]
+            lifetime = max(self.ttl, min(TIMEFRAMES[timeframe], 86400))
+            if end == previous_end and time.time() - item[0] < lifetime:
+                previous.attrs["cached"] = True
+                return previous
+            if end > previous_end and not previous.empty and previous_end > start:
+                # Include one overlap candle so revisions replace its old value.
+                tail = self.fetch(exchange, symbol, timeframe, previous.index[-1], end)
+                joined = pd.concat([previous, tail])
+                joined = joined.loc[~joined.index.duplicated(keep="last")]
+                joined = joined.loc[(joined.index >= start) & (candle_close(joined.index, timeframe) <= end)]
+                rows = [
+                    [int(t.timestamp() * 1000), *r] for t, r in zip(joined.index, joined.to_numpy().tolist())
+                ]
+                result = normalize(rows, timeframe, now=end)
+                result.attrs["quality"]["invalid_rows"] += tail.attrs.get("quality", {}).get(
+                    "invalid_rows", 0
+                )
+            else:
+                previous = None
+        if previous is None or refresh:
+            result = self.fetch(exchange, symbol, timeframe, start, end, refresh=refresh)
+        if not result.empty and candle_close(result.index[-1], timeframe) == end:
+            rows = [[int(t.timestamp() * 1000), *r] for t, r in zip(result.index, result.to_numpy().tolist())]
+            with sqlite3.connect(self.path) as conn:
+                conn.execute(
+                    "INSERT OR REPLACE INTO market_cache VALUES(?,?,?)",
+                    (
+                        key,
+                        time.time(),
+                        json.dumps(
+                            {"rows": rows, "quality": result.attrs["quality"], "end": end.isoformat()}
+                        ),
+                    ),
                 )
         return result
 
@@ -111,6 +175,8 @@ def demo_bundle(
     end: object = "2026-01-01T00:00:00Z",
     price: float = 90_000,
     include_macro: bool = False,
+    history_limits: dict[str, int] | None = None,
+    only_timeframe: str | None = None,
 ) -> dict[str, pd.DataFrame]:
     """Synthetic, NOT live prices. All timeframes resample the SAME seeded price path.
 
@@ -124,6 +190,40 @@ def demo_bundle(
         # Same path for all macro views; mirror Binance's actual history length.
         base_seconds = min(base_seconds, 900)
         total = max(1, int((utc(end) - utc("2017-09-01")).total_seconds() // base_seconds))
+    if history_limits and any(
+        tf not in requested or not isinstance(count, int) or not 1 <= count <= 3000
+        for tf, count in history_limits.items()
+    ):
+        raise ValueError("Demo history must use requested frames and 1–3000 bars.")
+    if only_timeframe is not None:
+        if only_timeframe not in requested:
+            raise ValueError("Demo timeframe is unavailable.")
+        requested = (only_timeframe,)
+    raw = _demo_path(base_seconds, total, seed, utc(end).isoformat(), price)
+    result = {}
+    start = history_start(utc(end), timeframe, bars)
+    for tf in requested:
+        df = resample_candles(raw, tf)
+        since = history_start(start, tf, 240)
+        if tf not in MTF_MAP[timeframe]:
+            since = history_start(utc(end), tf, 260)
+        if history_limits and tf in history_limits:
+            since = history_start(candle_boundary(utc(end), tf), tf, history_limits[tf])
+        df = df.loc[(candle_close(df.index, tf) <= utc(end)) & (df.index >= since)]
+        df.attrs.update(
+            {
+                "timeframe": tf,
+                "synthetic": True,
+                "quality": {"missing_candles": 0, "invalid_rows": 0, "duplicates": 0},
+            }
+        )
+        result[tf] = df
+    return result
+
+
+@lru_cache(maxsize=1)
+def _demo_path(base_seconds, total, seed, end, price):
+    """One bounded, read-only internal price path shared by demonstration views."""
     index = pd.date_range(end=utc(end), periods=total + 1, freq=pd.Timedelta(seconds=base_seconds))[:-1]
     rng = np.random.default_rng(seed)
     x = np.arange(total)
@@ -143,20 +243,4 @@ def demo_bundle(
         index=index,
     )
     raw.index.name = "timestamp"
-    result = {}
-    start = history_start(utc(end), timeframe, bars)
-    for tf in requested:
-        df = resample_candles(raw, tf)
-        since = history_start(start, tf, 240)
-        if tf not in MTF_MAP[timeframe]:
-            since = history_start(utc(end), tf, 260)
-        df = df.loc[(candle_close(df.index, tf) <= utc(end)) & (df.index >= since)]
-        df.attrs.update(
-            {
-                "timeframe": tf,
-                "synthetic": True,
-                "quality": {"missing_candles": 0, "invalid_rows": 0, "duplicates": 0},
-            }
-        )
-        result[tf] = df
-    return result
+    return raw

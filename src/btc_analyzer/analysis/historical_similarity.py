@@ -40,6 +40,7 @@ class HistoricalMatch:
     forward_return: float
     lowest_return: float
     highest_return: float
+    volatility: float
 
 
 @dataclass(frozen=True)
@@ -56,9 +57,11 @@ class SimilarityReport:
     best_similarity: float | None
     volume_used: bool
     matches: tuple[HistoricalMatch, ...]
+    anchor_price: float
+    volatility: float
 
 
-def find_similar_history(
+def prepare_history(
     raw: pd.DataFrame,
     timeframe: str,
     as_of: object,
@@ -67,14 +70,7 @@ def find_similar_history(
     *,
     max_matches: int = 5,
     min_similarity: float = 60,
-) -> SimilarityReport:
-    """Compare contiguous closed windows; all outcomes end before the query.
-
-    Each score is exp(-distance)*100. Weights: price path 65%, realized
-    volatility 20%, relative volume 15%. With no query volume, the first two
-    weights are renormalized. This descriptive score is not a probability.
-    Selected windows AND their follow-up periods may not overlap each other.
-    """
+) -> "PreparedHistory":
     if timeframe not in COMPOSITE_TIMEFRAMES:
         raise ValueError("지원하는 비교 시간대를 선택하세요.")
     if not (
@@ -108,79 +104,121 @@ def find_similar_history(
         raise ValueError(f"최근 비교에 필요한 연속 확정 봉 {window}개가 부족합니다.")
     if candle_close(frame.index[-1], timeframe) != boundary:
         raise ValueError("최신 확정 봉이 아직 도착하지 않았습니다. 데이터 갱신 후 다시 비교하세요.")
-    # Gap checking uses actual next boundaries, including leap months/weeks.
-    breaks = np.r_[0, (frame.index[1:] != candle_close(frame.index[:-1], timeframe)).astype(int)]
-    gaps = np.cumsum(breaks)
-    query_start = len(frame) - window
-    if gaps[-1] != gaps[query_start]:
-        raise ValueError("최근 비교 구간에 빠진 봉이 있습니다. 누락된 가격은 채워 넣지 않습니다.")
-    close = frame.close.to_numpy()
-    volume = frame.volume.to_numpy()
-    paths = sliding_window_view(np.log(close), window)
-    paths = paths - paths[:, :1]
-    query = paths[-1]
-    # A small common floor makes flat prices finite, without a fake correlation.
-    scale = np.maximum(np.sqrt(np.mean(paths**2, axis=1)), max(np.sqrt(np.mean(query**2)), 0.005))
-    price_scores = 100 * np.exp(-np.sqrt(np.mean((paths - query) ** 2, axis=1)) / scale)
-    volatility = np.maximum(np.std(np.diff(paths, axis=1), axis=1), 1e-6)
-    volatility_scores = 100 * np.exp(-np.abs(np.log(volatility / volatility[-1])))
-    volumes = sliding_window_view(volume, window)
-    means = volumes.mean(axis=1)
-    volume_used = bool(means[-1] > 0)
-    if volume_used:
-        profiles = np.log1p(volumes / np.maximum(means[:, None], 1e-12))
-        volume_scores = 100 * np.exp(-np.sqrt(np.mean((profiles - profiles[-1]) ** 2, axis=1)))
-        volume_scores[means <= 0] = 0
-        scores = 0.65 * price_scores + 0.20 * volatility_scores + 0.15 * volume_scores
-    else:
-        volume_scores = None
-        scores = (0.65 * price_scores + 0.20 * volatility_scores) / 0.85
-    # Future outcomes are not read until after the similarity ranking.
-    starts = np.arange(max(0, query_start - window - forward + 1))
-    ends = starts + window - 1
-    eligible = gaps[ends + forward] == gaps[starts]
-    starts, ends = starts[eligible], ends[eligible]
-    ranked = starts[np.argsort(-scores[starts], kind="stable")]
-    selected = []
-    intervals = []
-    for start in ranked:
-        if scores[start] < min_similarity:
-            break
-        end = int(start + window - 1)
-        observed_end = end + forward
-        if any(start <= right and observed_end >= left for left, right in intervals):
-            continue
-        intervals.append((int(start), observed_end))
-        anchor = close[end]
-        after = frame.iloc[end + 1 : observed_end + 1]
-        selected.append(
-            HistoricalMatch(
-                start=frame.index[start],
-                end=frame.index[end],
-                observed_until=candle_close(frame.index[observed_end], timeframe),
-                similarity=float(scores[start]),
-                price_similarity=float(price_scores[start]),
-                volatility_similarity=float(volatility_scores[start]),
-                volume_similarity=float(volume_scores[start]) if volume_used else None,
-                path=tuple((close[start : observed_end + 1] / anchor * 100).tolist()),
-                forward_return=float(close[observed_end] / anchor - 1),
-                lowest_return=float(min(0, after.low.min() / anchor - 1)),
-                highest_return=float(max(0, after.high.max() / anchor - 1)),
+    return PreparedHistory(frame, timeframe, window)
+
+
+class PreparedHistory:
+    """Compute window descriptors once; each query reads only its own past.
+
+    Precomputed descriptors are local to individual windows. There is no global
+    normalization or future-dependent threshold, including in walk-forward use.
+    """
+
+    def __init__(self, frame, timeframe, window):
+        self.frame, self.timeframe, self.window = frame, timeframe, window
+        self.close = frame.close.to_numpy()
+        breaks = np.r_[0, (frame.index[1:] != candle_close(frame.index[:-1], timeframe)).astype(int)]
+        self.gaps = np.cumsum(breaks)
+        self.paths = sliding_window_view(np.log(self.close), window)
+        self.paths = self.paths - self.paths[:, :1]
+        self.scales = np.sqrt(np.mean(self.paths**2, axis=1))
+        self.volatility = np.maximum(np.std(np.diff(self.paths, axis=1), axis=1), 1e-6)
+        volumes = sliding_window_view(frame.volume.to_numpy(), window)
+        self.means = volumes.mean(axis=1)
+        self.profiles = np.log1p(volumes / np.maximum(self.means[:, None], 1e-12))
+
+    def compare(self, forward, *, query_end=None, max_matches=5, min_similarity=60):
+        frame, timeframe, window = self.frame, self.timeframe, self.window
+        close, gaps = self.close, self.gaps
+        last = len(frame) - 1 if query_end is None else query_end
+        query_start = last - window + 1
+        if query_start < 0:
+            raise ValueError("최근 비교 구간이 부족합니다.")
+        if gaps[last] != gaps[query_start]:
+            raise ValueError("최근 비교 구간에 빠진 봉이 있습니다. 누락된 가격은 채워 넣지 않습니다.")
+        # Never score windows after the query, even though their descriptors
+        # may have been prepared for a later, separate evaluation origin.
+        paths = self.paths[: query_start + 1]
+        query = paths[query_start]
+        scale = np.maximum(self.scales[: query_start + 1], max(self.scales[query_start], 0.005))
+        price_scores = 100 * np.exp(-np.sqrt(np.mean((paths - query) ** 2, axis=1)) / scale)
+        volatility = self.volatility[: query_start + 1]
+        volatility_scores = 100 * np.exp(-np.abs(np.log(volatility / volatility[query_start])))
+        volume_used = bool(self.means[query_start] > 0)
+        if volume_used:
+            profiles = self.profiles[: query_start + 1]
+            volume_scores = 100 * np.exp(-np.sqrt(np.mean((profiles - profiles[query_start]) ** 2, axis=1)))
+            volume_scores[self.means[: query_start + 1] <= 0] = 0
+            scores = 0.65 * price_scores + 0.20 * volatility_scores + 0.15 * volume_scores
+        else:
+            volume_scores = None
+            scores = (0.65 * price_scores + 0.20 * volatility_scores) / 0.85
+        # Future outcomes are not read until after the similarity ranking.
+        starts = np.arange(max(0, query_start - window - forward + 1))
+        ends = starts + window - 1
+        eligible = gaps[ends + forward] == gaps[starts]
+        starts, ends = starts[eligible], ends[eligible]
+        ranked = starts[np.argsort(-scores[starts], kind="stable")]
+        selected = []
+        intervals = []
+        for start in ranked:
+            if scores[start] < min_similarity:
+                break
+            end = int(start + window - 1)
+            observed_end = end + forward
+            if any(start <= right and observed_end >= left for left, right in intervals):
+                continue
+            intervals.append((int(start), observed_end))
+            anchor = close[end]
+            after = frame.iloc[end + 1 : observed_end + 1]
+            selected.append(
+                HistoricalMatch(
+                    start=frame.index[start],
+                    end=frame.index[end],
+                    observed_until=candle_close(frame.index[observed_end], timeframe),
+                    similarity=float(scores[start]),
+                    price_similarity=float(price_scores[start]),
+                    volatility_similarity=float(volatility_scores[start]),
+                    volume_similarity=float(volume_scores[start]) if volume_used else None,
+                    path=tuple((close[start : observed_end + 1] / anchor * 100).tolist()),
+                    forward_return=float(close[observed_end] / anchor - 1),
+                    lowest_return=float(min(0, after.low.min() / anchor - 1)),
+                    highest_return=float(max(0, after.high.max() / anchor - 1)),
+                    volatility=float(volatility[start]),
+                )
             )
+            if len(selected) == max_matches:
+                break
+        return SimilarityReport(
+            timeframe,
+            window,
+            forward,
+            frame.index[0],
+            candle_close(frame.index[last], timeframe),
+            frame.index[query_start],
+            candle_close(frame.index[last], timeframe),
+            tuple((close[query_start : last + 1] / close[last] * 100).tolist()),
+            len(starts),
+            float(scores[ranked[0]]) if len(ranked) else None,
+            volume_used,
+            tuple(selected),
+            float(close[last]),
+            float(volatility[query_start]),
         )
-        if len(selected) == max_matches:
-            break
-    return SimilarityReport(
-        timeframe,
-        window,
-        forward,
-        frame.index[0],
-        candle_close(frame.index[-1], timeframe),
-        frame.index[query_start],
-        candle_close(frame.index[-1], timeframe),
-        tuple((close[-window:] / close[-1] * 100).tolist()),
-        len(starts),
-        float(scores[ranked[0]]) if len(ranked) else None,
-        volume_used,
-        tuple(selected),
+
+
+def find_similar_history(
+    raw: pd.DataFrame,
+    timeframe: str,
+    as_of: object,
+    window: int = 30,
+    forward: int = 30,
+    *,
+    max_matches: int = 5,
+    min_similarity: float = 60,
+) -> SimilarityReport:
+    """Rank past contiguous closed windows before reading their later outcomes."""
+    prepared = prepare_history(
+        raw, timeframe, as_of, window, forward, max_matches=max_matches, min_similarity=min_similarity
     )
+    return prepared.compare(forward, max_matches=max_matches, min_similarity=min_similarity)
