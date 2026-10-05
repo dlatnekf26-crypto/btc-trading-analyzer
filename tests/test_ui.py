@@ -4,48 +4,27 @@ from pathlib import Path
 from streamlit.testing.v1 import AppTest
 
 
-def press(app, label):
-    tab = {
-        "백테스트 실행": "백테스트",
-        "Monte Carlo 실행": "몬테카를로",
-        "모의거래 활성화": "모의거래",
-        "신규 모의거래 중지": "모의거래",
-        "현재 설정 SQLite에 저장": "설정",
-    }.get(label)
-    if tab:
-        app.session_state["dashboard_tab"] = tab
-        app.run(timeout=45)
-    button = next(b for b in app.button if b.label == label)
-    button.click()
-    # AppTest does not serialize the new stateful tab-container widget yet.
-    # Supply its state along with the button; browser tests exercise native clicks.
-    if tab:
-        app.session_state["dashboard_tab"] = tab
-    return app.run(timeout=45)
+def test_dashboard_only_has_requested_views_and_never_opens_account_db(monkeypatch, tmp_path):
+    from btc_analyzer.storage.database import Database
 
+    path = tmp_path / "dashboard.sqlite"
+    monkeypatch.setenv("BTC_DB_PATH", str(path))
 
-def test_dashboard_and_backtest_paper(monkeypatch, tmp_path):
-    monkeypatch.setenv("BTC_DB_PATH", str(tmp_path / "dashboard.sqlite"))
+    def forbidden(*args, **kwargs):
+        raise AssertionError("The lightweight dashboard must not initialize an account database")
+
+    monkeypatch.setattr(Database, "__init__", forbidden)
     app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
-    assert not app.exception
-    assert not app.error
-    assert len(app.tabs) == 10
-    assert {item.label for item in app.metric} == {"추세", "모멘텀", "거래량", "변동성", "시장 구조"}
+    assert not app.exception and not app.error
+    assert [tab.label for tab in app.tabs] == ["시장 개요", "기술 지표", "다중 시간대", "미래 예측"]
     assert any('aria-label="분석 요약"' in item.value for item in app.markdown)
     assert any("합성" in x.value for x in app.warning)
-    app = press(app, "백테스트 실행")
-    assert not app.exception
-    assert "backtest_result" in app.session_state
-    app = press(app, "Monte Carlo 실행")
-    assert not app.exception
-    assert "monte_carlo_result" in app.session_state
-    app = press(app, "모의거래 활성화")
-    assert not app.exception
-    app = press(app, "신규 모의거래 중지")
-    assert not app.exception
-    app = press(app, "현재 설정 SQLite에 저장")
-    assert not app.exception
-    assert any("저장" in x.value for x in app.success)
+    assert not app.sidebar.selectbox and not app.number_input and not app.file_uploader
+    for tab in ["기술 지표", "다중 시간대", "미래 예측"]:
+        app.session_state["dashboard_tab"] = tab
+        app.run()
+        assert not app.exception and not app.error
+    assert not path.exists()
 
 
 def test_live_invalid_binance_symbol_shows_error(monkeypatch, tmp_path):
@@ -64,27 +43,16 @@ def test_live_invalid_binance_symbol_shows_error(monkeypatch, tmp_path):
     assert any("INVALID/USDT" in x.value for x in app.error)
 
 
-def test_invalid_uploaded_json_shows_validation_error(monkeypatch, tmp_path):
-    import io
-    import streamlit as st
-
-    monkeypatch.setenv("BTC_DB_PATH", str(tmp_path / "invalid-config.sqlite"))
-    monkeypatch.setattr(st, "file_uploader", lambda *args, **kwargs: io.BytesIO(b"[]"))
-    app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
-    assert not app.exception
-    app.session_state["dashboard_tab"] = "설정"
-    app.run()
-    assert any("JSON object" in x.value for x in app.error)
-
-
-def test_corrupt_database_is_preserved_and_explained(monkeypatch, tmp_path):
-    path = tmp_path / "corrupt.sqlite"
-    original = b"not a SQLite database"
+def test_removed_tab_state_recovers_and_existing_database_is_untouched(monkeypatch, tmp_path):
+    path = tmp_path / "existing.sqlite"
+    original = b"do not open or replace an existing research database in Demo"
     path.write_bytes(original)
     monkeypatch.setenv("BTC_DB_PATH", str(path))
     app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
-    assert not app.exception
-    assert any("데이터베이스" in x.value for x in app.error)
+    app.session_state["dashboard_tab"] = "모의거래"
+    app.run()
+    assert not app.exception and not app.error
+    assert app.session_state["dashboard_tab"] == "시장 개요"
     assert path.read_bytes() == original
 
 
@@ -101,10 +69,7 @@ def test_five_horizon_chart_switch_keeps_composite_decision(monkeypatch, tmp_pat
     app.session_state["dashboard_tab"] = "다중 시간대"
     app.run()
     assert any("월봉 EMA200" in item.value for item in app.caption)
-    from btc_analyzer.storage.database import Database
-
-    signals = Database(tmp_path / "five-horizon.sqlite").history("signals")
-    assert (signals.timeframe == "ALL").sum() == 1
+    assert not (tmp_path / "five-horizon.sqlite").exists()
 
 
 def test_optional_monthly_failure_keeps_dashboard_but_vetoes_signal(monkeypatch, tmp_path):
@@ -138,13 +103,19 @@ def test_ichimoku_view_and_overlay_controls_preserve_signal(monkeypatch, tmp_pat
     app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
     assert not app.exception and not app.error
     summary = next(item.value for item in app.markdown if 'aria-label="분석 요약"' in item.value)
-    assert any('aria-label="일목균형표 해석"' in item.value for item in app.markdown)
-    assert any("미래 가격 예측이 아니에요" in item.value for item in app.caption)
+    assert not any("일목균형표, 이렇게 읽어요" in item.value for item in app.subheader)
+    assert any("미래 가격 예측이 아닙니다" in item.value for item in app.caption)
     next(item for item in app.get("button_group") if item.label == "차트 보기").set_value("상세").run()
     assert not app.exception and not app.error
     assert any(item.label == "표시할 봉 수" for item in app.select_slider)
+    assert all(
+        "가격 영역" not in option.content
+        for item in app.get("button_group")
+        if item.label == "겹쳐 볼 지표"
+        for option in item.proto.options
+    )
     next(item for item in app.get("button_group") if item.label == "겹쳐 볼 지표").set_value(
-        ["일목균형표", "이동평균선", "볼린저밴드", "가격 영역"]
+        ["일목균형표", "이동평균선", "볼린저밴드"]
     ).run()
     assert not app.exception and not app.error
     next(item for item in app.get("button_group") if item.label == "겹쳐 볼 지표").set_value([]).run()

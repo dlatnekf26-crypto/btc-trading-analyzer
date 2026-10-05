@@ -1,7 +1,6 @@
 """Verify public visitor isolation and production entry-point behavior."""
 
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
 import json
 import os
 import sqlite3
@@ -12,7 +11,6 @@ import sysconfig
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from btc_analyzer.config import AppConfig
 from btc_analyzer.data.service import DataService, demo_bundle
 from btc_analyzer.storage.database import Database
 from btc_analyzer.ui.web_runtime import ResearchBusy, ResearchGate, runtime_paths
@@ -134,117 +132,60 @@ def test_public_default_live_binance_and_usdt_quote(monkeypatch, tmp_path):
     app = AppTest.from_file(Path(__file__).resolve().parents[1] / "web_app.py", default_timeout=30).run()
     assert not app.exception
     assert not app.error
-    assert len(app.tabs) == 10
+    assert len(app.tabs) == 4
     assert captured["exchange"] == "Binance"
     assert captured["symbol"] == "BTC/USDT"
     assert captured["include_macro"] is True
-    assert any(
-        "123,456.78" in item.value and "USDT" in item.value and "24시간 변동" in item.value
-        for item in app.markdown
-    )
-    assert next(item.value for item in app.number_input if item.label == "모의 자본 · USDT") == 10_000.0
+    widget = app.get("iframe")[0].proto.srcdoc
+    assert "data-stream.binance.vision" in widget and "api.upbit.com/websocket/v1" in widget
+    assert "BTC / USDT" in widget and "KRW-BTC" in widget
     assert captured["cache"] == tmp_path / "web" / "market-cache.sqlite3"
-    assert any("현재 접속 세션" in item.value for item in app.info)
+    assert "_btc_private_storage" not in app.session_state
     assert not app.warning
 
 
-def test_two_public_visitors_do_not_share_accounts_backtests_or_settings(monkeypatch, tmp_path):
+def test_public_visitors_never_read_or_write_existing_private_records(monkeypatch, tmp_path):
     monkeypatch.setenv("BTC_WEB_DATA_DIR", str(tmp_path / "web"))
     monkeypatch.setenv("BTC_DEFAULT_SOURCE", "demo")
-    monkeypatch.setenv("BTC_DEFAULT_EXCHANGE", "Upbit")
-    monkeypatch.delenv("BTC_APP_MODE", raising=False)
     private_path = tmp_path / "local-private.sqlite3"
-    Database(private_path).save_settings("default", {"private": True})
+    database = Database(private_path)
+    database.save_settings("default", {"private": True})
+    original = private_path.read_bytes()
     monkeypatch.setenv("BTC_DB_PATH", str(private_path))
     entry = Path(__file__).resolve().parents[1] / "web_app.py"
-    first = AppTest.from_file(entry, default_timeout=30).run()
-    assert not first.exception
-    first.session_state["dashboard_tab"] = "모의거래"
-    first.run()
-    next(b for b in first.button if b.label == "모의거래 활성화").click()
-    first.session_state["dashboard_tab"] = "모의거래"
-    first.run()
-    first.session_state["dashboard_tab"] = "설정"
-    first.run()
-    next(b for b in first.button if b.label == "현재 설정 SQLite에 저장").click()
-    first.session_state["dashboard_tab"] = "설정"
-    first.run()
-    first.session_state["dashboard_tab"] = "백테스트"
-    first.run()
-    next(b for b in first.button if b.label == "백테스트 실행").click()
-    first.session_state["dashboard_tab"] = "백테스트"
-    first.run(timeout=45)
-    assert not first.exception
-    first_path = Path(first.session_state["_btc_private_storage"].name) / "analyzer.sqlite3"
-    first_db = Database(first_path)
-    assert first_db.load_settings("default") is not None
-    assert len(first_db.history("backtest_runs")) == 1
-    with first_db.connect() as conn:
-        first_states = conn.execute("SELECT state FROM paper_accounts").fetchall()
-    assert len(first_states) == 1
-    assert json.loads(first_states[0][0])["enabled"]
-    second = AppTest.from_file(entry, default_timeout=30).run()
-    assert not second.exception
-    second_path = Path(second.session_state["_btc_private_storage"].name) / "analyzer.sqlite3"
-    assert first_path != second_path
-    second_db = Database(second_path)
-    assert second_db.load_settings("default") is None
-    assert second_db.history("backtest_runs").empty
-    assert "backtest_result" not in second.session_state
-    with second_db.connect() as conn:
-        states = conn.execute("SELECT state FROM paper_accounts").fetchall()
-    assert all(not json.loads(row[0])["enabled"] for row in states)
-    assert Database(private_path).load_settings("default") == {"private": True}
-    assert first_db.load_settings("default")["risk"]["capital"] == AppConfig().risk.capital * 1000
+    for _ in range(2):
+        app = AppTest.from_file(entry, default_timeout=30).run()
+        assert not app.exception and not app.error
+        assert "_btc_private_storage" not in app.session_state
+        assert "backtest_result" not in app.session_state
+        assert len(app.tabs) == 4
+    assert private_path.read_bytes() == original
+    assert not (tmp_path / "web" / "sessions").exists()
 
 
-def test_public_live_history_limit_prevents_large_download(monkeypatch, tmp_path):
-    monkeypatch.setenv("BTC_WEB_DATA_DIR", str(tmp_path / "web"))
-    monkeypatch.setenv("BTC_DEFAULT_SOURCE", "live")
-    monkeypatch.setenv("BTC_DEFAULT_EXCHANGE", "Upbit")
-    monkeypatch.delenv("BTC_APP_MODE", raising=False)
-    calls = []
-
-    def bundle(self, exchange, symbol, timeframe, start, end, **kwargs):
-        calls.append(timeframe)
-        return demo_bundle(timeframe, 800, end=end, include_macro=kwargs.get("include_macro", False))
-
-    monkeypatch.setattr(DataService, "bundle", bundle)
-    app = AppTest.from_file(Path(__file__).resolve().parents[1] / "web_app.py", default_timeout=30).run()
-    assert not app.exception
-    next(box for box in app.selectbox if box.label == "연구 시간대").select("5m")
-    today = datetime.now(timezone.utc).date()
-    app.date_input[0].set_value((today - timedelta(days=30), today))
-    app.run()
-    assert not app.exception
-    assert any("3,000" in item.value for item in app.info)
-    assert calls == ["1d"]
-
-
-def test_binance_ticker_failure_is_labeled_as_candle_close(monkeypatch, tmp_path):
+def test_live_analysis_failure_keeps_independent_quote_widget(monkeypatch, tmp_path):
     import streamlit as st
     from btc_analyzer.data.base_provider import DataError
 
     st.cache_data.clear()
     monkeypatch.setenv("BTC_WEB_DATA_DIR", str(tmp_path / "web"))
-    monkeypatch.setenv("BTC_DEFAULT_EXCHANGE", "Binance")
     monkeypatch.setenv("BTC_DEFAULT_SOURCE", "live")
 
-    def bundle(self, exchange, symbol, timeframe, start, end, **kwargs):
-        return demo_bundle(timeframe, 800, end=end, include_macro=kwargs.get("include_macro", False))
+    def unavailable(*args, **kwargs):
+        raise DataError("Candle API unavailable")
 
-    def unavailable(self, symbol):
-        raise DataError("Ticker temporarily unavailable")
+    def no_server_quote(*args, **kwargs):
+        raise AssertionError("Browser streaming must not block on a server ticker request")
 
-    monkeypatch.setattr(DataService, "bundle", bundle)
-    monkeypatch.setattr("btc_analyzer.data.binance_provider.BinanceProvider.quote", unavailable)
+    monkeypatch.setattr(DataService, "bundle", unavailable)
+    monkeypatch.setattr("btc_analyzer.data.binance_provider.BinanceProvider.quote", no_server_quote)
     app = AppTest.from_file(Path(__file__).resolve().parents[1] / "web_app.py", default_timeout=30).run()
     assert not app.exception
-    assert not app.error
-    hero = next(item.value for item in app.markdown if 'aria-label="시장 가격"' in item.value)
-    assert "마지막 확정 봉 종가" in hero
-    assert "현재가 · 최근 조회" not in hero
-    assert any("현재가 조회가 지연" in item.value for item in app.caption)
+    assert any("Candle API unavailable" in item.value for item in app.error)
+    assert len(app.get("iframe")) == 1
+    assert "상단 실시간 시세 연결은 독립적으로" in app.info[0].value
+    assert not app.get("plotly_chart")
+    assert not app.warning
 
 
 def test_market_hero_escapes_user_supplied_symbols():

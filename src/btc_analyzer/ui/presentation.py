@@ -1,9 +1,14 @@
 """Responsive dashboard presentation. Escape market text before rendering HTML."""
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+
 from html import escape
 import math
 
-from btc_analyzer.strategy.signal_engine import Analysis
+if TYPE_CHECKING:
+    from btc_analyzer.strategy.signal_engine import Analysis
 from btc_analyzer.strategy.composite import CompositeSignal, FRAME_LABELS, FRAME_WEIGHTS
 
 
@@ -317,9 +322,9 @@ def decision_panel(signal: CompositeSignal) -> str:
     }
     if signal.mode == "눌림목 분할매수":
         headings["매수"] = "조정된 가격에서 나눠 살 조건이에요"
-        reason = "가격 할인과 하락 압력 둔화를 확인했어요. 단기 상승 전에도 검토할 수 있어요. 일봉 기준 진입 영역과 손절을 함께 살펴보세요."
+        reason = "가격 할인과 하락 압력 둔화를 확인했어요. 단기 상승 전에도 검토할 수 있어요. 주봉·월봉 방향과 일봉 변동성을 함께 확인한 신호예요."
     elif signal.action == "매수":
-        reason = "일봉·주봉·월봉이 상승 방향을 지지해요. 단기 봉의 상승 여부보다 일봉 진입 영역과 비용 후 손익비를 먼저 확인해요."
+        reason = "일봉·주봉·월봉이 상승 방향을 지지해요. 단기 상승 여부와 함께 일봉 변동성과 비용 후 손익비를 확인한 신호예요."
     elif signal.mode == "과열 분할매도":
         headings["매도"] = "과열 구간에서 나눠 팔 때예요"
         reason = "일봉 RSI와 중기 기준 대비 가격 이격이 커요. 현물 보유 중이라면 분할 이익 실현을 검토하는 신호예요."

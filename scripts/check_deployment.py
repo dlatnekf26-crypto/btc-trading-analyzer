@@ -31,16 +31,13 @@ def main() -> None:
         assert hasattr(candle_module, "candle_boundary")
         if legacy is not None:
             assert candle_module is not legacy
-        assert len(app.tabs) == 10
-        assert {item.label for item in app.metric} == {"추세", "모멘텀", "거래량", "변동성", "시장 구조"}
+        assert len(app.tabs) == 4
         assert next(item.value for item in app.selectbox if item.label == "거래소") == "Binance"
-        assert any(
-            "BTC/USDT" in item.value and 'aria-label="시장 가격"' in item.value for item in app.markdown
-        )
-        assert any("현재 접속 세션" in item.value for item in app.info)
+        assert any("BTC/USDT" in item.value for item in app.caption)
         assert any("합성" in item.value for item in app.warning)
         assert any('aria-label="다섯 시간대 방향"' in item.value for item in app.markdown)
-        assert any('aria-label="일목균형표 해석"' in item.value for item in app.markdown)
+        assert "_btc_private_storage" not in app.session_state
+        assert not app.sidebar.selectbox and not app.number_input
         decision = next(item.value for item in app.markdown if 'aria-label="분석 요약"' in item.value)
         app.session_state["dashboard_tab"] = "미래 예측"
         app.run(timeout=45)
@@ -70,23 +67,14 @@ def main() -> None:
         control.set_value("1M").run(timeout=45)
         assert not app.exception and not app.error
         assert any(item.value.startswith("월봉 · ") for item in app.caption)
-        for tab, label in (
-            ("백테스트", "백테스트 실행"),
-            ("모의거래", "모의거래 활성화"),
-            ("설정", "현재 설정 SQLite에 저장"),
-        ):
+        for tab in ("기술 지표", "다중 시간대"):
             app.session_state["dashboard_tab"] = tab
             app.run(timeout=45)
-            next(button for button in app.button if button.label == label).click()
-            app.session_state["dashboard_tab"] = tab
-            app.run(timeout=45)
-            assert not app.exception, [item.message for item in app.exception]
-            assert not app.error, [item.value for item in app.error]
-        assert "backtest_result" in app.session_state
+            assert not app.exception and not app.error
         assert sys.modules["btc_analyzer.candles"] is candle_module
-        app.session_state["_btc_private_storage"].cleanup()
+        assert not (Path(directory) / "sessions").exists()
         print(
-            "PASS: public checkout startup, Binance BTC/USDT, Ichimoku/detail/monthly charts, medium/long-term signal, forecast/uncertainty/validation, historical analogues, 10 lazy tabs, backtest, paper controls and settings"
+            "PASS: public checkout startup, 4 lightweight tabs, Binance BTC/USDT, Ichimoku/detail/monthly charts, medium/long-term signals, forecast/uncertainty/validation and historical analogues; no account storage"
         )
         if legacy is not None:
             print("PASS: retained legacy candles recovered; ordinary reruns preserve module identity")

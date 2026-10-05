@@ -145,22 +145,52 @@ def test_ui_only_runs_active_tab_and_live_refresh_reuses_data(monkeypatch, tmp_p
     app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=45).run()
     assert not app.exception and not app.error
     assert len(app.get("plotly_chart")) == 1 and len(app.dataframe) <= 1
-    assert calls == {"bundle": 1, "quote": 1, "features": 5}
+    assert calls == {"bundle": 1, "quote": 0, "features": 5}
     next(x for x in app.get("button_group") if x.label == "차트 보기").set_value("상세").run()
-    assert calls == {"bundle": 1, "quote": 1, "features": 5}
+    assert calls == {"bundle": 1, "quote": 0, "features": 5}
     app.session_state["dashboard_tab"] = "다중 시간대"
     app.run()
     assert len(app.get("plotly_chart")) == 0 and len(app.dataframe) == 3
-    assert calls == {"bundle": 1, "quote": 1, "features": 5}
+    assert calls == {"bundle": 1, "quote": 0, "features": 5}
     next(x for x in app.button if x.label == "데이터 새로고침").click().run()
-    assert calls["bundle"] == 2 and calls["quote"] == 2
+    assert calls["bundle"] == 2 and calls["quote"] == 0
     app.run()
-    assert calls["bundle"] == 3 and calls["quote"] == 2  # refill memory from persistent cache once
+    assert calls["bundle"] == 2 and calls["quote"] == 0  # forced refresh refills the ordinary memory key
     app.run()
-    assert calls["bundle"] == 3 and not app.exception and not app.error
+    assert calls["bundle"] == 2 and not app.exception and not app.error
     st.cache_data.clear()
 
 
 def test_calendar_cache_boundary_uses_monday_and_real_leap_month():
     assert candle_boundary(pd.Timestamp("2024-02-29T23:59Z"), "1M") == pd.Timestamp("2024-02-01T00:00Z")
     assert candle_boundary(pd.Timestamp("2024-02-29T23:59Z"), "1w") == pd.Timestamp("2024-02-26T00:00Z")
+
+
+def test_snapshot_cache_tracks_raw_revisions_cutoff_and_returns_isolated_frames(monkeypatch):
+    from btc_analyzer.config import AppConfig
+    from btc_analyzer.ui import analysis_cache
+
+    analysis_cache.market_snapshot.clear()
+    bundle = demo_bundle("1d", 400, include_macro=True)
+    cutoff = pd.Timestamp("2026-01-01T00:00Z")
+    cfg = AppConfig()
+    calls = []
+    original = analysis_cache.composite_signal
+
+    def recorded(*args, **kwargs):
+        calls.append(1)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(analysis_cache, "composite_signal", recorded)
+    first, _ = analysis_cache.market_snapshot(bundle, cutoff, cfg)
+    first["1d"].iloc[-1, first["1d"].columns.get_loc("close")] = 1
+    second, signal = analysis_cache.market_snapshot(bundle, cutoff, cfg)
+    assert len(calls) == 1 and second["1d"].close.iloc[-1] == bundle["1d"].close.iloc[-1]
+    assert not signal.frames["1h"].stale
+    revised = {tf: frame.copy() for tf, frame in bundle.items()}
+    revised["1d"].iloc[-1, revised["1d"].columns.get_loc("close")] -= 0.01
+    changed, _ = analysis_cache.market_snapshot(revised, cutoff, cfg)
+    assert len(calls) == 2 and changed["1d"].close.iloc[-1] == revised["1d"].close.iloc[-1]
+    _, stale = analysis_cache.market_snapshot(bundle, cutoff + pd.Timedelta(hours=1), cfg)
+    assert len(calls) == 3 and stale.frames["1h"].stale and stale.action == "관망"
+    analysis_cache.market_snapshot.clear()

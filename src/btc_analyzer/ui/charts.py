@@ -1,9 +1,15 @@
 """Plotly price, indicator, trade, performance and simulation visualizations."""
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from btc_analyzer.strategy.signal_engine import Analysis
+
+if TYPE_CHECKING:
+    from btc_analyzer.strategy.signal_engine import Analysis
 from btc_analyzer.candles import candle_shift
 
 
@@ -114,7 +120,7 @@ def add_ichimoku(fig: go.Figure, df: pd.DataFrame, frame: pd.DataFrame, timezone
 
 def price_chart(
     df: pd.DataFrame,
-    analysis: Analysis,
+    analysis: Analysis | None,
     timezone: str = "Asia/Seoul",
     averages: tuple[str, ...] = ("ema_20", "ema_50", "ema_200"),
     bands: bool = True,
@@ -184,7 +190,7 @@ def price_chart(
         row=2,
         col=1,
     )
-    for zone in analysis.zones if zones_visible else []:
+    for zone in analysis.zones if zones_visible and analysis is not None else []:
         fig.add_hrect(
             y0=zone.low,
             y1=zone.high,
@@ -194,7 +200,7 @@ def price_chart(
             row=1,
             col=1,
         )
-    if analysis.plan and levels_visible:
+    if levels_visible and analysis is not None and analysis.plan:
         p = analysis.plan
         fig.add_hrect(y0=p.entry_low, y1=p.entry_high, fillcolor="#60a5fa", opacity=0.2, row=1, col=1)
         fig.add_hline(y=p.stop, line_dash="dash", line_color="#ef4444", annotation_text="Stop", row=1, col=1)
