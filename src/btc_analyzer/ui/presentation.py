@@ -100,6 +100,9 @@ button:focus-visible { outline: 3px solid #3182f666; outline-offset: 3px; }
 .btc-forecast-cards p { margin: 0 0 8px; color: #66758b; font-size: 12px; }
 .btc-forecast-cards strong { display: block; font-size: clamp(19px, 2vw, 26px); letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
 .btc-forecast-cards span { display: block; margin-top: 8px; color: #66758b; font-size: 11px; }
+.btc-replay-summary { border: 1px solid #f5dfb9; border-radius: 14px; background: #fff9ef; padding: 13px 16px; margin: 0 0 12px; }
+.btc-replay-summary strong { display: block; color: #8f570c; font-size: 15px; }
+.btc-replay-summary span { display: block; color: #746653; margin-top: 5px; font-size: 12px; }
 .btc-match-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 10px 0 16px; }
 .btc-match-cards article { padding: 14px; border: 1px solid #e7ecf3; border-radius: 16px; background: #fff; }
 .btc-match-cards span { color: #66758b; font-size: 11px; display: block; }

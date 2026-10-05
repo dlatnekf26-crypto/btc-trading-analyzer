@@ -41,7 +41,11 @@ BTC_CHECK_STALE_IMPORTS=1 python -I scripts/check_deployment.py
 
 이 검사는 이전 `candles` 모듈을 먼저 로딩한 상태에서 공개 앱을 실행하고, 최신 모듈로 복구된 뒤 반복 실행에서는 같은 모듈을 유지하는지 확인합니다. 이미 실패 중인 Community Cloud 앱은 수정 코드 반영 후 **Manage app → Reboot app**으로 기존 프로세스를 한 번 정리할 수 있습니다.
 
-공개 화면의 분석 기본 시장은 Binance BTC/USDT입니다. Live 상단에는 Binance USDT와 Upbit KRW 현재가를 각각 표시합니다. 브라우저는 공개 WebSocket `data-stream.binance.vision` / `api.upbit.com`에 직접 연결하고, 초기 이력과 대체 조회(Binance 10초, Upbit 11초)에는 REST `data-api.binance.vision` / `api.upbit.com`을 사용합니다. API 키는 필요하지 않습니다. 각 가격 옆 그래프와 수신 상태를 함께 표시합니다.
+공개 화면의 분석 기본 시장은 Binance BTC/USDT입니다. Live 상단에는 Binance BTC/ETH, 원/달러 환율, BTC 김치프리미엄을 표시합니다. Upbit BTC는 김프 산출용으로만 수신합니다. 브라우저는 공개 WebSocket `data-stream.binance.vision` / `api.upbit.com`에 직접 연결하고, 초기 이력과 대체 조회(Binance 10초, Upbit 11초)에는 REST `data-api.binance.vision` / `api.upbit.com`을 사용합니다. API 키는 필요하지 않습니다. 각 가격 옆 그래프와 수신 상태를 함께 표시합니다.
+
+환율·김프에는 브라우저에서 `quotation-api-cdn.dunamu.com`(은행 고시), `api.frankfurter.dev`(일별 대체 환율), `api.exchange.coinbase.com`(USDT/USD)도 접근 가능해야 합니다. 인증키를 요구하지 않는 공개 조회이며 요청에 계좌 정보를 넣지 않습니다. 환율과 USDT/USD는 분 단위로 조회합니다. CORS·지역·서비스 제한으로 접근하지 못하면 숫자를 만들어 넣지 않고 대기/지연으로 표시합니다.
+
+개발 클라우드의 기존 허용 목록은 Binance·Upbit만 포함했습니다. 새 세 자료원은 실제 요청에서 프록시 CONNECT 403이었고 필요한 도메인을 보존·추가한 환경 설정 **초안**을 저장했습니다. 환경 설정의 저장/적용 후 실제 요청을 다시 검사해야 하며, 이 초안이 Streamlit Community Cloud나 현재 프록시에 자동 적용된 것은 아닙니다. 응답을 주입한 브라우저 검사는 실제 외부 연결 성공과 구분합니다.
 
 분석 서버는 공개 REST에 접근할 수 있어야 하고, 방문자 브라우저는 자신의 네트워크에서 시세 API에 접근할 수 있어야 합니다. 연결 제한이나 인증서 오류를 숨기거나 검증을 끄지 않습니다. WebSocket이 불가능하면 REST 조회로 전환하며 오래된 가격은 지연 상태로 표시합니다. Live 오류를 합성 가격으로 대체하지 않습니다.
 

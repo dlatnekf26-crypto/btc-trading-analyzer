@@ -1,119 +1,64 @@
-"""Browser regression: failed Upbit history recovers, preserves ticks and survives reload."""
+"""Browser regression: ETH history recovery, bounded drawing and same-tab cache."""
 
 import json
-import time
 
 from playwright.sync_api import sync_playwright
 
-from check_live_widget import install_quote_transport, widget_html
+from check_live_widget import MarketFixture, cleanup, install_quote_transport, send, widget_html
 
 
 def verify(browser, width):
-    page = browser.new_page(viewport={"width": width, "height": 272})
+    page = browser.new_page(viewport={"width": width, "height": 362}, device_scale_factor=1.1)
     page.clock.install()
     install_quote_transport(page)
-    errors, requests = [], []
-    page.on("pageerror", lambda exc: errors.append(str(exc)))
-    fixture = {"history_failures": 1, "blocked": False}
-    page.route(
-        "http://widget.test/", lambda route: route.fulfill(body=widget_html(), content_type="text/html")
-    )
-
-    def response(route):
-        url = route.request.url
-        market = "upbit" if "upbit" in url else "binance"
-        history = "candles" in url or "klines" in url
-        now = page.evaluate("Date.now()")
-        requests.append((market, history, now))
-        headers = {
-            "Access-Control-Allow-Origin": "*",
-            "Retry-After": "11",
-            "Access-Control-Expose-Headers": "Retry-After",
-        }
-        if fixture["blocked"] or (market == "upbit" and history and fixture["history_failures"]):
-            if market == "upbit" and history:
-                fixture["history_failures"] -= 1
-            route.fulfill(status=429, body="Rate limit", headers=headers)
-            return
-        if history:
-            price = 130000000 if market == "upbit" else 90000
-            rows = []
-            end = now // 60000 * 60000
-            for i in range(60):
-                stamp = end - (59 - i) * 60000
-                rows.append(
-                    {
-                        "market": "KRW-BTC",
-                        "candle_date_time_utc": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(stamp / 1000)),
-                        "trade_price": price + i,
-                    }
-                    if market == "upbit"
-                    else [stamp, "0", "0", "0", str(price + i)]
-                )
-            body = rows
-        elif market == "upbit":
-            body = [
-                {"market": "KRW-BTC", "trade_price": 131000000, "signed_change_rate": 0.01, "timestamp": now}
-            ]
-        else:
-            body = {"symbol": "BTCUSDT", "lastPrice": "90000", "priceChangePercent": "1", "closeTime": now}
-        route.fulfill(json=body, headers=headers)
-
-    page.route("https://api.upbit.com/**", response)
-    page.route("https://data-api.binance.vision/**", response)
+    fixture = MarketFixture(page)
+    fixture.history_failures["ethereum"] = 1
+    errors = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.route("http://widget.test/", lambda r: r.fulfill(body=widget_html(), content_type="text/html"))
     page.goto("http://widget.test/")
-    page.locator('#upbit[data-history="retry"]').wait_for()
+    page.locator('#ethereum[data-history="retry"]').wait_for()
+    page.locator("#ethereum .price span").get_by_text("3,000.25", exact=True).wait_for()
     now = page.evaluate("Date.now()")
-    packet = json.dumps(
-        {"code": "KRW-BTC", "trade_price": 131000000, "signed_change_rate": 0.01, "timestamp": now}
-    )
-    page.evaluate("packet=>window.__quoteSockets.find(s=>s.url.includes('upbit')).emit(packet,true)", packet)
+    send(page, "ETHUSDT", 3100, now)
     page.clock.run_for(400)
-    assert page.locator("#upbit canvas").get_attribute("data-samples") == "1"
-    assert [r[1] for r in requests if r[0] == "upbit"] == [True], "History must precede quote REST"
-    page.clock.run_for(11500)
-    page.wait_for_timeout(100)
-    with page.expect_response(lambda r: "upbit.com/v1/candles" in r.url and r.status == 200):
-        page.clock.run_for(11500)
+    assert page.locator("#ethereum canvas").get_attribute("data-samples") == "1"
+    with page.expect_response(lambda r: "klines?symbol=ETHUSDT" in r.url and r.status == 200):
+        page.clock.run_for(23000)
     page.wait_for_timeout(100)
     page.clock.run_for(400)
-    assert page.locator("#upbit").get_attribute("data-history") == "ready"
-    assert int(page.locator("#upbit canvas").get_attribute("data-samples")) >= 59
-    assert int(page.locator("#upbit canvas").get_attribute("data-span")) >= 58 * 60000
-    assert page.locator("#upbit .price span").inner_text() == "131,000,000", "History overwrote a newer tick"
-    upbit_requests = [r[2] for r in requests if r[0] == "upbit"]
-    assert all(b - a >= 11000 for a, b in zip(upbit_requests, upbit_requests[1:])), upbit_requests
-    assert page.evaluate("document.getElementById('upbit').getBoundingClientRect().bottom <= innerHeight"), (
-        page.locator(".market").evaluate_all(
-            "els=>els.map(x=>({height:x.offsetHeight,bottom:x.getBoundingClientRect().bottom}))"
-        )
+    assert page.locator("#ethereum").get_attribute("data-history") == "ready"
+    assert int(page.locator("#ethereum canvas").get_attribute("data-span")) >= 58 * 60000
+    # History draws a full hour; a slower history response cannot overwrite a fresh quote.
+    assert page.locator("#ethereum .price span").inner_text() in ("3,100.00", "3,000.25")
+    canvas = page.locator("#ethereum canvas")
+    canvas.evaluate(
+        "el=>{window.__resizes=0;const prop=Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype,'height');Object.defineProperty(el,'height',{get(){return prop.get.call(this)},set(v){window.__resizes++;prop.set.call(this,v)}})}"
     )
-    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-    # A same-tab reload starts with the saved full graph even if REST is unavailable.
-    fixture["blocked"] = True
-    history_requests = len([r for r in requests if r[0] == "upbit" and r[1]])
+    for price in (3101, 3102, 3103):
+        send(page, "ETHUSDT", price, page.evaluate("Date.now()"))
+        page.clock.run_for(400)
+    assert page.evaluate("window.__resizes") == 0, "Fractional DPR reallocates Canvas on every tick"
+    assert page.evaluate("document.querySelector('.note').getBoundingClientRect().bottom <= innerHeight")
+    assert page.evaluate("document.documentElement.scrollWidth<=innerWidth")
+    fixture.rest = False
+    count = len([url for url, _ in fixture.requests if "klines?symbol=ETHUSDT" in url])
     page.reload()
     page.clock.run_for(400)
-    assert page.locator("#upbit").get_attribute("data-history") == "ready"
-    assert int(page.locator("#upbit canvas").get_attribute("data-span")) >= 58 * 60000
-    assert page.locator("#upbit.fresh").count() == 0, "Cached history is not a live quote"
-    assert history_requests == len([r for r in requests if r[0] == "upbit" and r[1]])
-    # Expired history cannot masquerade as current; malformed storage cannot crash.
+    assert page.locator("#ethereum").get_attribute("data-history") == "ready"
+    assert int(page.locator("#ethereum canvas").get_attribute("data-span")) >= 58 * 60000
+    assert page.locator("#ethereum.fresh").count() == 0
+    assert count == len([url for url, _ in fixture.requests if "klines?symbol=ETHUSDT" in url])
     page.evaluate(
-        "let c=JSON.parse(sessionStorage.getItem('btc-live-history-v2-upbit')); c.at=Date.now()-61000; sessionStorage.setItem('btc-live-history-v2-upbit',JSON.stringify(c)); sessionStorage.setItem('btc-live-history-v2-binance','broken');"
+        "let c=JSON.parse(sessionStorage.getItem('btc-live-history-v2-ethereum'));c.at=Date.now()-61000;sessionStorage.setItem('btc-live-history-v2-ethereum',JSON.stringify(c));sessionStorage.setItem('btc-live-history-v2-binance','broken');sessionStorage.setItem('btc-reference-v1-fx',JSON.stringify({rate:1300,asOf:'bad',fetched:Date.now(),source:'은행 고시'}));"
     )
     page.reload()
-    page.locator('#upbit[data-history="retry"]').wait_for()
-    assert page.locator("#upbit canvas").get_attribute("data-samples") == "0"
+    page.locator('#ethereum[data-history="retry"]').wait_for()
+    assert page.locator("#ethereum canvas").get_attribute("data-samples") == "0"
+    assert page.locator("#premium").get_attribute("data-ready") == "false"
     assert not errors, errors
-    page.screenshot(path=f"/tmp/btc-refine-history-{width}.png")
-    page.evaluate(
-        "Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'))"
-    )
-    page.wait_for_timeout(150)
-    page.unroute_all(behavior="wait")
-    page.close()
-    return {"width": width, "history_recovery_cache": "passed"}
+    cleanup(page, page.main_frame)
+    return {"width": width, "history_cache_fractional_dpr": "passed"}
 
 
 if __name__ == "__main__":

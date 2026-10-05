@@ -14,7 +14,15 @@ from btc_analyzer.ui.cache_keys import MARKET_HASH_FUNCS
 from btc_analyzer.ui.charts import style_chart
 
 
-def prediction_chart(result: ForecastReport, timezone: str, quote: str, show_range: bool = True):
+def analogue_path(report, index=0):
+    """Rebase one complete observed path without shrinking or volatility scaling."""
+    match = report.matches[index]
+    return tuple(report.anchor_price * np.asarray(match.path) / 100)
+
+
+def prediction_chart(
+    result: ForecastReport, timezone: str, quote: str, show_range: bool = True, analogue_index: int | None = 0
+):
     report, prediction = result.history, result.prediction
     if prediction is None:
         raise ValueError("No forecast available")
@@ -75,6 +83,27 @@ def prediction_chart(result: ForecastReport, timezone: str, quote: str, show_ran
             hovertemplate=f"%{{y:,.2f}} {escape(quote)}<extra>모델 예상</extra>",
         )
     )
+    if analogue_index is not None:
+        match = report.matches[analogue_index]
+        observed = (
+            pd.DatetimeIndex(
+                forecast_dates(candle_close(match.start, report.timeframe), report.timeframe, len(match.path))
+            )
+            .tz_convert(timezone)
+            .strftime("%Y-%m-%d %H:%M")
+            .tolist()
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=past + future[1:],
+                y=np.round(analogue_path(report, analogue_index), 2).tolist(),
+                customdata=observed,
+                mode="lines",
+                name="과거 사례 재현",
+                line={"color": "#ed9a24", "width": 2, "dash": "dot"},
+                hovertemplate=f"환산 %{{y:,.2f}} {escape(quote)}<br>당시 %{{customdata}}<extra>과거 실제 경로</extra>",
+            )
+        )
     fig.add_shape(
         type="line",
         x0=future[0],
@@ -120,8 +149,8 @@ def prediction_chart(result: ForecastReport, timezone: str, quote: str, show_ran
 
 
 @st.cache_data(ttl=3600, max_entries=24, show_spinner=False)
-def prediction_spec(result, timezone, quote, show_range):
-    return prediction_chart(result, timezone, quote, show_range).to_dict()
+def prediction_spec(result, timezone, quote, show_range, analogue_index=0):
+    return prediction_chart(result, timezone, quote, show_range, analogue_index).to_dict()
 
 
 @st.fragment
@@ -174,15 +203,38 @@ def render_prediction(
     target = prediction.dates[-1].tz_convert(timezone)
     st.caption(f"예측 도착일 {target:%Y.%m.%d} · 기준 종가 {report.anchor_price:,.2f} {quote}에서 출발해요.")
     show_range = st.toggle("예상 변동 범위 함께 보기", value=True, key="forecast_show_range")
+    if st.session_state.get("forecast_analogue", 0) not in range(len(report.matches)):
+        st.session_state["forecast_analogue"] = 0
+    selected = (
+        st.segmented_control(
+            "함께 볼 과거 경로 · 유사도 순",
+            list(range(len(report.matches))),
+            format_func=lambda i: f"{i + 1}위",
+            default=0,
+            key="forecast_analogue",
+        )
+        or 0
+    )
+    match = report.matches[selected]
+    replay_price = analogue_path(report, selected)[-1]
+    st.markdown(
+        f'<div class="btc-replay-summary"><strong>당시에는 {match.forward_return:+.1%} 움직였어요</strong>'
+        f"<span>{match.start.tz_convert(timezone):%Y.%m.%d} ~ {match.end.tz_convert(timezone):%Y.%m.%d} · 유사도 {match.similarity:.0f}점</span>"
+        f"<span>같은 움직임이면 {replay_price:,.2f} {escape(quote)} · 주황색은 선택한 과거 사례의 재현이에요.</span></div>",
+        unsafe_allow_html=True,
+    )
     st.plotly_chart(
-        prediction_spec(result, timezone, quote, show_range),
+        prediction_spec(result, timezone, quote, show_range, selected),
         width="stretch",
         key="future_price_chart",
         theme=None,
         config={"displaylogo": False, "displayModeBar": False, "scrollZoom": False},
     )
     st.caption(
-        "회색은 실제 확정 가격, 파란 점선은 현재 가격에 맞춘 모델 예상, 옅은 영역은 예상 변동 범위예요. 매수·매도 신호는 상단의 별도 위험 조건으로 판단합니다."
+        "회색은 확정 가격, 파란 점선은 여러 사례를 종합한 모델 예상, 주황색은 한 과거 사례의 실제 움직임을 현재 가격에 맞춘 경로예요. 옅은 영역은 예상 변동 범위입니다."
+    )
+    st.caption(
+        "상승·하락 사례가 섞이면 평균 예상은 평평해질 수 있어요. 주황색 경로는 움직임을 줄이지 않은 과거 재현이며, 같은 미래가 온다는 뜻은 아닙니다."
     )
     st.caption(
         f"기준 종가 {report.anchor_price:,.2f} {quote} · {report.query_end.tz_convert(timezone):%Y.%m.%d %H:%M} · {timezone}"
@@ -282,6 +334,9 @@ def render_prediction(
                     "predicted_price": prediction.center,
                     "lower_price": prediction.lower,
                     "upper_price": prediction.upper,
+                    "analogue_replay_price": analogue_path(report, selected)[report.window - 1 :],
+                    "analogue_start_utc": match.start.isoformat(),
+                    "analogue_end_utc": match.end.isoformat(),
                 }
             )
             st.download_button(

@@ -57,6 +57,8 @@ def main() -> None:
         app.run(timeout=45)
         assert not app.exception and not app.error
         assert any("예측 도착일 2026.04.01" in item.value for item in app.caption)
+        assert any(item.label == "함께 볼 과거 경로 · 유사도 순" for item in app.get("button_group"))
+        assert any("주황색" in item.value for item in app.caption)
         app.session_state["dashboard_tab"] = "시장 개요"
         app.run(timeout=45)
         next(item for item in app.get("button_group") if item.label == "차트 보기").set_value("상세").run(

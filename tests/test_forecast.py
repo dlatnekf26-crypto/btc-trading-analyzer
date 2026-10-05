@@ -181,3 +181,27 @@ def test_six_month_forecast_is_complete_and_validation_observes_only_closed_hist
     assert len(result.validation) < 12  # A long horizon cannot invent more independent evidence.
     assert all(case.observed_until <= end for case in result.validation)
     assert result.prediction.calibrated_cases == 0
+
+
+def test_analogue_replay_preserves_observed_moves_and_keeps_forecast_band_unchanged():
+    from btc_analyzer.analysis.forecast import ForecastReport
+    from btc_analyzer.ui.forecast_view import analogue_path, prediction_chart
+
+    report = mixed_report()
+    prediction = forecast_path(report)
+    result = ForecastReport(report, prediction, None, (), None, None, None, None)
+    for index, match in enumerate(report.matches):
+        replay = analogue_path(report, index)
+        assert replay[report.window - 1] == report.anchor_price
+        assert replay[-1] == pytest.approx(report.anchor_price * (1 + match.forward_return))
+        assert np.diff(np.log(replay)) == pytest.approx(np.diff(np.log(match.path)))
+        chart = prediction_chart(result, "Asia/Seoul", "USDT", analogue_index=index)
+        assert tuple(chart.data[0].y) == tuple(np.round(prediction.upper, 2))
+        assert tuple(chart.data[1].y) == tuple(np.round(prediction.lower, 2))
+        assert tuple(chart.data[3].y) == tuple(np.round(prediction.center, 2))
+        assert tuple(chart.data[4].y) == tuple(np.round(replay, 2))
+        assert chart.data[4].x[report.window - 1] == chart.data[3].x[0]
+        assert chart.data[4].customdata[-1] == match.observed_until.tz_convert("Asia/Seoul").strftime(
+            "%Y-%m-%d %H:%M"
+        )
+    assert len(prediction_chart(result, "Asia/Seoul", "USDT", analogue_index=None).data) == 4
