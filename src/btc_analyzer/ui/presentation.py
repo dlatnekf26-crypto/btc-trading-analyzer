@@ -119,9 +119,8 @@ button:focus-visible { outline: 3px solid #3182f666; outline-offset: 3px; }
 @media (max-width: 760px) {
     .st-key-market_controls [data-testid="stHorizontalBlock"] { flex-wrap: wrap; gap: 8px 12px; }
     .st-key-market_controls [data-testid="stColumn"] { min-width: 0 !important; }
-    .st-key-market_controls [data-testid="stColumn"]:nth-child(1) { flex: 2 1 30%; }
-    .st-key-market_controls [data-testid="stColumn"]:nth-child(2) { flex: 3 1 50%; }
-    .st-key-market_controls [data-testid="stColumn"]:nth-child(3) { flex: 1 0 100%; }
+    .st-key-market_controls [data-testid="stColumn"]:nth-child(1) { flex: 3 1 58%; }
+    .st-key-market_controls [data-testid="stColumn"]:nth-child(2) { flex: 2 1 34%; }
 
     .btc-match-cards article { padding: 10px; }
     .btc-match-cards strong { font-size: 20px; }

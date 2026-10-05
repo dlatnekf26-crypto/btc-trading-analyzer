@@ -7,13 +7,17 @@ from tempfile import TemporaryDirectory
 from types import ModuleType
 
 from streamlit.testing.v1 import AppTest
+import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from offline_ui_fixture import offline_market_data  # noqa: E402
 
 
 def main() -> None:
     entry = Path(__file__).resolve().parents[1] / "web_app.py"
-    with TemporaryDirectory(prefix="btc-deployment-check-") as directory:
+    with TemporaryDirectory(prefix="btc-deployment-check-") as directory, offline_market_data(entry.parent):
         os.environ["BTC_DEFAULT_SOURCE"] = "demo"
-        os.environ["BTC_DEFAULT_EXCHANGE"] = "Binance"
+        os.environ["BTC_DEFAULT_EXCHANGE"] = "Upbit"  # Old defaults cannot restore removed choices.
         os.environ["BTC_WEB_DATA_DIR"] = directory
         legacy = None
         if os.getenv("BTC_CHECK_STALE_IMPORTS") == "1":
@@ -32,9 +36,12 @@ def main() -> None:
         if legacy is not None:
             assert candle_module is not legacy
         assert len(app.tabs) == 4
-        assert next(item.value for item in app.selectbox if item.label == "거래소") == "Binance"
+        assert not any(item.label in ("거래소", "데이터 모드") for item in app.selectbox)
         assert any("BTC/USDT" in item.value for item in app.caption)
-        assert any("합성" in item.value for item in app.warning)
+        assert not app.warning
+        widget = app.get("iframe")[0].proto.srcdoc
+        assert 'id="nasdaq"' in widget and 'id="treasury"' in widget
+        assert "CME_MINI:NQ1!" in widget and "TVC:US10Y" in widget
         assert any('aria-label="다섯 시간대 방향"' in item.value for item in app.markdown)
         assert "_btc_private_storage" not in app.session_state
         assert not app.sidebar.selectbox and not app.number_input
@@ -56,7 +63,8 @@ def main() -> None:
         app.session_state["dashboard_tab"] = "미래 예측"
         app.run(timeout=45)
         assert not app.exception and not app.error
-        assert any("예측 도착일 2026.04.01" in item.value for item in app.caption)
+        target = pd.Timestamp.now(tz="UTC").normalize() + pd.DateOffset(months=3)
+        assert any(f"예측 도착일 {target:%Y.%m.%d}" in item.value for item in app.caption)
         assert any(item.label == "함께 볼 과거 경로 · 유사도 순" for item in app.get("button_group"))
         assert any("주황색" in item.value for item in app.caption)
         app.session_state["dashboard_tab"] = "시장 개요"

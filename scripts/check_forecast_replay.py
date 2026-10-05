@@ -1,6 +1,6 @@
 """Native forecast case switching preserves the model and skips parent analysis.
 
-Use against a running Demo-capable dashboard. An optional instrumentation log
+Use against a running Live dashboard (or developer-injected public fixtures). An instrumentation log
 may be passed to verify that child controls never re-enter parent analysis.
 """
 
@@ -20,20 +20,15 @@ def verify(browser, width, url, event_log):
     MarketFixture(page)
     page.goto(url)
     page.get_by_role("tab", name="시장 개요", exact=True).wait_for(timeout=45000)
-    page.get_by_role("combobox").nth(1).click()
-    page.get_by_role("option", name="Demo · 합성 데이터", exact=True).click()
-    page.get_by_text(
-        "DEMO · 합성 데이터입니다. 실시간 가격과 그래프는 Live 모드에서 확인하세요.", exact=True
-    ).wait_for()
     page.get_by_role("tab", name="미래 예측", exact=True).click()
     page.get_by_text("기간별 가격 전망", exact=True).wait_for()
     page.get_by_text("3개월", exact=True).click()
-    page.get_by_text(re.compile("예측 도착일 2026.04.01")).wait_for()
+    page.get_by_text(re.compile("예측 도착일 ")).wait_for()
     panel = page.get_by_role("tabpanel", name="미래 예측", exact=True)
     plot = panel.locator(".js-plotly-plot")
     plot.wait_for()
     page.wait_for_function(
-        "() => [...document.querySelectorAll('.js-plotly-plot')].some(el=>el.getBoundingClientRect().width>0 && el.data?.length===5 && el.data[3].x.length===91)"
+        "() => [...document.querySelectorAll('.js-plotly-plot')].some(el=>el.getBoundingClientRect().width>0 && el.data?.length===5 && el.data[3].x.length>=90)"
     )
     before = plot.evaluate("el=>el.data.map(t=>({name:t.name,y:t.y,x:t.x}))")
     assert before[4]["name"] == "과거 사례 재현"

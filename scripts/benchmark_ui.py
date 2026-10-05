@@ -6,9 +6,13 @@ import os
 from pathlib import Path
 import statistics
 import time
+import sys
 from tempfile import TemporaryDirectory
 
 from streamlit.testing.v1 import AppTest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from offline_ui_fixture import offline_market_data  # noqa: E402
 
 
 def main():
@@ -18,11 +22,12 @@ def main():
     args = parser.parse_args()
     if not 1 <= args.repeats <= 30:
         parser.error("repeats must be 1–30")
-    with TemporaryDirectory(prefix="btc-ui-benchmark-") as directory:
+    with TemporaryDirectory(prefix="btc-ui-benchmark-") as directory, offline_market_data(args.checkout):
         os.environ.update(
-            BTC_DEFAULT_SOURCE="demo",
+            BTC_DEFAULT_SOURCE="live",
             BTC_DEFAULT_EXCHANGE="Binance",
             BTC_DB_PATH=str(Path(directory) / "demo.sqlite3"),
+            BTC_WEB_DATA_DIR=directory,
         )
         app = AppTest.from_file(args.checkout / "app.py", default_timeout=60)
 

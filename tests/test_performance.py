@@ -115,7 +115,7 @@ def test_feature_cache_reuses_work_and_invalidates_price_and_config(bars, monkey
     analysis_cache.feature_frame.clear()
 
 
-def test_ui_only_runs_active_tab_and_live_refresh_reuses_data(monkeypatch, tmp_path):
+def test_ui_only_runs_active_tab_and_live_refresh_reuses_data(monkeypatch, tmp_path, offline_dashboard):
     import streamlit as st
     from btc_analyzer.ui import analysis_cache
 

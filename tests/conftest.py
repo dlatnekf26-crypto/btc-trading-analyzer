@@ -5,6 +5,8 @@ import pandas as pd
 import pytest
 from btc_analyzer.data.service import demo_bundle
 from btc_analyzer.analysis.multi_timeframe import prepare
+from pathlib import Path
+import streamlit as st
 
 
 @pytest.fixture(scope="session")
@@ -26,3 +28,14 @@ def bars():
     )
     df.attrs["timeframe"] = "1h"
     return df
+
+
+@pytest.fixture
+def offline_dashboard(monkeypatch, tmp_path):
+    from scripts.offline_ui_fixture import offline_market_data
+
+    monkeypatch.setenv("BTC_WEB_DATA_DIR", str(tmp_path / "web"))
+    st.cache_data.clear()
+    with offline_market_data(Path(__file__).resolve().parents[1]):
+        yield
+    st.cache_data.clear()

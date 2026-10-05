@@ -8,7 +8,7 @@ from check_live_widget import MarketFixture, cleanup, install_quote_transport, s
 
 
 def verify(browser, width):
-    page = browser.new_page(viewport={"width": width, "height": 362}, device_scale_factor=1.1)
+    page = browser.new_page(viewport={"width": width, "height": 592}, device_scale_factor=1.1)
     page.clock.install()
     install_quote_transport(page)
     fixture = MarketFixture(page)

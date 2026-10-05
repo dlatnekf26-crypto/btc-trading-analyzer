@@ -13,6 +13,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
 .change{font-size:11px;min-height:14px;color:#66758b}.status{font-size:10px;margin-top:5px;color:#66758b;min-height:13px}.dot{display:inline-block;width:6px;height:6px;background:#98a5b5;border-radius:50%;margin-right:5px}.fresh .dot{background:#10a878}.reference .dot{background:#3182f6}.stale .price{color:#8793a4}
 .plot{min-width:0;position:relative;margin-top:5px}canvas{width:100%;height:42px;display:block;touch-action:pan-y}.range{display:flex;justify-content:space-between;gap:3px;font-size:9px;color:#66758b;margin-top:2px}.empty{position:absolute;inset:12px 0 auto;text-align:center;font-size:10px;color:#8793a4}
 .aux{min-height:114px}.aux .change{font-size:10px;min-height:26px}.note{margin:7px 2px 0;color:#7b8797;font-size:10px;line-height:1.45}
+.macro .vendor{height:126px;min-width:0;margin:2px -6px 0}.macro .status{min-height:27px}.macro a{color:#3182f6;text-decoration:none;font-size:10px}.macro .name b{font-size:12px}.macro .name{font-size:9px}
 @media(max-width:450px){.market{padding:11px 10px;border-radius:16px}.name b{font-size:12px}.name{font-size:10px}.price{font-size:clamp(17px,5.2vw,23px)}.status{font-size:9px}.aux .change{font-size:9px}.range{font-size:8px}}
 </style></head><body><div class="dashboard">
 <section class="market crypto stale" id="binance" aria-label="비트코인 실시간 가격">
@@ -28,19 +29,24 @@ LIVE_PRICES_HTML = r"""<!doctype html>
 </section>
 <section class="market aux stale" id="premium" aria-label="비트코인 김치프리미엄">
 <div class="name"><b>김치프리미엄</b>BTC</div><div class="price"><span>—</span><small>%</small></div><div class="change">Upbit / Binance · 환산 반영</div><div class="status"><i class="dot"></i><span>계산 자료 대기</span></div>
-</section></div><p class="note">환율은 고시 시각 기준 · 김프는 USDT/USD 환산을 포함한 참고값이에요.</p>
+</section>
+<section class="market macro" id="nasdaq" aria-label="나스닥100 선물 NQ">
+<div class="name"><b>나스닥100 선물</b>NQ 연속물</div><div class="vendor"></div><div class="status">거래소 제공 지연 시세 · CME</div>
+<a href="https://www.tradingview.com/symbols/CME_MINI-NQ1!/" target="_blank" rel="noopener noreferrer">TradingView에서 보기 ↗</a>
+</section>
+<section class="market macro" id="treasury" aria-label="미국 국채 10년물 금리">
+<div class="name"><b>미국채 10년물</b>금리 (%)</div><div class="vendor"></div><div class="status">참고 금리 · TVC:US10Y</div>
+<a href="https://www.tradingview.com/symbols/TVC-US10Y/" target="_blank" rel="noopener noreferrer">TradingView에서 보기 ↗</a>
+</section></div><p class="note">환율은 고시 시각 기준 · 김프는 USDT/USD 환산 포함 · NQ는 공개 지연 시세, 미국채는 금리(%)예요.</p>
 <script>
 (() => {
   'use strict';
-  const MAX_POINTS = 61, STALE_MS = 15000, DRAW_MS = 250;
+  const MAX_POINTS = 61, STALE_MS = 15000, DRAW_MS = 100;
   const configs = [
     {id:'binance', market:'binance', symbol:'BTCUSDT', decimals:2, changeLabel:'24시간', restGap:1000,
-     socket:'wss://data-stream.binance.vision/ws/btcusdt@ticker',
-     ticker:'https://data-api.binance.vision/api/v3/ticker/24hr?symbol=BTCUSDT',
+     socket:'wss://data-stream.binance.vision/stream?streams=btcusdt@aggTrade/ethusdt@aggTrade/btcusdt@ticker/ethusdt@ticker',
      history:'https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=60'},
     {id:'ethereum', market:'binance', symbol:'ETHUSDT', decimals:2, changeLabel:'24시간', restGap:1000,
-     socket:'wss://data-stream.binance.vision/ws/ethusdt@ticker',
-     ticker:'https://data-api.binance.vision/api/v3/ticker/24hr?symbol=ETHUSDT',
      history:'https://data-api.binance.vision/api/v3/klines?symbol=ETHUSDT&interval=1m&limit=60'},
     {id:'upbit', market:'upbit', symbol:'KRW-BTC', decimals:0, changeLabel:'전일 대비', restGap:11000,
      socket:'wss://api.upbit.com/websocket/v1',
@@ -51,6 +57,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     socketRef:null, retryTimer:null, retries:0, connectedAt:0, lastRx:0, lastEvent:0,
     lastPoll:0, lastWs:0, historyAt:0, transport:'', price:null, change:null, pending:false,
     loadingHistory:false, historyReady:false, historyRetryAt:0, historyFailures:0, nextRestAt:0, storageAt:0, controllers:new Set(), dirty:true}));
+  const binanceRequest={pending:false,lastPoll:0,restGap:1000,nextRestAt:0,controllers:new Set()};
   const validNumber = n => typeof n === 'number' && Number.isFinite(n);
   const timeFormat = new Intl.DateTimeFormat('en-GB', {hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23',timeZone:'Asia/Seoul'});
   const clock = t => timeFormat.format(new Date(t));
@@ -89,7 +96,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
         s.el.dataset.transport = s.transport;
         s.el.querySelector('.status span').textContent = s.price === null
           ? (s.retries ? '연결 지연 · 재시도 중' : '연결 중…')
-          : (s.transport === 'history' ? '최근 분봉' : live ? (s.transport === 'ws' ? '실시간' : (Math.max(10,s.restGap/1000)+'초 조회')) : '수신 지연 · 마지막 가격') + ' · ' + clock(s.lastEvent);
+          : (s.transport === 'history' ? '최근 분봉' : live ? (s.transport === 'ws' ? '실시간' : (Math.max(5,s.restGap/1000)+'초 조회')) : '수신 지연 · 마지막 가격') + ' · ' + clock(s.lastEvent);
         if (s.dirty) {
           if (s.price !== null) {
     s.el.querySelector('.price span').textContent=s.price.toLocaleString('en-US', {
@@ -118,12 +125,13 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     if (!item || typeof item !== 'object') return;
     const binance = s.market === 'binance';
     if ((binance ? item.s || item.symbol : item.code || item.market) !== s.symbol) return;
-    const price = binance ? Number(item.c ?? item.lastPrice) : item.trade_price;
+    const price = binance ? Number(item.e==='aggTrade' ? item.p : item.c ?? item.lastPrice) : item.trade_price;
     const change = binance ? Number(item.P ?? item.priceChangePercent) : item.signed_change_rate*100;
     const time = binance ? item.E ?? item.closeTime : item.timestamp;
     if (!validNumber(price) || price <= 0 || !validNumber(time) || time <= 0 ||
         time < s.lastEvent || time > Date.now()+60000) return;
-    s.price=price; s.change=validNumber(change) ? change : null;
+    s.price=price;
+    if (validNumber(change)) s.change=change;
     s.lastEvent=time; s.lastRx=Date.now(); s.transport=transport;
     if (transport === 'ws') { s.lastWs=Date.now(); if (fresh(s)) s.retries=0; }
     if (s.history) addPoint(s,time,price);
@@ -199,12 +207,28 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     finally { s.loadingHistory=false; }
   }
   async function poll(s) {
+    if (s.market==='binance') { pollBinance(); return; }
     if (s.pending || disposed || document.hidden || (s.transport==='ws' && fresh(s)) ||
         Date.now()-s.lastPoll<Math.max(10000,s.restGap) || !reserveRest(s)) return;
     s.pending=true; s.lastPoll=Date.now();
     try { const raw=await json(s,s.ticker); if (!disposed && !document.hidden) accept(s,raw,'rest'); }
     catch (_) { s.retries=Math.max(1,s.retries); schedulePaint(); }
     finally { s.pending=false; }
+  }
+  async function pollBinance() {
+    const s=binanceRequest, group=states.slice(0,2);
+    if (s.pending || disposed || document.hidden || group.every(x=>x.transport==='ws' && fresh(x)) ||
+        Date.now()-s.lastPoll<5000 || !reserveRest(s)) return;
+    s.pending=true; s.lastPoll=Date.now();
+    try {
+      const rows=await json(s,'https://data-api.binance.vision/api/v3/ticker/24hr?symbols='+encodeURIComponent('["BTCUSDT","ETHUSDT"]'));
+      if (!Array.isArray(rows) || disposed || document.hidden) return;
+      // A slow REST response cannot displace a healthy, more recent WebSocket.
+      for (const item of rows) for (const market of group) {
+        if (!(market.transport==='ws' && fresh(market))) accept(market,item,'rest');
+      }
+    } catch (_) { group.forEach(x=>x.retries=Math.max(1,x.retries)); schedulePaint(); }
+    finally {s.pending=false;}
   }
   function reconnect(s) {
     if (disposed || document.hidden || s.retryTimer) return;
@@ -213,11 +237,13 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     schedulePaint();
   }
   function connect(s) {
-    if (disposed || document.hidden || s.socketRef) return;
+    if (s.id==='ethereum' || disposed || document.hidden || s.socketRef) return;
+    const group=s.market==='binance' ? states.slice(0,2) : [s];
     let ws;
     try { ws=new WebSocket(s.socket); }
     catch (_) { reconnect(s); return; }
-    s.socketRef=ws; s.connectedAt=Date.now(); ws.binaryType='arraybuffer';
+    for (const market of group) {market.socketRef=ws; market.connectedAt=Date.now();}
+    ws.binaryType='arraybuffer';
     ws.onopen=()=>{
       if (s.id==='upbit') ws.send(JSON.stringify([
         {ticket:'btc-signal-lab-'+Math.random().toString(36).slice(2)},
@@ -226,14 +252,19 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     };
     ws.onmessage=event=>{
       if (disposed || s.socketRef!==ws || document.hidden) return;
-      try { accept(s,JSON.parse(typeof event.data==='string' ? event.data : new TextDecoder().decode(event.data)),'ws'); }
+      try {
+        const packet=JSON.parse(typeof event.data==='string' ? event.data : new TextDecoder().decode(event.data));
+        for (const market of group) accept(market,packet.data ?? packet,'ws');
+      }
       catch (_) { /* Ignore malformed messages; never convert them to a price. */ }
     };
     ws.onerror=()=>ws.close();
     ws.onclose=()=>{
       if (s.socketRef!==ws) return;
-      s.socketRef=null;
-      if (s.transport==='ws') s.lastRx=0;
+      for (const market of group) {
+        market.socketRef=null;
+        if (market.transport==='ws') market.lastRx=0;
+      }
       reconnect(s); poll(s); schedulePaint();
     };
   }
@@ -242,6 +273,35 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     const ws=s.socketRef; s.socketRef=null; if (ws) ws.close();
     for (const controller of s.controllers) controller.abort();
     s.lastRx=0;
+  }
+  const macros=[{id:'nasdaq',symbol:'CME_MINI:NQ1!',label:'거래소 제공 지연 시세 · CME'},
+    {id:'treasury',symbol:'TVC:US10Y',label:'참고 금리 · TVC:US10Y'}].map(x=>({...x,loaded:false,generation:0}));
+  function loadMacros() {
+    if (disposed || document.hidden) return;
+    for (const s of macros) {
+      if (s.loaded) continue;
+      const el=document.getElementById(s.id), vendor=el.querySelector('.vendor'), generation=++s.generation;
+      s.loaded=true;
+      const host=document.createElement('div'); host.className='tradingview-widget-container';
+      const widget=document.createElement('div'); widget.className='tradingview-widget-container__widget';
+      const script=document.createElement('script'); script.async=true;
+      script.src='https://s3.tradingview.com/external-embedding/embed-widget-single-quote.js';
+      script.textContent=JSON.stringify({symbol:s.symbol,width:'100%',isTransparent:true,colorTheme:'light',locale:'kr'});
+      script.onerror=()=>{
+        if (disposed || generation!==s.generation) return;
+        el.querySelector('.status').textContent='시세 연결 제한 · 아래 링크에서 확인';
+      };
+      script.onload=()=>{
+        if (!disposed && generation===s.generation) el.querySelector('.status').textContent=s.label;
+      };
+      host.append(widget,script); vendor.replaceChildren(host);
+    }
+  }
+  function stopMacros() {
+    for (const s of macros) {
+      s.generation++; s.loaded=false;
+      document.getElementById(s.id).querySelector('.vendor').replaceChildren();
+    }
   }
   const rateState=id=>({id,rate:null,asOf:0,fetched:0,source:'',daily:false,pending:false,nextPoll:0,
     restGap:60000,nextRestAt:0,controllers:new Set()});
@@ -329,7 +389,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
   const heartbeat=setInterval(()=>{
     if (disposed || document.hidden) return;
     for (const s of states) {
-      if (s.socketRef && Date.now()-Math.max(s.connectedAt,s.lastWs)>20000) s.socketRef.close();
+      if (s.socketRef && Date.now()-Math.max(s.connectedAt,s.lastWs)>(s.market==='binance' ? 12000 : 20000)) s.socketRef.close();
       if (s.history && !s.historyReady) history(s);
       poll(s);
     }
@@ -340,21 +400,24 @@ LIVE_PRICES_HTML = r"""<!doctype html>
       if (document.hidden) stop(s);
       else { history(s); connect(s); poll(s); }
     }
-    if (document.hidden) rates.forEach(s=>s.controllers.forEach(c=>c.abort()));
-    else pollRates();
+    if (document.hidden) {
+      rates.forEach(s=>s.controllers.forEach(c=>c.abort()));
+      binanceRequest.controllers.forEach(c=>c.abort()); stopMacros();
+    } else {pollRates(); loadMacros();}
     schedulePaint();
   });
   const observer=new ResizeObserver(()=>{ for (const s of states) s.dirty=true; schedulePaint(); });
   observer.observe(document.body);
   window.addEventListener('pagehide',()=>{
     disposed=true; clearInterval(heartbeat); clearTimeout(paintTimer); observer.disconnect(); states.forEach(stop); rates.forEach(s=>s.controllers.forEach(c=>c.abort()));
+    binanceRequest.controllers.forEach(c=>c.abort()); stopMacros();
   });
   for (const s of states) { restore(s); history(s); connect(s); poll(s); }
-  restoreRates(); pollRates(); schedulePaint();
+  restoreRates(); pollRates(); schedulePaint(); loadMacros();
 })();
 </script></body></html>"""
 
 
 def render_live_prices() -> None:
     """Keep a stable iframe outside analysis fragments so tab clicks keep sockets."""
-    components.html(LIVE_PRICES_HTML, height=362, scrolling=False)
+    components.html(LIVE_PRICES_HTML, height=592, scrolling=False)

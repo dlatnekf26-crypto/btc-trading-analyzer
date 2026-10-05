@@ -18,8 +18,8 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from btc_analyzer.config import AppConfig, COMPOSITE_TIMEFRAMES
-from btc_analyzer.candles import candle_boundary, candle_close
-from btc_analyzer.data.service import DataService, demo_bundle
+from btc_analyzer.candles import candle_boundary
+from btc_analyzer.data.service import DataService
 from btc_analyzer.data.base_provider import DataError
 from btc_analyzer.storage.database import dumps
 from btc_analyzer.strategy.composite import FRAME_LABELS, FRAME_WEIGHTS
@@ -32,15 +32,10 @@ logging.basicConfig(level=os.getenv("BTC_LOG_LEVEL", "INFO"))
 st.set_page_config(page_title="BTC Signal Lab · 실시간 시장 분석", page_icon="₿", layout="wide")
 st.markdown(CSS, unsafe_allow_html=True)
 st.markdown(BRAND, unsafe_allow_html=True)
-PUBLIC = bool(globals().get("PUBLIC_DEPLOYMENT")) or os.getenv("BTC_APP_MODE") == "public"
-cache_path = (
-    Path(os.getenv("BTC_WEB_DATA_DIR", "data/web")) / "market-cache.sqlite3"
-    if PUBLIC
-    else Path(os.getenv("BTC_DB_PATH", "data/analyzer.sqlite3"))
-)
+cache_path = Path(os.getenv("BTC_WEB_DATA_DIR", "data/web")) / "market-cache.sqlite3"
 cfg = AppConfig()
 display_timezone = "Asia/Seoul"
-timeframe, bars = "1d", 800
+exchange, symbol, quote_currency, timeframe = "Binance", "BTC/USDT", "USDT", "1d"
 average_lines = ("ema_20", "ema_50", "ema_200")
 
 
@@ -57,32 +52,14 @@ def open_history_comparison() -> None:
 
 
 with st.container(key="market_controls"):
-    market_control, mode_control, refresh_control = st.columns([2, 3, 2], vertical_alignment="bottom")
+    market_control, refresh_control = st.columns([5, 2], vertical_alignment="bottom")
     with market_control:
-        exchange = st.selectbox(
-            "거래소", ["Binance", "Upbit"], index=int(os.getenv("BTC_DEFAULT_EXCHANGE") == "Upbit")
-        )
-    with mode_control:
-        source = st.selectbox(
-            "데이터 모드",
-            ["Demo · 합성 데이터", "Live · 공개 거래소 데이터"],
-            index=int(os.getenv("BTC_DEFAULT_SOURCE", "live" if PUBLIC else "demo").lower() == "live"),
-        )
+        st.caption("Binance · BTC/USDT · LIVE")
     with refresh_control:
         st.button("데이터 새로고침", on_click=request_market_refresh, width="stretch")
-demo = source.startswith("Demo")
-symbol, quote_currency = ("BTC/USDT", "USDT") if exchange == "Binance" else ("KRW-BTC", "KRW")
-if demo:
-    st.warning("DEMO · 합성 데이터입니다. 실시간 가격과 그래프는 Live 모드에서 확인하세요.")
-else:
-    # Render before any server-side candle request. Quote ticks never rerun Python.
-    render_live_prices()
+# Render before any server-side candle request. Quote ticks never rerun Python.
+render_live_prices()
 st.caption(f"분석 기준 {exchange} {symbol} · 확정 봉으로 계산 · 실시간 현재가와 구분해요.")
-
-
-@st.cache_data(ttl=3600, max_entries=6, show_spinner=False)
-def get_demo(tf: str, count: int, quote_price: float) -> dict:
-    return demo_bundle(tf, count, price=quote_price, include_macro=True)
 
 
 @st.cache_data(ttl=60, max_entries=12, show_spinner=False)
@@ -90,24 +67,20 @@ def get_live_bundle(cache: str, market: str, pair: str, tf: str, start, end, _re
     return DataService(cache).bundle(market, pair, tf, start, end, include_macro=True, refresh=_refresh)
 
 
-@st.fragment(run_every=None if demo else 60)
+@st.fragment(run_every=60)
 def dashboard() -> None:
     sequence = st.session_state.get("market_refresh_sequence", 0)
     refresh = sequence != st.session_state.get("market_refresh_consumed", 0)
     st.session_state["market_refresh_consumed"] = sequence
     try:
-        if demo:
-            bundle = get_demo(timeframe, bars, 90_000.0 if exchange == "Binance" else 130_000_000.0)
-            available_cutoff = candle_close(bundle["1h"].index[-1], "1h")
-        else:
-            available_cutoff = pd.Timestamp.now(tz="UTC")
-            collection_end = candle_boundary(available_cutoff, "1h")
-            start = collection_end.normalize() - pd.Timedelta(days=30)
-            args = (str(cache_path), exchange, symbol, timeframe, start, collection_end)
-            with st.spinner("확정 봉을 불러오는 중…"):
-                if refresh:
-                    get_live_bundle.clear(*args)
-                bundle = get_live_bundle(*args, _refresh=refresh)
+        available_cutoff = pd.Timestamp.now(tz="UTC")
+        collection_end = candle_boundary(available_cutoff, "1h")
+        start = collection_end.normalize() - pd.Timedelta(days=30)
+        args = (str(cache_path), exchange, symbol, timeframe, start, collection_end)
+        with st.spinner("확정 봉을 불러오는 중…"):
+            if refresh:
+                get_live_bundle.clear(*args)
+            bundle = get_live_bundle(*args, _refresh=refresh)
         if not any(not frame.empty for frame in bundle.values()):
             raise DataError("확정 봉을 받지 못했습니다.")
         cutoff = candle_boundary(available_cutoff, "1h")
@@ -266,11 +239,9 @@ def dashboard() -> None:
                 exchange=exchange,
                 symbol=symbol,
                 cutoff=available_cutoff,
-                demo=demo,
-                demo_frames=bundle,
+                demo=False,
+                demo_frames={},
                 research_timeframe=timeframe,
-                demo_bars=bars,
-                demo_price=90_000.0 if exchange == "Binance" else 130_000_000.0,
                 timezone=display_timezone,
                 refresh=refresh,
             )

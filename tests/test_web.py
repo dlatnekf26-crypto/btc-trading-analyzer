@@ -100,13 +100,14 @@ def test_research_gate_is_bounded_and_releases_after_failure():
         pass
 
 
-def test_public_default_live_binance_and_usdt_quote(monkeypatch, tmp_path):
+@pytest.mark.parametrize("entry", ["app.py", "web_app.py"])
+def test_public_default_live_binance_and_usdt_quote(monkeypatch, tmp_path, entry):
     import streamlit as st
 
     st.cache_data.clear()
     monkeypatch.setenv("BTC_WEB_DATA_DIR", str(tmp_path / "web"))
-    monkeypatch.delenv("BTC_DEFAULT_SOURCE", raising=False)
-    monkeypatch.delenv("BTC_DEFAULT_EXCHANGE", raising=False)
+    monkeypatch.setenv("BTC_DEFAULT_SOURCE", "demo")
+    monkeypatch.setenv("BTC_DEFAULT_EXCHANGE", "Upbit")
     monkeypatch.delenv("BTC_APP_MODE", raising=False)
     captured = {}
 
@@ -129,7 +130,7 @@ def test_public_default_live_binance_and_usdt_quote(monkeypatch, tmp_path):
         "btc_analyzer.data.binance_provider.BinanceProvider.quote",
         lambda self, symbol: {"price": 123456.78, "change_24h": 2.15, "observed_at": "2026-10-04T00:00:00Z"},
     )
-    app = AppTest.from_file(Path(__file__).resolve().parents[1] / "web_app.py", default_timeout=30).run()
+    app = AppTest.from_file(Path(__file__).resolve().parents[1] / entry, default_timeout=30).run()
     assert not app.exception
     assert not app.error
     assert len(app.tabs) == 4
@@ -141,12 +142,16 @@ def test_public_default_live_binance_and_usdt_quote(monkeypatch, tmp_path):
     assert "BTCUSDT" in widget and "ETHUSDT" in widget and "KRW-BTC" in widget
     assert 'id="upbit"' not in widget
     assert 'id="forex"' in widget and 'id="premium"' in widget
+    assert 'id="nasdaq"' in widget and 'id="treasury"' in widget
+    assert not any(item.label in ("거래소", "데이터 모드") for item in app.selectbox)
     assert captured["cache"] == tmp_path / "web" / "market-cache.sqlite3"
     assert "_btc_private_storage" not in app.session_state
     assert not app.warning
 
 
-def test_public_visitors_never_read_or_write_existing_private_records(monkeypatch, tmp_path):
+def test_public_visitors_never_read_or_write_existing_private_records(
+    monkeypatch, tmp_path, offline_dashboard
+):
     monkeypatch.setenv("BTC_WEB_DATA_DIR", str(tmp_path / "web"))
     monkeypatch.setenv("BTC_DEFAULT_SOURCE", "demo")
     private_path = tmp_path / "local-private.sqlite3"

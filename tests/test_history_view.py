@@ -156,13 +156,10 @@ def test_live_history_failure_is_cached_and_never_replaced_with_demo(monkeypatch
     st.cache_data.clear()
 
 
-def test_demo_comparison_reuses_the_exact_displayed_path_and_five_timeframes(monkeypatch, tmp_path):
+def test_live_comparison_uses_public_history_and_five_timeframes(monkeypatch, tmp_path, offline_dashboard):
     st.cache_data.clear()
     monkeypatch.setenv("BTC_DB_PATH", str(tmp_path / "demo.sqlite"))
     monkeypatch.setenv("BTC_DEFAULT_SOURCE", "demo")
-    monkeypatch.setattr(
-        DataService, "fetch", lambda *args, **kwargs: pytest.fail("Demo must not request public history")
-    )
     app = AppTest.from_file(ROOT / "app.py", default_timeout=45).run()
     next(item for item in app.get("button_group") if item.label == "차트 시간대").set_value("4h").run()
     next(item for item in app.button if item.label == "예측과 과거 차트 함께 보기").click()
@@ -173,8 +170,8 @@ def test_demo_comparison_reuses_the_exact_displayed_path_and_five_timeframes(mon
         next(item for item in app.get("button_group") if item.label == "비교 시간대").set_value(tf)
         choose_history(app)
         assert not app.exception and not app.error
-        assert any("DEMO · 유사 구간" in item.value for item in app.warning)
-        assert any("합성 자료" in item.value for item in app.caption)
+        assert not any("DEMO" in item.value or "합성" in item.value for item in app.warning)
+        assert any("Binance 공개 시세 API" in item.value for item in app.caption)
     st.cache_data.clear()
 
 
@@ -193,7 +190,7 @@ def test_calculation_cache_invalidates_actual_price_changes_without_changing_oth
 
 
 def test_default_prediction_and_lazy_details_show_measured_error_and_keep_private_decision(
-    monkeypatch, tmp_path
+    monkeypatch, tmp_path, offline_dashboard
 ):
     from btc_analyzer.ui import forecast_view
 
@@ -248,7 +245,9 @@ def test_forecast_cache_tracks_price_changes_and_returned_forecasts_are_isolated
     history_view.forecast_analysis.clear()
 
 
-def test_quick_horizons_have_exact_end_dates_and_a_focused_case_comparison(monkeypatch, tmp_path):
+def test_quick_horizons_have_exact_end_dates_and_a_focused_case_comparison(
+    monkeypatch, tmp_path, offline_dashboard
+):
     import json
     from btc_analyzer.analysis.forecast import horizon_days
 
@@ -257,13 +256,13 @@ def test_quick_horizons_have_exact_end_dates_and_a_focused_case_comparison(monke
     monkeypatch.setenv("BTC_DB_PATH", str(tmp_path / "quick.sqlite"))
     app = AppTest.from_file(ROOT / "app.py", default_timeout=45).run()
     choose_history(app)
-    origin = pd.Timestamp("2026-01-01T09:00:00")
+    origin = pd.Timestamp.now(tz="UTC").normalize().tz_convert("Asia/Seoul").tz_localize(None)
     for horizon in ("1w", "1mo", "6mo", "3mo"):
         next(item for item in app.get("button_group") if item.label == "예측 기간").set_value(horizon)
         choose_history(app)
         assert not app.exception and not app.error
         chart = json.loads(app.get("plotly_chart")[0].proto.spec)
-        expected_days = horizon_days("2026-01-01", horizon)
+        expected_days = horizon_days(origin.tz_localize("Asia/Seoul").tz_convert("UTC"), horizon)
         assert len(chart["data"][3]["x"]) == expected_days + 1
         assert pd.Timestamp(chart["data"][3]["x"][-1]) == origin + pd.Timedelta(days=expected_days)
         assert any("일봉" in item.value and "자료:" in item.value for item in app.caption)
@@ -290,7 +289,7 @@ def test_quick_horizons_have_exact_end_dates_and_a_focused_case_comparison(monke
     st.cache_data.clear()
 
 
-def test_previous_year_selection_migrates_to_three_months(monkeypatch, tmp_path):
+def test_previous_year_selection_migrates_to_three_months(monkeypatch, tmp_path, offline_dashboard):
     st.cache_data.clear()
     monkeypatch.setenv("BTC_DEFAULT_SOURCE", "demo")
     monkeypatch.setenv("BTC_DB_PATH", str(tmp_path / "migrate.sqlite"))
@@ -301,5 +300,6 @@ def test_previous_year_selection_migrates_to_three_months(monkeypatch, tmp_path)
     assert not app.exception and not app.error
     control = next(item for item in app.get("button_group") if item.label == "예측 기간")
     assert control.value == "3mo"
-    assert any("예측 도착일 2026.04.01" in item.value for item in app.caption)
+    target = pd.Timestamp.now(tz="UTC").normalize() + pd.DateOffset(months=3)
+    assert any(f"예측 도착일 {target:%Y.%m.%d}" in item.value for item in app.caption)
     st.cache_data.clear()

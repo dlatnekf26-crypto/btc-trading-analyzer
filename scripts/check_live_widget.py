@@ -62,6 +62,9 @@ class MarketFixture:
         self.fx_price = 1300.0
         self.history_failures = {}
         self.requests = []
+        self.macro_fail = False
+        self.macro_requests = []
+        page.route("https://s3.tradingview.com/**", self.macro_route)
         for host in (
             "data-api.binance.vision",
             "api.upbit.com",
@@ -70,6 +73,25 @@ class MarketFixture:
             "api.exchange.coinbase.com",
         ):
             page.route("https://" + host + "/**", self.route)
+
+    def macro_route(self, route):
+        self.macro_requests.append(route.request.url)
+        if self.macro_fail:
+            route.abort("blockedbyclient")
+            return
+        # Exercise the vendor integration contract, not TradingView's prices.
+        route.fulfill(
+            content_type="application/javascript",
+            body=r"""
+        (()=>{
+          const script=document.currentScript, config=JSON.parse(script.textContent);
+          const frame=document.createElement('iframe');frame.dataset.symbol=config.symbol;
+          frame.style='border:0;width:100%;height:126px';frame.title=config.symbol;
+          frame.srcdoc='<div style="font:20px sans-serif;padding:12px">'+(config.symbol==='TVC:US10Y' ? '4.25%' : '22,345.50')+'<p style="font-size:11px">Fixture quote</p></div>';
+          script.parentNode.querySelector('.tradingview-widget-container__widget').append(frame);
+        })();
+        """,
+        )
 
     def route(self, route):
         from datetime import datetime, timedelta, timezone
@@ -127,13 +149,18 @@ class MarketFixture:
                 {"market": "KRW-BTC", "trade_price": 135252000, "signed_change_rate": 0.01, "timestamp": now}
             ]
         else:
-            symbol = parse_qs(urlparse(url).query)["symbol"][0]
-            body = {
-                "symbol": symbol,
-                "lastPrice": "3000.25" if symbol == "ETHUSDT" else "100000",
-                "priceChangePercent": "2.34",
-                "closeTime": now,
-            }
+            query = parse_qs(urlparse(url).query)
+            symbols = json.loads(query["symbols"][0]) if "symbols" in query else query["symbol"]
+            quotes = [
+                {
+                    "symbol": symbol,
+                    "lastPrice": "3000.25" if symbol == "ETHUSDT" else "100000",
+                    "priceChangePercent": "2.34",
+                    "closeTime": now,
+                }
+                for symbol in symbols
+            ]
+            body = quotes if "symbols" in query else quotes[0]
         if failure:
             route.fulfill(status=429, body="Rate limited", headers=headers)
         else:
@@ -149,6 +176,8 @@ def send(widget, symbol, price, now):
         if symbol == "KRW-BTC"
         else {"s": symbol, "c": str(price), "P": "2.34", "E": now}
     )
+    if symbol != "KRW-BTC":
+        data = {"stream": symbol.lower() + "@ticker", "data": data}
     widget.evaluate(
         "([token,packet,binary])=>window.__quoteSockets.filter(s=>s.url.includes(token)).at(-1).emit(packet,binary)",
         [token, json.dumps(data), symbol == "KRW-BTC"],
@@ -164,7 +193,7 @@ def cleanup(page, widget):
     page.close()
 
 
-def verify(browser, width, app_url=None):
+def verify(browser, width, app_url=None, event_log=None):
     page = browser.new_page(viewport={"width": width, "height": 1000})
     page.clock.install()
     install_quote_transport(page)
@@ -183,7 +212,13 @@ def verify(browser, width, app_url=None):
         widget = page.main_frame
     widget.locator('#premium[data-ready="true"]').wait_for(timeout=20000)
     assert widget.locator("#upbit").count() == 0
-    assert widget.locator(".market").count() == 4
+    assert widget.locator(".market").count() == 6
+    widget.locator('#nasdaq iframe[data-symbol="CME_MINI:NQ1!"]').wait_for()
+    widget.locator('#treasury iframe[data-symbol="TVC:US10Y"]').wait_for()
+    assert "금리 (%)" in widget.locator("#treasury").inner_text()
+    assert "지연 시세" in widget.locator("#nasdaq").inner_text()
+    assert 1 <= len(fixture.macro_requests) <= 2  # Concurrent loads may share the same script request.
+    assert widget.evaluate("window.__quoteSockets.length") == 2
     assert widget.locator("#ethereum .price span").inner_text() == "3,000.25"
     assert widget.locator("#forex .price span").inner_text() == "1,300.00"
     assert widget.locator("#premium .price span").inner_text() == "+2.00"
@@ -195,8 +230,9 @@ def verify(browser, width, app_url=None):
         "Removed Upbit chart must not fetch candles"
     )
     baseline = None
-    event_file = Path("/tmp/btc-lean-browser-events.log")
-    if app_url and event_file.exists():
+    event_file = event_log
+    if app_url and event_file is not None:
+        assert event_file.exists(), "This run's instrumentation log is missing"
         baseline = event_file.read_text()
     now = page.evaluate("Date.now()")
     for symbol, price in (("BTCUSDT", 101000), ("ETHUSDT", 3100.5), ("KRW-BTC", 135252000)):
@@ -214,16 +250,19 @@ def verify(browser, width, app_url=None):
     assert widget.locator(".crypto.fresh").count() == 2
     for packet in (
         "not json",
-        json.dumps({"s": "ETHUSDT", "c": "1", "E": now + 1}),
+        json.dumps({"s": "DOGEUSDT", "c": "1", "E": now + 1}),
         json.dumps({"s": "BTCUSDT", "c": "-1", "E": now + 1}),
         json.dumps({"s": "BTCUSDT", "c": "1", "E": now - 60000}),
     ):
         widget.evaluate("p=>window.__quoteSockets.find(s=>s.url.includes('btcusdt@')).emit(p,false)", packet)
     page.clock.run_for(300)
     assert widget.locator("#binance .price span").inner_text() == "101,000.00"
+    assert widget.locator("#ethereum .price span").inner_text() == "3,100.50"
     if baseline is not None:
         assert event_file.read_text() == baseline, "Quote updates re-entered Python"
     if app_url:
+        assert page.get_by_text("데이터 모드", exact=True).count() == 0
+        assert page.get_by_text("거래소", exact=True).count() == 0
         widget.evaluate("window.__quoteProbe='same-iframe'")
         page.get_by_role("tab", name="기술 지표", exact=True).click()
         page.get_by_text("모멘텀과 변동성", exact=True).wait_for()
@@ -241,8 +280,19 @@ def verify(browser, width, app_url=None):
     assert widget.locator(".crypto.stale").count() == 2
     assert widget.locator("#premium").get_attribute("data-ready") == "false"
     assert "시세 지연" in widget.locator("#premium .status").inner_text()
+    # Simulated transports emit no periodic packets. Let both watchdogs finish
+    # any reconnect already triggered while checking staleness/tab navigation.
+    for _ in range(15):
+        if widget.evaluate(
+            "['btcusdt@','api.upbit.com'].every(token=>window.__quoteSockets.filter(s=>s.url.includes(token)).at(-1)?.readyState===1)"
+        ):
+            break
+        page.clock.run_for(1000)
+    else:
+        raise AssertionError("Quote transports never reopened")
     now = page.evaluate("Date.now()")
     send(widget, "BTCUSDT", 100000, now)
+    send(widget, "ETHUSDT", 3000.25, now)
     page.clock.run_for(400)
     assert widget.locator("#binance.fresh").count() == 1
     assert widget.locator("#premium").get_attribute("data-ready") == "false", (
@@ -256,11 +306,11 @@ def verify(browser, width, app_url=None):
     page.clock.run_for(1700)
     assert widget.evaluate("window.__quoteSockets.filter(s=>s.url.includes('btcusdt@')).length") == count + 1
     fixture.rest = True
-    with page.expect_response(lambda r: "/ticker/24hr?symbol=BTCUSDT" in r.url and r.status == 200):
+    with page.expect_response(lambda r: "/ticker/24hr?symbols=" in r.url and r.status == 200):
         page.clock.fast_forward(11000)
     page.wait_for_timeout(100)
     page.clock.run_for(700)
-    assert "10초 조회" in widget.locator("#binance .status").inner_text()
+    assert "5초 조회" in widget.locator("#binance .status").inner_text()
     assert all(
         int(v) <= 61 for v in widget.locator("canvas").evaluate_all("els=>els.map(x=>x.dataset.samples)")
     )
@@ -268,25 +318,33 @@ def verify(browser, width, app_url=None):
         "Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'))"
     )
     assert widget.evaluate("window.__quoteSockets.every(s=>s.readyState===3)")
+    assert widget.locator(".macro iframe").count() == 0
     count = widget.evaluate("window.__quoteSockets.length")
     widget.evaluate(
         "Object.defineProperty(document,'hidden',{configurable:true,value:false});document.dispatchEvent(new Event('visibilitychange'))"
     )
     page.clock.run_for(400)
-    assert widget.evaluate("window.__quoteSockets.length") == count + 3
+    assert widget.evaluate("window.__quoteSockets.length") == count + 2
+    widget.locator(".macro iframe").first.wait_for()
     assert not errors, errors
     cleanup(page, widget)
-    return {"width": width, "mode": "embedded" if app_url else "standalone", "passed": True}
+    return {
+        "width": width,
+        "mode": "embedded" if app_url else "standalone",
+        "passed": True,
+        "parent_analysis_checked": baseline is not None,
+    }
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--app-url")
+    parser.add_argument("--event-log", type=Path)
     parser.add_argument("--chromium", default="/usr/bin/chromium")
     args = parser.parse_args()
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(executable_path=args.chromium, args=["--no-sandbox"])
-        results = [verify(browser, width, args.app_url) for width in (1440, 390)]
+        results = [verify(browser, width, args.app_url, args.event_log) for width in (1440, 390)]
         browser.close()
     print(json.dumps(results))
 

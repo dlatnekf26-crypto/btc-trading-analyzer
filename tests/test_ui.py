@@ -2,6 +2,9 @@
 
 from pathlib import Path
 from streamlit.testing.v1 import AppTest
+import pytest
+
+pytestmark = pytest.mark.usefixtures("offline_dashboard")
 
 
 def test_dashboard_only_has_requested_views_and_never_opens_account_db(monkeypatch, tmp_path):
@@ -18,7 +21,9 @@ def test_dashboard_only_has_requested_views_and_never_opens_account_db(monkeypat
     assert not app.exception and not app.error
     assert [tab.label for tab in app.tabs] == ["시장 개요", "기술 지표", "다중 시간대", "미래 예측"]
     assert any('aria-label="분석 요약"' in item.value for item in app.markdown)
-    assert any("합성" in x.value for x in app.warning)
+    assert not app.warning
+    assert not any(x.label in ("거래소", "데이터 모드") for x in app.selectbox)
+    assert len(app.get("iframe")) == 1
     assert not app.sidebar.selectbox and not app.number_input and not app.file_uploader
     for tab in ["기술 지표", "다중 시간대", "미래 예측"]:
         app.session_state["dashboard_tab"] = tab
@@ -37,15 +42,13 @@ def test_live_invalid_binance_symbol_shows_error(monkeypatch, tmp_path):
     monkeypatch.setenv("BTC_DB_PATH", str(tmp_path / "invalid-market.sqlite"))
     monkeypatch.setattr("btc_analyzer.data.binance_provider.ccxt.binance", lambda options: Client())
     app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
-    next(x for x in app.selectbox if x.label == "데이터 모드").select("Live · 공개 거래소 데이터")
-    app.run()
     assert not app.exception
     assert any("INVALID/USDT" in x.value for x in app.error)
 
 
 def test_removed_tab_state_recovers_and_existing_database_is_untouched(monkeypatch, tmp_path):
     path = tmp_path / "existing.sqlite"
-    original = b"do not open or replace an existing research database in Demo"
+    original = b"do not open or replace an existing research database in Live"
     path.write_bytes(original)
     monkeypatch.setenv("BTC_DB_PATH", str(path))
     app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
