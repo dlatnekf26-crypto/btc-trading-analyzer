@@ -1,4 +1,5 @@
 """Streamlit BTC research dashboard. V1 has no live-order code or credentials."""
+# ruff: noqa: E402 -- checkout preparation must precede project imports.
 
 from datetime import datetime, timedelta, timezone
 import hashlib
@@ -8,10 +9,13 @@ from pathlib import Path
 import sqlite3
 import sys
 
-# Streamlit runs the checkout directly; importing the app must not require an
-# editable project installation or a particular server working directory.
-if str(Path(__file__).resolve().parent / "src") not in sys.path:
-    sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
+# Use this checkout even when a long-running host has imported an older release.
+# Ordinary reruns preserve module identities and the optimized market caches.
+PROJECT_ROOT = Path(__file__).resolve().parent
+sys.path[:] = [str(PROJECT_ROOT), *[path for path in sys.path if path != str(PROJECT_ROOT)]]
+from checkout_bootstrap import ensure_checkout
+
+SOURCE_VERSION = globals().get("CHECKOUT_SOURCE_VERSION") or ensure_checkout(PROJECT_ROOT)
 
 import pandas as pd
 import streamlit as st
@@ -298,7 +302,16 @@ def dashboard() -> None:
         combined = combined_analysis(bundle, cutoff, cfg, enriched)
         context = hashlib.sha256(
             dumps(
-                [cfg.to_dict(), exchange, symbol, timeframe, demo, str(start), str(features.index[-1])]
+                [
+                    SOURCE_VERSION,
+                    cfg.to_dict(),
+                    exchange,
+                    symbol,
+                    timeframe,
+                    demo,
+                    str(start),
+                    str(features.index[-1]),
+                ]
             ).encode()
         ).hexdigest()
         source_name = "demo" if demo else "live"

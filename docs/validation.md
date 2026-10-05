@@ -6,7 +6,7 @@
 |---|---|
 | lock 의존성 설치 / 재실행 | 성공; scripts/install_cloud.sh 반복 실행 |
 | dependency imports / pip check | 성공; 충돌 없음 |
-| pytest | 145 passed; skipped/xfail 없음 |
+| pytest | 151 passed; skipped/xfail 없음 |
 | Ruff lint / formatting / compileall | 성공 |
 | Streamlit HTTP health / 앱 shell | 실제 서버 실행 후 200 및 ok 확인 |
 | Streamlit AppTest | 9개 탭, 백테스트, Monte Carlo, 모의 활성/중지, 설정 저장 버튼 검증 |
@@ -26,7 +26,7 @@
 
 ```bash
 .venv/bin/python -m pytest -q
-.venv/bin/ruff check src tests app.py web_app.py scripts
+.venv/bin/ruff check src tests app.py web_app.py checkout_bootstrap.py scripts
 .venv/bin/python scripts/smoke.py
 .venv/bin/python -m btc_analyzer.cli --source demo --bars 600 --robustness --paper-tick
 .venv/bin/python scripts/check_live.py --exchange both
@@ -110,9 +110,19 @@ Git 추적 파일을 확인한 결과 `src/btc_analyzer/data/`의 Python 파일 
 
 ## 경량 실행과 중장기 신호
 
-- 현재 전체 검사는 **145 passed**, skipped/xfail 없음입니다. 앞 절의 127개는 일목 추가 시점의 이전 검사 수입니다. 새 회귀 검사는 가격·설정 변경의 캐시 무효화, 새 확정 봉·윤년·주봉/월봉 경계, 지연된 최신 봉의 재시도, 클라이언트 재사용, 활성 탭만 실행, 수동 갱신과 현재가 실패의 짧은 캐시를 확인합니다.
+- 이 변경 시점의 전체 검사는 **145 passed**, skipped/xfail 없음입니다. 앞 절의 127개는 일목 추가 시점의 이전 검사 수입니다. 새 회귀 검사는 가격·설정 변경의 캐시 무효화, 새 확정 봉·윤년·주봉/월봉 경계, 지연된 최신 봉의 재시도, 클라이언트 재사용, 활성 탭만 실행, 수동 갱신과 현재가 실패의 짧은 캐시를 확인합니다.
 - 일봉·주봉·월봉 85%의 중장기 규칙을 구현했습니다. 실제 지표를 계산한 합성 사례에서 1시간·4시간·일봉이 하락 우위이고 종가가 계속 조금 낮아져도, 장기 지지·가격 할인·하락 진정·일봉 비용 후 RR이 충족되면 눌림목 매수를 표시하는 것을 확인했습니다.
 - 같은 할인 구간의 급락, 하락 진정 부족, 확정 지지 이탈, 장기 하락, 낮은 일봉 거래량, 높은 거래 비용을 별도로 검사했습니다. 단기 반등이 중장기 위험 축소를 막지 않고, 상승 중 과열이 분할매도 신호를 낼 수 있음을 검사했습니다. 미래·미완성 봉을 추가해도 눌림목 판단과 가격 기준이 바뀌지 않습니다.
 - 별도 프로세스에서 동일한 Python 3.12 런타임으로 이전 커밋과 새 구현의 Demo 기본 화면을 비교했습니다. 다섯 번 반복 실행 중앙값은 0.604초에서 0.177초, 최초 실행은 1.767초에서 1.360초로 줄었습니다. 기본 차트 JSON은 117,511에서 39,779바이트로 줄었습니다. 측정 범위와 캐시 정책은 [성능 문서](performance.md)에 기록합니다.
 - 실제 Chromium에서 1440px·390px 화면, 가격 매력·하락 진정 카드, 기본 차트 한 개, 활성 탭만 생성, 월봉 전환, 모의거래/설정/백테스트의 브라우저 클릭 후 선택 탭 유지, 페이지 새로고침과 가로 넘침 없음을 확인했습니다. 기존 연구·모의계좌 격리는 유지됩니다.
 - 종합 규칙은 `composite-v3-position`으로 이전 기록과 구분합니다. 순수 계산 캐시는 방문자의 모의계좌·기록·백테스트 결과를 공유하지 않습니다. 중장기 종합 신호의 실거래 수익성·실제 Binance 연결·사용자 공개 사이트의 속도는 검증하지 않았습니다.
+
+## 배포 ImportError와 이전 모듈 복구
+
+- 사용자가 `app.py`의 `from btc_analyzer.candles import candle_boundary, candle_close`에서 발생한 ImportError를 공유했습니다. 현재 Git 소스에는 함수가 있습니다. 이전 커밋의 실제 `candles.py`를 같은 경로의 메모리 모듈로 남겨 두면 동일한 import 줄에서 `cannot import name 'candle_boundary'`를 재현했습니다. 실제 호스팅 로그의 마지막 예외 문구와 서버 상태는 확인하지 못했습니다.
+- 두 진입점은 자체 소스의 내용 해시와 로딩 경로를 확인합니다. 이전 버전·다른 체크아웃·남은 이전 하위 모듈이 확인되면 자체 패키지와 공개 계산 캐시를 갱신합니다. 파일 크기·수정 시각이 같거나 파일 감시기가 모듈을 먼저 제거해도 이전 bytecode/계산 결과를 재사용하지 않는지 검사했습니다.
+- 같은 소스의 반복 실행에서는 클래스와 모듈의 동일성·계산 캐시를 유지합니다. 세션 연구 결과의 문맥에는 소스 버전도 포함합니다. 가격 계산과 중장기 신호 규칙은 그대로입니다.
+- 전체 **151 passed**, skipped/xfail 없음이며 Ruff lint/format이 통과했습니다. 공개 진입점의 이전 모듈 복구 검사는 상세 일목·월봉 차트, 백테스트·모의거래·설정 저장 이후에도 최신 모듈을 유지하는지 확인합니다. CI의 Python 3.12/3.13 런타임 작업에 일반 시작과 `BTC_CHECK_STALE_IMPORTS=1` 검사를 추가했습니다.
+- 실제 Streamlit 검증 서버에도 이전 `candles.py`를 먼저 로딩했습니다. 390px Chromium에서 화면·차트·활성 탭·페이지 새로고침과 가로 넘침 없음을 확인했습니다. 명시적 Demo 검사이며 사용자의 공개 사이트나 실시간 API 검증은 아닙니다.
+- 동일한 Python 3.12 런타임의 별도 프로세스에서 직전 버전과 수정 버전을 비교했습니다. Demo 화면의 다섯 번 반복 실행 중앙값은 각각 0.192초와 0.189초, 기본 차트 JSON은 둘 다 39,779바이트였습니다. 일반 새로고침의 경량 실행을 유지합니다. 실제 호스팅 속도를 보장하는 측정은 아닙니다.
+- 이미 오류가 난 Community Cloud 앱은 GitHub 수정 반영 후 기존 앱의 **Manage app → Reboot app**으로 프로세스를 한 번 재시작합니다. 실제 공개 화면 복구는 호스팅에서 확인해야 합니다.

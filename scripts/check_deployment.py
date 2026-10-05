@@ -2,7 +2,9 @@
 
 import os
 from pathlib import Path
+import sys
 from tempfile import TemporaryDirectory
+from types import ModuleType
 
 from streamlit.testing.v1 import AppTest
 
@@ -13,9 +15,22 @@ def main() -> None:
         os.environ["BTC_DEFAULT_SOURCE"] = "demo"
         os.environ["BTC_DEFAULT_EXCHANGE"] = "Binance"
         os.environ["BTC_WEB_DATA_DIR"] = directory
+        legacy = None
+        if os.getenv("BTC_CHECK_STALE_IMPORTS") == "1":
+            # Simulate a Cloud process retaining the pre-optimization module.
+            # This intentionally lacks candle_boundary; no Git history needed.
+            sys.path.insert(0, str(entry.parent / "src"))
+            __import__("btc_analyzer")
+            legacy = ModuleType("btc_analyzer.candles")
+            legacy.__file__ = str(entry.parent / "src/btc_analyzer/candles.py")
+            sys.modules[legacy.__name__] = legacy
         app = AppTest.from_file(entry, default_timeout=45).run()
         assert not app.exception, [item.message for item in app.exception]
         assert not app.error, [item.value for item in app.error]
+        candle_module = sys.modules["btc_analyzer.candles"]
+        assert hasattr(candle_module, "candle_boundary")
+        if legacy is not None:
+            assert candle_module is not legacy
         assert len(app.tabs) == 9
         assert {item.label for item in app.metric} == {"추세", "모멘텀", "거래량", "변동성", "시장 구조"}
         assert next(item.value for item in app.selectbox if item.label == "거래소") == "Binance"
@@ -47,10 +62,13 @@ def main() -> None:
             assert not app.exception, [item.message for item in app.exception]
             assert not app.error, [item.value for item in app.error]
         assert "backtest_result" in app.session_state
+        assert sys.modules["btc_analyzer.candles"] is candle_module
         app.session_state["_btc_private_storage"].cleanup()
         print(
             "PASS: public checkout startup, Binance BTC/USDT, Ichimoku/detail/monthly charts, medium/long-term signal, 9 lazy tabs, backtest, paper controls and settings"
         )
+        if legacy is not None:
+            print("PASS: retained legacy candles recovered; ordinary reruns preserve module identity")
 
 
 if __name__ == "__main__":
