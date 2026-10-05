@@ -10,7 +10,7 @@ from btc_analyzer.candles import candle_shift
 def style_chart(fig: go.Figure, height: int = 540) -> go.Figure:
     fig.update_layout(
         height=height,
-        template="plotly_white",
+        template="none",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="#ffffff",
         colorway=["#3182f6", "#dd9b24", "#08a878", "#8c65da", "#e94b65"],
@@ -21,8 +21,8 @@ def style_chart(fig: go.Figure, height: int = 540) -> go.Figure:
         hoverlabel={"bgcolor": "#ffffff", "font_color": "#191f28"},
         modebar={"bgcolor": "rgba(255,255,255,0.95)", "color": "#66758b", "activecolor": "#3182f6"},
     )
-    fig.update_xaxes(gridcolor="#edf1f7", zeroline=False)
-    fig.update_yaxes(gridcolor="#edf1f7", zeroline=False, tickformat=",.0f")
+    fig.update_xaxes(gridcolor="#edf1f7", zeroline=False, automargin=True)
+    fig.update_yaxes(gridcolor="#edf1f7", zeroline=False, tickformat=",.0f", automargin=True)
     return fig
 
 

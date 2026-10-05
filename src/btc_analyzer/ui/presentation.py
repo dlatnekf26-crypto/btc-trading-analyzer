@@ -95,11 +95,22 @@ button:focus-visible { outline: 3px solid #3182f666; outline-offset: 3px; }
 .btc-forecast-cards p { margin: 0 0 8px; color: #66758b; font-size: 12px; }
 .btc-forecast-cards strong { display: block; font-size: clamp(19px, 2vw, 26px); letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
 .btc-forecast-cards span { display: block; margin-top: 8px; color: #66758b; font-size: 11px; }
+.btc-match-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 10px 0 16px; }
+.btc-match-cards article { padding: 14px; border: 1px solid #e7ecf3; border-radius: 16px; background: #fff; }
+.btc-match-cards span { color: #66758b; font-size: 11px; display: block; }
+.btc-match-cards strong { display: block; font-size: 24px; margin-top: 5px; font-variant-numeric: tabular-nums; }
+.btc-match-cards small { color: #66758b; font-size: 11px; font-weight: 400; }
+.btc-chart-summary { background: white; border: 1px solid #e7ecf3; border-radius: 18px; padding: 16px 20px; }
+.btc-chart-summary span { display: block; color: #66758b; font-size: 12px; }
+.btc-chart-summary strong { display: block; font-size: 28px; letter-spacing: -.035em; margin: 5px 0; }
+.btc-chart-summary small { font-size: 13px; color: #66758b; }
 @media (prefers-reduced-motion: reduce) {
     [data-testid="stButton"] button, [data-testid="stButtonGroup"] button, [role="tab"] { transition: none; }
     [data-testid="stButton"] button:hover, [data-testid="stButton"] button:active { transform: none; }
 }
 @media (max-width: 760px) {
+    .btc-match-cards article { padding: 10px; }
+    .btc-match-cards strong { font-size: 20px; }
     .btc-forecast-cards { grid-template-columns: 1fr; gap: 8px; }
     .btc-forecast-cards article { padding: 14px 17px; }
     .btc-forecast-cards strong { font-size: 23px; }

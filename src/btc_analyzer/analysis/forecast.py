@@ -1,4 +1,4 @@
-"""Causal analogue forecasts with rolling, genuinely out-of-sample validation."""
+"""Causal analogue forecasts with rolling out-of-sample validation."""
 
 from dataclasses import dataclass
 
@@ -6,12 +6,53 @@ import numpy as np
 import pandas as pd
 
 from btc_analyzer.analysis.historical_similarity import SimilarityReport, prepare_history
-from btc_analyzer.candles import candle_close, candle_shift
+from btc_analyzer.candles import candle_close
+from btc_analyzer.config import TIMEFRAMES
+from btc_analyzer.data.base_provider import utc
 
 MODEL_VERSION = "analogue-v1"
 MIN_MATCHES = 3
 MIN_CALIBRATION = 12
 MAX_VALIDATION = 24
+
+
+HORIZON_LABELS = {"1w": "1주", "1mo": "1개월", "6mo": "6개월", "1y": "1년"}
+
+
+def horizon_days(origin, horizon: str) -> int:
+    """Daily-candle horizon ending on the actual UTC calendar anniversary."""
+    origin = utc(origin).normalize()
+    if horizon == "1w":
+        target = origin + pd.Timedelta(days=7)
+    elif horizon in ("1mo", "6mo", "1y"):
+        target = origin + pd.DateOffset(months={"1mo": 1, "6mo": 6, "1y": 12}[horizon])
+    else:
+        raise ValueError("지원하지 않는 예측 기간입니다.")
+    return int((target - origin).days)
+
+
+def forecast_dates(origin, timeframe, count):
+    frequency = pd.offsets.MonthBegin() if timeframe == "1M" else pd.Timedelta(seconds=TIMEFRAMES[timeframe])
+    return tuple(pd.date_range(origin, periods=count, freq=frequency))
+
+
+def weighted_path_quantiles(values, weights, quantiles=(0.1, 0.9)):
+    """Vectorized interpolation of weighted midpoints, clamped at both ends."""
+    order = np.argsort(values, axis=0)
+    ranked = np.take_along_axis(values, order, axis=0)
+    ranked_weights = weights[order]
+    cumulative = np.cumsum(ranked_weights, axis=0) - ranked_weights / 2
+    steps = np.arange(values.shape[1])
+    outputs = []
+    for q in quantiles:
+        right = np.minimum((cumulative < q).sum(axis=0), len(weights) - 1)
+        left = np.maximum(right - 1, 0)
+        start, end = cumulative[left, steps], cumulative[right, steps]
+        fraction = np.clip(
+            np.divide(q - start, end - start, out=np.zeros_like(start), where=end > start), 0, 1
+        )
+        outputs.append(ranked[left, steps] + fraction * (ranked[right, steps] - ranked[left, steps]))
+    return np.array(outputs)
 
 
 @dataclass(frozen=True)
@@ -49,7 +90,7 @@ class ForecastReport:
     coverage: float | None
 
 
-def forecast_path(report: SimilarityReport, errors=()) -> PriceForecast | None:
+def forecast_path(report: SimilarityReport, errors=(), *, include_dates=True) -> PriceForecast | None:
     """Similarity weights + volatility scaling; bands are estimates, not promises.
 
     Errors must come from completed predictions made strictly before this origin.
@@ -69,16 +110,7 @@ def forecast_path(report: SimilarityReport, errors=()) -> PriceForecast | None:
     # Small or weak samples shrink the predicted move towards unchanged price.
     reliability = min(0.85, float(weights @ scores / 100)) * min(1, (effective - 1) / 4)
     center = weights @ scenarios * reliability
-    order = np.argsort(scenarios, axis=0)
-    ranked = np.take_along_axis(scenarios, order, axis=0)
-    ranked_weights = weights[order]
-    cumulative = np.cumsum(ranked_weights, axis=0) - ranked_weights / 2
-    quantiles = np.array(
-        [
-            [np.interp(q, cumulative[:, step], ranked[:, step]) for step in range(report.forward + 1)]
-            for q in (0.1, 0.9)
-        ]
-    )
+    quantiles = weighted_path_quantiles(scenarios, weights)
     radius = 1.281552 * report.volatility * np.sqrt(np.arange(report.forward + 1))
     calibrated = len(errors) if len(errors) >= MIN_CALIBRATION else 0
     if calibrated:
@@ -89,7 +121,7 @@ def forecast_path(report: SimilarityReport, errors=()) -> PriceForecast | None:
     center[0] = lower[0] = upper[0] = 0
     prices = report.anchor_price * np.exp(np.stack([center, lower, upper]))
     return PriceForecast(
-        tuple(candle_shift(report.query_end, report.timeframe, i) for i in range(report.forward + 1)),
+        forecast_dates(report.query_end, report.timeframe, report.forward + 1) if include_dates else (),
         tuple(prices[0]),
         tuple(prices[1]),
         tuple(prices[2]),
@@ -103,7 +135,7 @@ def forecast_path(report: SimilarityReport, errors=()) -> PriceForecast | None:
 def predict_history(raw, timeframe, as_of, window=30, forward=30, *, min_similarity=60) -> ForecastReport:
     prepared = prepare_history(raw, timeframe, as_of, window, forward, min_similarity=min_similarity)
     current = prepared.compare(forward, min_similarity=min_similarity)
-    first = forecast_path(current)
+    first = forecast_path(current, include_dates=False)
     if first is None:
         return ForecastReport(
             current,
@@ -126,7 +158,7 @@ def predict_history(raw, timeframe, as_of, window=30, forward=30, *, min_similar
             historical = prepared.compare(forward, query_end=origin, min_similarity=min_similarity)
         except ValueError:
             continue
-        prediction = forecast_path(historical, errors)
+        prediction = forecast_path(historical, errors, include_dates=False)
         if prediction is None:
             continue
         actual_path = prepared.close[origin : origin + forward + 1] / prepared.close[origin]

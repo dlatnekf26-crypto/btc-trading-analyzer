@@ -93,9 +93,9 @@ def test_live_tab_collects_only_when_open_and_controls_and_refresh_reuse_work(mo
     assert len(calls) == 1 and calls[0][1:4] == ("Binance", "BTC/USDT", "1d")
     assert calls[0][0] == tmp_path / "web/market-cache.sqlite3"
     assert any("Binance 공개 시세 API" in x.value for x in app.caption)
-    assert any("가장 닮은 과거" in x.value for x in app.success)
+    assert any('aria-label="예측 요약"' in x.value for x in app.markdown)
     assert len(app.get("plotly_chart")) == 1
-    next(item for item in app.select_slider if item.label == "예측 기간").set_value(90)
+    next(item for item in app.get("button_group") if item.label == "예측 기간").set_value("6mo")
     choose_history(app)
     assert len(calls) == 1
     next(item for item in app.button if item.label == "비교 자료 새로고침").click()
@@ -104,6 +104,8 @@ def test_live_tab_collects_only_when_open_and_controls_and_refresh_reuse_work(mo
     choose_history(app)
     assert len(calls) == 2
     assert next(item.value for item in app.markdown if 'aria-label="분석 요약"' in item.value) == decision
+    next(item for item in app.get("button_group") if item.label == "예측 기간").set_value("custom")
+    choose_history(app)
     next(item for item in app.get("button_group") if item.label == "비교 시간대").set_value("1w")
     choose_history(app)
     assert len(calls) == 3 and calls[-1][3] == "1w"
@@ -231,3 +233,40 @@ def test_forecast_cache_tracks_price_changes_and_returned_forecasts_are_isolated
     assert first.prediction.center[0] != second.prediction.center[0]
     assert history_view.forecast_analysis(original, "1d", end.isoformat(), 30, 30, 60) == first
     history_view.forecast_analysis.clear()
+
+
+def test_quick_horizons_have_exact_end_dates_and_a_focused_case_comparison(monkeypatch, tmp_path):
+    import json
+    from btc_analyzer.analysis.forecast import horizon_days
+
+    st.cache_data.clear()
+    monkeypatch.setenv("BTC_DEFAULT_SOURCE", "demo")
+    monkeypatch.setenv("BTC_DB_PATH", str(tmp_path / "quick.sqlite"))
+    app = AppTest.from_file(ROOT / "app.py", default_timeout=45).run()
+    choose_history(app)
+    origin = pd.Timestamp("2026-01-01T09:00:00")
+    for horizon in ("1w", "1mo", "6mo", "1y"):
+        next(item for item in app.get("button_group") if item.label == "예측 기간").set_value(horizon)
+        choose_history(app)
+        assert not app.exception and not app.error
+        chart = json.loads(app.get("plotly_chart")[0].proto.spec)
+        expected_days = horizon_days("2026-01-01", horizon)
+        assert len(chart["data"][3]["x"]) == expected_days + 1
+        assert pd.Timestamp(chart["data"][3]["x"][-1]) == origin + pd.Timedelta(days=expected_days)
+        assert any("일봉" in item.value and "자료:" in item.value for item in app.caption)
+    next(item for item in app.get("button_group") if item.label == "분석 보기").set_value("과거 비교")
+    choose_history(app)
+    fig = json.loads(app.get("plotly_chart")[0].proto.spec)
+    assert len(fig["data"]) == 3
+    assert fig["data"][0]["y"][-1] == fig["data"][2]["y"][-1] == 0
+    assert fig["data"][1]["y"][0] == 0
+    assert fig["data"][0]["xaxis"] != fig["data"][1]["xaxis"]
+    next(item for item in app.selectbox if item.label == "비슷했던 시기").set_value(1)
+    choose_history(app)
+    assert not app.exception
+    assert any('aria-label="선택한 과거 요약"' in item.value for item in app.markdown)
+    assert not app.get("dataframe")  # No hidden all-cases table in the default comparison.
+    next(item for item in app.toggle if item.label == "모든 사례 겹쳐보기").set_value(True)
+    choose_history(app)
+    assert len(json.loads(app.get("plotly_chart")[0].proto.spec)["data"]) > 3
+    st.cache_data.clear()

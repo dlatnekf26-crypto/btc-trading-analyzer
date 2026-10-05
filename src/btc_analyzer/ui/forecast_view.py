@@ -2,29 +2,37 @@
 
 from html import escape
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from btc_analyzer.analysis.forecast import ForecastReport, MIN_CALIBRATION, MODEL_VERSION
-from btc_analyzer.candles import candle_shift
+from btc_analyzer.analysis.forecast import ForecastReport, MIN_CALIBRATION, MODEL_VERSION, forecast_dates
+from btc_analyzer.candles import candle_close
 from btc_analyzer.ui.charts import style_chart
 
 
-def prediction_chart(result: ForecastReport, timezone: str, quote: str):
+def prediction_chart(result: ForecastReport, timezone: str, quote: str, show_range: bool = True):
     report, prediction = result.history, result.prediction
     if prediction is None:
         raise ValueError("No forecast available")
     fig = go.Figure()
-    future = [date.tz_convert(timezone).isoformat() for date in prediction.dates]
-    past = [
-        candle_shift(report.query_start, report.timeframe, i + 1).tz_convert(timezone).isoformat()
-        for i in range(report.window)
-    ]
+    future = pd.DatetimeIndex(prediction.dates).tz_convert(timezone).strftime("%Y-%m-%d %H:%M").tolist()
+    past = (
+        pd.DatetimeIndex(
+            forecast_dates(
+                candle_close(report.query_start, report.timeframe), report.timeframe, report.window
+            )
+        )
+        .tz_convert(timezone)
+        .strftime("%Y-%m-%d %H:%M")
+        .tolist()
+    )
     fig.add_trace(
         go.Scatter(
             x=future,
-            y=prediction.upper,
+            y=np.round(prediction.upper, 2).tolist(),
+            visible=show_range,
             mode="lines",
             line={"width": 0},
             showlegend=False,
@@ -35,7 +43,8 @@ def prediction_chart(result: ForecastReport, timezone: str, quote: str):
     fig.add_trace(
         go.Scatter(
             x=future,
-            y=prediction.lower,
+            y=np.round(prediction.lower, 2).tolist(),
+            visible=show_range,
             mode="lines",
             line={"width": 0},
             fill="tonexty",
@@ -57,25 +66,63 @@ def prediction_chart(result: ForecastReport, timezone: str, quote: str):
     fig.add_trace(
         go.Scatter(
             x=future,
-            y=prediction.center,
+            y=np.round(prediction.center, 2).tolist(),
             mode="lines",
             name="예상 중심 경로",
             line={"color": "#3182f6", "width": 3, "dash": "dash"},
             hovertemplate=f"%{{y:,.2f}} {escape(quote)}<extra>모델 예상</extra>",
         )
     )
-    style_chart(fig, height=420)
+    fig.add_shape(
+        type="line",
+        x0=future[0],
+        x1=future[0],
+        y0=0,
+        y1=1,
+        yref="paper",
+        line={"color": "#b3bfd1", "dash": "dot", "width": 1},
+    )
+    fig.add_annotation(
+        x=future[0],
+        y=1.03,
+        yref="paper",
+        text="예측 시작",
+        showarrow=False,
+        xanchor="left",
+        font={"size": 11, "color": "#66758b"},
+    )
+    fig.add_annotation(
+        x=future[-1],
+        y=prediction.center[-1],
+        text=f"예상 {prediction.center[-1]:,.0f}",
+        showarrow=False,
+        xanchor="right",
+        yshift=18,
+        font={"size": 12, "color": "#3182f6"},
+        bgcolor="rgba(255,255,255,0.85)",
+    )
+    style_chart(fig, height=440)
     fig.update_layout(
         uirevision=f"forecast-{report.timeframe}-{report.window}-{report.forward}",
         margin={"t": 60, "l": 12, "r": 12},
         transition={"duration": 150},
         legend={"y": 1.02, "yanchor": "bottom"},
     )
-    fig.update_xaxes(title=f"확정 가격 ← 기준 시점 → 모델 예상 · {timezone}")
+    fig.update_xaxes(
+        title=f"실제 가격 → 예상 경로 · {timezone}",
+        tickformat="%m.%d<br>%H:%M" if report.timeframe in ("1h", "4h") else "%y.%m.%d",
+        nticks=5,
+    )
     fig.update_yaxes(title=quote, tickformat=",.0f")
     return fig
 
 
+@st.cache_data(ttl=3600, max_entries=24, show_spinner=False)
+def prediction_spec(result, timezone, quote, show_range):
+    return prediction_chart(result, timezone, quote, show_range).to_dict()
+
+
+@st.fragment
 def render_prediction(
     result: ForecastReport, timezone: str, quote: str, period: str, *, demo: bool, exchange: str, symbol: str
 ):
@@ -108,8 +155,11 @@ def render_prediction(
         st.caption(
             f"과거 검증에서 가격 유지 가정보다 평균 오차가 {improvement:.0%} 작았습니다. 미래 성능을 보장하지 않습니다."
         )
+    target = prediction.dates[-1].tz_convert(timezone)
+    st.caption(f"예측 도착일 {target:%Y.%m.%d} · 기준 종가 {report.anchor_price:,.2f} {quote}에서 출발해요.")
+    show_range = st.toggle("예상 변동 범위 함께 보기", value=True, key="forecast_show_range")
     st.plotly_chart(
-        prediction_chart(result, timezone, quote),
+        prediction_spec(result, timezone, quote, show_range),
         width="stretch",
         key="future_price_chart",
         theme=None,

@@ -1,12 +1,56 @@
 """Chart-only fragment: controls do not rerun collection, signals or paper trading."""
 
+from html import escape
+
 import streamlit as st
 
+from btc_analyzer.ui.cache_keys import MARKET_HASH_FUNCS
+
 from btc_analyzer.config import COMPOSITE_TIMEFRAMES, MTF_MAP
+from btc_analyzer.candles import candle_close
 from btc_analyzer.strategy.composite import FRAME_LABELS
 from btc_analyzer.ui.analysis_cache import research_analysis
 from btc_analyzer.ui.charts import price_chart
 from btc_analyzer.ui.presentation import ichimoku_cards
+
+
+@st.cache_data(ttl=3600, max_entries=24, show_spinner=False, hash_funcs=MARKET_HASH_FUNCS)
+def market_chart_spec(
+    features,
+    analysis,
+    timezone,
+    averages,
+    bands,
+    quote,
+    ichimoku,
+    detailed,
+    zones,
+    bars,
+    timeframe,
+    displacement,
+):
+    features = features.copy(deep=False)
+    features.attrs = {**features.attrs, "timeframe": timeframe, "ichimoku_displacement": displacement}
+    fig = price_chart(
+        features,
+        analysis,
+        timezone,
+        averages,
+        bands,
+        quote=quote,
+        ichimoku=ichimoku,
+        ichimoku_detail=detailed,
+        zones_visible=zones,
+        levels_visible=zones,
+        bars=bars,
+    )
+    fig.update_layout(
+        uirevision=f"market-{features.attrs.get('timeframe')}-{bars}", transition={"duration": 150}
+    )
+    fig.update_xaxes(
+        tickformat="%m.%d<br>%H:%M" if timeframe in ("1h", "4h") else "%y.%m.%d", nticks=5, row=2, col=1
+    )
+    return fig.to_dict()
 
 
 @st.fragment
@@ -40,20 +84,29 @@ def render_market_chart(*, bundle, enriched, cfg, display_timezone, average_line
             cfg,
             enriched,
         )
-        fig = price_chart(
+        visible = chart_features.tail(chart_bars)
+        first_price, last_price = float(visible.close.iloc[0]), float(visible.close.iloc[-1])
+        st.markdown(
+            '<div class="btc-chart-summary" aria-label="차트 가격 요약">'
+            f"<span>{FRAME_LABELS[chart_tf]} 확정 종가 · {candle_close(visible.index[-1], chart_tf).tz_convert(display_timezone):%m.%d %H:%M}</span>"
+            f"<strong>{last_price:,.2f} <small>{escape(quote_currency)}</small></strong>"
+            f"<span>표시 구간 변화 {last_price / first_price - 1:+.1%} · 초록 봉 상승 / 빨간 봉 하락</span></div>",
+            unsafe_allow_html=True,
+        )
+        fig = market_chart_spec(
             chart_features.tail(420),
             chart_analysis,
             display_timezone,
             tuple(average_lines) if "이동평균선" in overlays else (),
             "볼린저밴드" in overlays,
-            quote=quote_currency,
-            ichimoku="일목균형표" in overlays,
-            ichimoku_detail=detailed_chart,
-            zones_visible="가격 영역" in overlays,
-            levels_visible="가격 영역" in overlays,
-            bars=chart_bars,
+            quote_currency,
+            "일목균형표" in overlays,
+            detailed_chart,
+            "가격 영역" in overlays,
+            chart_bars,
+            chart_tf,
+            cfg.indicators.ichimoku_displacement,
         )
-        fig.update_layout(uirevision=f"market-{chart_tf}-{chart_bars}", transition={"duration": 150})
         st.plotly_chart(
             fig,
             width="stretch",

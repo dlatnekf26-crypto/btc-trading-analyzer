@@ -129,3 +129,55 @@ def test_unfinished_and_future_rows_cannot_change_prediction_or_validation():
     before = predict_history(frame, "1d", end, 12, 7)
     after = predict_history(pd.concat([frame, extra]), "1d", end + pd.Timedelta(hours=12), 12, 7)
     assert after == before
+
+
+@pytest.mark.parametrize(
+    "origin,horizon,target",
+    [
+        ("2024-01-31", "1mo", "2024-02-29"),
+        ("2023-01-31", "1mo", "2023-02-28"),
+        ("2024-08-31", "6mo", "2025-02-28"),
+        ("2024-02-29", "1y", "2025-02-28"),
+        ("2023-03-01", "1y", "2024-03-01"),
+        ("2026-12-29", "1w", "2027-01-05"),
+    ],
+)
+def test_quick_horizon_uses_calendar_months_and_leap_years(origin, horizon, target):
+    from btc_analyzer.analysis.forecast import horizon_days
+
+    origin = pd.Timestamp(origin, tz="UTC")
+    assert origin + pd.Timedelta(days=horizon_days(origin, horizon)) == pd.Timestamp(target, tz="UTC")
+
+
+def test_vectorized_weighted_quantiles_match_independent_column_interpolation():
+    from btc_analyzer.analysis.forecast import weighted_path_quantiles
+
+    rng = np.random.default_rng(321)
+    values = rng.normal(size=(5, 366))
+    weights = np.array([0.02, 0.14, 0.27, 0.11, 0.46])
+    quantiles = (0, 0.1, 0.5, 0.9, 1)
+    expected = []
+    for q in quantiles:
+        row = []
+        for column in values.T:
+            ranked = sorted(zip(column, weights))
+            sorted_values, sorted_weights = map(np.array, zip(*ranked))
+            cumulative = np.cumsum(sorted_weights) - sorted_weights / 2
+            row.append(np.interp(q, cumulative, sorted_values))
+        expected.append(row)
+    np.testing.assert_allclose(weighted_path_quantiles(values, weights, quantiles), expected, atol=1e-14)
+
+
+def test_one_year_forecast_is_complete_and_validation_observes_only_closed_history():
+    from btc_analyzer.analysis.forecast import horizon_days
+
+    frame = prices(np.full(3000, 100), pd.date_range(end="2024-02-28", periods=3000, freq="D", tz="UTC"))
+    end = candle_close(frame.index[-1], "1d")
+    forward = horizon_days(end, "1y")
+    result = predict_history(frame, "1d", end, 30, forward)
+    assert result.prediction is not None
+    assert len(result.prediction.center) == forward + 1
+    assert result.prediction.dates[-1] == pd.Timestamp("2025-02-28", tz="UTC")
+    assert len(result.validation) < 12  # A long horizon cannot invent more independent evidence.
+    assert all(case.observed_until <= end for case in result.validation)
+    assert result.prediction.calibrated_cases == 0

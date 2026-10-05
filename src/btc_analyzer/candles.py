@@ -39,7 +39,8 @@ def candle_grid(values: pd.Series, timeframe: str) -> pd.Series:
         midnight = values == values.dt.normalize()
         return midnight & ((values.dt.day == 1) if timeframe == "1M" else (values.dt.dayofweek == 0))
     duration = pd.Timedelta(seconds=TIMEFRAMES[timeframe])
-    return values.map(lambda t: False if pd.isna(t) else t.value % duration.value == 0)
+    timestamps = pd.DatetimeIndex(values).as_unit("ns").asi8
+    return pd.Series(values.notna().to_numpy() & (timestamps % duration.value == 0), index=values.index)
 
 
 def missing_intervals(index: pd.DatetimeIndex, timeframe: str) -> pd.Series:

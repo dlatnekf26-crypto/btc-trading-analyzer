@@ -83,6 +83,9 @@ def request_market_refresh() -> None:
 def open_history_comparison() -> None:
     st.session_state["dashboard_tab"] = "미래 예측"
     st.session_state["similarity_timeframe"] = st.session_state.get("price_chart_timeframe", "1d")
+    st.session_state["forecast_horizon"] = (
+        "1mo" if st.session_state["similarity_timeframe"] == "1d" else "custom"
+    )
 
 
 with st.sidebar:
@@ -321,11 +324,16 @@ def dashboard() -> None:
         ).hexdigest()
         source_name = "demo" if demo else "live"
         trader = PaperTrader(database, cfg, exchange, symbol, timeframe, source_name)
-        database.record_signal(analysis, exchange, symbol, timeframe, source_name, trader.strategy_key)
         composite_key = (
             "composite-v3-position:" + hashlib.sha256(dumps(cfg.to_dict()).encode()).hexdigest()[:16]
         )
-        database.record_signal(combined, exchange, symbol, "ALL", source_name, composite_key)
+        with database.connect(write=True) as signal_connection:
+            database.record_signal(
+                analysis, exchange, symbol, timeframe, source_name, trader.strategy_key, signal_connection
+            )
+            database.record_signal(
+                combined, exchange, symbol, "ALL", source_name, composite_key, signal_connection
+            )
     except (DataError, ValueError, OSError, KeyError, sqlite3.Error) as exc:
         logging.exception("Dashboard market data/analysis failed")
         st.error(f"데이터/분석 오류: {exc}")
@@ -362,47 +370,59 @@ def dashboard() -> None:
             logging.warning("Public Binance ticker unavailable: %s", exc)
             quote_note = "현재가 조회가 지연되어 마지막 확정 봉 종가를 표시합니다."
     confirmed = pd.Timestamp(combined.timestamp).tz_convert(display_timezone)
-    st.markdown(
-        market_hero(
-            exchange=exchange,
-            symbol=symbol,
-            timeframe="5개 시간대 종합",
-            quote=quote_currency,
-            price=displayed_price,
-            change=change,
-            change_label=change_label,
-            price_label=price_label,
-            confirmed_at=f"{confirmed:%m.%d %H:%M} · {display_timezone}",
-            demo=demo,
-        ),
-        unsafe_allow_html=True,
+    prediction_active = st.session_state.get("dashboard_tab") in ("미래 예측", "과거 유사성")
+    summary_area = (
+        st.expander("현재 시장 · 종합 매수·매도 판단", expanded=False)
+        if prediction_active
+        else st.container()
     )
-    if st.session_state.get("dashboard_tab") not in ("미래 예측", "과거 유사성"):
-        st.button(
-            "미래 예측 보기 →", type="primary", on_click=open_history_comparison, key="open_prediction_top"
+    with summary_area:
+        st.markdown(
+            market_hero(
+                exchange=exchange,
+                symbol=symbol,
+                timeframe="5개 시간대 종합",
+                quote=quote_currency,
+                price=displayed_price,
+                change=change,
+                change_label=change_label,
+                price_label=price_label,
+                confirmed_at=f"{confirmed:%m.%d %H:%M} · {display_timezone}",
+                demo=demo,
+            ),
+            unsafe_allow_html=True,
         )
-    st.markdown(decision_panel(combined), unsafe_allow_html=True)
-    st.markdown(composite_cards(combined), unsafe_allow_html=True)
-    if demo:
-        st.warning("DEMO · 합성 가격으로 계산한 화면입니다. 실제 Binance 시세는 Live 모드에서 확인하세요.")
-    if quote_note:
-        st.caption(quote_note)
-    st.caption(
-        "수주~수개월 관점 · 가격 매력과 하락 진정을 함께 봐요. ‘가격 매력’은 기술적 상대 위치이며 적정 가치나 성공 확률이 아니에요."
-    )
-    if combined.action == "매수" and combined.plan:
-        plan = combined.plan
-        st.write(
-            f"**{combined.mode} · 일봉 기준 진입 영역** · {plan.entry_low:,.2f} ~ {plan.entry_high:,.2f} {quote_currency}"
-        )
-        st.write(
-            f"손절 {plan.stop:,.2f} · 목표 "
-            + " / ".join(f"{value:,.2f}" for value in plan.targets)
-            + f" {quote_currency}"
-        )
+        if st.session_state.get("dashboard_tab") not in ("미래 예측", "과거 유사성"):
+            st.button(
+                "미래 예측 보기 →",
+                type="primary",
+                on_click=open_history_comparison,
+                key="open_prediction_top",
+            )
+        st.markdown(decision_panel(combined), unsafe_allow_html=True)
+        st.markdown(composite_cards(combined), unsafe_allow_html=True)
+        if demo:
+            st.warning(
+                "DEMO · 합성 가격으로 계산한 화면입니다. 실제 Binance 시세는 Live 모드에서 확인하세요."
+            )
+        if quote_note:
+            st.caption(quote_note)
         st.caption(
-            "일봉 변동폭과 확정 지지점을 사용해요. 신호는 진입 영역 상단의 수수료·슬리피지 후 평균 RR까지 확인합니다. 진입 영역 안에서 분할 접근을 검토해요."
+            "수주~수개월 관점 · 가격 매력과 하락 진정을 함께 봐요. ‘가격 매력’은 기술적 상대 위치이며 적정 가치나 성공 확률이 아니에요."
         )
+        if combined.action == "매수" and combined.plan:
+            plan = combined.plan
+            st.write(
+                f"**{combined.mode} · 일봉 기준 진입 영역** · {plan.entry_low:,.2f} ~ {plan.entry_high:,.2f} {quote_currency}"
+            )
+            st.write(
+                f"손절 {plan.stop:,.2f} · 목표 "
+                + " / ".join(f"{value:,.2f}" for value in plan.targets)
+                + f" {quote_currency}"
+            )
+            st.caption(
+                "일봉 변동폭과 확정 지지점을 사용해요. 신호는 진입 영역 상단의 수수료·슬리피지 후 평균 RR까지 확인합니다. 진입 영역 안에서 분할 접근을 검토해요."
+            )
     if st.session_state.get("dashboard_tab") == "과거 유사성":
         st.session_state["dashboard_tab"] = "미래 예측"
     tabs = st.tabs(
