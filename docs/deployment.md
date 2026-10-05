@@ -41,7 +41,7 @@ BTC_CHECK_STALE_IMPORTS=1 python -I scripts/check_deployment.py
 
 이 검사는 이전 `candles` 모듈을 먼저 로딩한 상태에서 공개 앱을 실행하고, 최신 모듈로 복구된 뒤 반복 실행에서는 같은 모듈을 유지하는지 확인합니다. 이미 실패 중인 Community Cloud 앱은 수정 코드 반영 후 **Manage app → Reboot app**으로 기존 프로세스를 한 번 정리할 수 있습니다.
 
-공개 화면의 분석 기본 시장은 Binance BTC/USDT입니다. Live 상단에는 Binance USDT와 Upbit KRW 현재가를 각각 표시합니다. 브라우저는 공개 WebSocket `data-stream.binance.vision` / `api.upbit.com`에 직접 연결하고, 초기 이력과 10초 대체 조회에는 REST `data-api.binance.vision` / `api.upbit.com`을 사용합니다. API 키는 필요하지 않습니다. 각 가격 옆 그래프와 수신 상태를 함께 표시합니다.
+공개 화면의 분석 기본 시장은 Binance BTC/USDT입니다. Live 상단에는 Binance USDT와 Upbit KRW 현재가를 각각 표시합니다. 브라우저는 공개 WebSocket `data-stream.binance.vision` / `api.upbit.com`에 직접 연결하고, 초기 이력과 대체 조회(Binance 10초, Upbit 11초)에는 REST `data-api.binance.vision` / `api.upbit.com`을 사용합니다. API 키는 필요하지 않습니다. 각 가격 옆 그래프와 수신 상태를 함께 표시합니다.
 
 분석 서버는 공개 REST에 접근할 수 있어야 하고, 방문자 브라우저는 자신의 네트워크에서 시세 API에 접근할 수 있어야 합니다. 연결 제한이나 인증서 오류를 숨기거나 검증을 끄지 않습니다. WebSocket이 불가능하면 REST 조회로 전환하며 오래된 가격은 지연 상태로 표시합니다. Live 오류를 합성 가격으로 대체하지 않습니다.
 

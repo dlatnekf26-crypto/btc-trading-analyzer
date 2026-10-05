@@ -137,8 +137,8 @@ def test_unfinished_and_future_rows_cannot_change_prediction_or_validation():
         ("2024-01-31", "1mo", "2024-02-29"),
         ("2023-01-31", "1mo", "2023-02-28"),
         ("2024-08-31", "6mo", "2025-02-28"),
-        ("2024-02-29", "1y", "2025-02-28"),
-        ("2023-03-01", "1y", "2024-03-01"),
+        ("2024-11-30", "3mo", "2025-02-28"),
+        ("2023-11-30", "3mo", "2024-02-29"),
         ("2026-12-29", "1w", "2027-01-05"),
     ],
 )
@@ -168,16 +168,16 @@ def test_vectorized_weighted_quantiles_match_independent_column_interpolation():
     np.testing.assert_allclose(weighted_path_quantiles(values, weights, quantiles), expected, atol=1e-14)
 
 
-def test_one_year_forecast_is_complete_and_validation_observes_only_closed_history():
+def test_six_month_forecast_is_complete_and_validation_observes_only_closed_history():
     from btc_analyzer.analysis.forecast import horizon_days
 
-    frame = prices(np.full(3000, 100), pd.date_range(end="2024-02-28", periods=3000, freq="D", tz="UTC"))
+    frame = prices(np.full(2000, 100), pd.date_range(end="2024-02-28", periods=2000, freq="D", tz="UTC"))
     end = candle_close(frame.index[-1], "1d")
-    forward = horizon_days(end, "1y")
+    forward = horizon_days(end, "6mo")
     result = predict_history(frame, "1d", end, 30, forward)
     assert result.prediction is not None
     assert len(result.prediction.center) == forward + 1
-    assert result.prediction.dates[-1] == pd.Timestamp("2025-02-28", tz="UTC")
+    assert result.prediction.dates[-1] == pd.Timestamp("2024-08-29", tz="UTC")
     assert len(result.validation) < 12  # A long horizon cannot invent more independent evidence.
     assert all(case.observed_until <= end for case in result.validation)
     assert result.prediction.calibrated_cases == 0

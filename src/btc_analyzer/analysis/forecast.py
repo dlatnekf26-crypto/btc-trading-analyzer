@@ -10,13 +10,13 @@ from btc_analyzer.candles import candle_close
 from btc_analyzer.config import TIMEFRAMES
 from btc_analyzer.data.base_provider import utc
 
-MODEL_VERSION = "analogue-v1"
+MODEL_VERSION = "analogue-v2-context"
 MIN_MATCHES = 3
 MIN_CALIBRATION = 12
 MAX_VALIDATION = 24
 
 
-HORIZON_LABELS = {"1w": "1주", "1mo": "1개월", "6mo": "6개월", "1y": "1년"}
+HORIZON_LABELS = {"1w": "1주", "1mo": "1개월", "3mo": "3개월", "6mo": "6개월"}
 
 
 def horizon_days(origin, horizon: str) -> int:
@@ -24,8 +24,8 @@ def horizon_days(origin, horizon: str) -> int:
     origin = utc(origin).normalize()
     if horizon == "1w":
         target = origin + pd.Timedelta(days=7)
-    elif horizon in ("1mo", "6mo", "1y"):
-        target = origin + pd.DateOffset(months={"1mo": 1, "6mo": 6, "1y": 12}[horizon])
+    elif horizon in ("1mo", "3mo", "6mo"):
+        target = origin + pd.DateOffset(months={"1mo": 1, "3mo": 3, "6mo": 6}[horizon])
     else:
         raise ValueError("지원하지 않는 예측 기간입니다.")
     return int((target - origin).days)
@@ -76,6 +76,7 @@ class ValidationCase:
     lower_return: float
     upper_return: float
     calibration_cases: int
+    model: str = "pattern"
 
 
 @dataclass(frozen=True)
@@ -88,6 +89,21 @@ class ForecastReport:
     baseline_mae: float | None
     directional_accuracy: float | None
     coverage: float | None
+    model: str = "pattern"
+    context_cases: int = 0
+    pattern_mae: float | None = None
+    context_mae: float | None = None
+    context_values: tuple[float | None, ...] = ()
+
+
+def context_evidence(paired_errors):
+    """Fixed gate using only the last 12 already-completed paired forecasts."""
+    recent = paired_errors[-MIN_CALIBRATION:]
+    if not recent:
+        return False, None, None
+    pattern, context = np.mean(recent, axis=0)
+    enabled = len(recent) >= MIN_CALIBRATION and pattern > 0 and context < pattern * 0.95
+    return bool(enabled), float(pattern), float(context)
 
 
 def forecast_path(report: SimilarityReport, errors=(), *, include_dates=True) -> PriceForecast | None:
@@ -132,7 +148,11 @@ def forecast_path(report: SimilarityReport, errors=(), *, include_dates=True) ->
     )
 
 
-def predict_history(raw, timeframe, as_of, window=30, forward=30, *, min_similarity=60) -> ForecastReport:
+def predict_history(
+    raw, timeframe, as_of, window=30, forward=30, *, min_similarity=60, use_context=False
+) -> ForecastReport:
+    # Context ranking is an explicit research candidate: observed walk-forward
+    # errors did not improve across all horizons. Production keeps pattern weights.
     prepared = prepare_history(raw, timeframe, as_of, window, forward, min_similarity=min_similarity)
     current = prepared.compare(forward, min_similarity=min_similarity)
     first = forecast_path(current, include_dates=False)
@@ -150,7 +170,7 @@ def predict_history(raw, timeframe, as_of, window=30, forward=30, *, min_similar
     frame = prepared.frame
     # Outcomes are disjoint; complete at/before the current confirmed close.
     origins = list(range(len(frame) - 1 - forward, window - 2, -forward))[:MAX_VALIDATION]
-    cases, errors = [], []
+    cases, errors, paired_errors = [], [], []
     for origin in reversed(origins):
         if prepared.gaps[origin + forward] != prepared.gaps[origin]:
             continue
@@ -158,9 +178,23 @@ def predict_history(raw, timeframe, as_of, window=30, forward=30, *, min_similar
             historical = prepared.compare(forward, query_end=origin, min_similarity=min_similarity)
         except ValueError:
             continue
-        prediction = forecast_path(historical, errors, include_dates=False)
-        if prediction is None:
+        pattern = forecast_path(historical, errors, include_dates=False)
+        if pattern is None:
             continue
+        contextual = (
+            prepared.compare(forward, query_end=origin, min_similarity=min_similarity, use_context=True)
+            if use_context
+            else None
+        )
+        context = (
+            forecast_path(contextual, errors, include_dates=False)
+            if contextual is not None and contextual.context_used
+            else None
+        )
+        # Decide before observing this outcome. Both candidates use identical
+        # past calibration errors; the gate compares their endpoint errors.
+        selected_context = context is not None and context_evidence(paired_errors)[0]
+        prediction = context if selected_context else pattern
         actual_path = prepared.close[origin : origin + forward + 1] / prepared.close[origin]
         predicted_path = np.array(prediction.center) / historical.anchor_price
         cases.append(
@@ -172,11 +206,24 @@ def predict_history(raw, timeframe, as_of, window=30, forward=30, *, min_similar
                 float(prediction.lower[-1] / historical.anchor_price - 1),
                 float(prediction.upper[-1] / historical.anchor_price - 1),
                 prediction.calibrated_cases,
+                "context" if selected_context else "pattern",
             )
         )
         # Add this outcome only AFTER forecasting this origin. At the next
         # origin, its last candle is closed and the error is observable.
         errors.append(np.abs(np.log(actual_path) - np.log(predicted_path)))
+        if context is not None:
+            paired_errors.append(
+                (
+                    abs(pattern.center[-1] / historical.anchor_price - actual_path[-1]),
+                    abs(context.center[-1] / historical.anchor_price - actual_path[-1]),
+                )
+            )
+    enabled, pattern_mae, context_mae = context_evidence(paired_errors)
+    if use_context and enabled:
+        contextual = prepared.compare(forward, min_similarity=min_similarity, use_context=True)
+        if contextual.context_used and forecast_path(contextual, include_dates=False) is not None:
+            current = contextual
     prediction = forecast_path(current, errors)
     mae = float(np.mean([abs(c.predicted_return - c.actual_return) for c in cases])) if cases else None
     baseline = float(np.mean([abs(c.actual_return) for c in cases])) if cases else None
@@ -200,4 +247,19 @@ def predict_history(raw, timeframe, as_of, window=30, forward=30, *, min_similar
         if calibrated_cases
         else None
     )
-    return ForecastReport(current, prediction, None, tuple(cases), mae, baseline, accuracy, coverage)
+    values = tuple(float(v) if np.isfinite(v) else None for v in prepared.context[-1]) if use_context else ()
+    return ForecastReport(
+        current,
+        prediction,
+        None,
+        tuple(cases),
+        mae,
+        baseline,
+        accuracy,
+        coverage,
+        "context" if current.context_used else "pattern",
+        len(paired_errors),
+        pattern_mae,
+        context_mae,
+        values,
+    )

@@ -56,19 +56,20 @@ def open_history_comparison() -> None:
     )
 
 
-market_control, mode_control, refresh_control = st.columns([2, 3, 2], vertical_alignment="bottom")
-with market_control:
-    exchange = st.selectbox(
-        "거래소", ["Binance", "Upbit"], index=int(os.getenv("BTC_DEFAULT_EXCHANGE") == "Upbit")
-    )
-with mode_control:
-    source = st.selectbox(
-        "데이터 모드",
-        ["Demo · 합성 데이터", "Live · 공개 거래소 데이터"],
-        index=int(os.getenv("BTC_DEFAULT_SOURCE", "live" if PUBLIC else "demo").lower() == "live"),
-    )
-with refresh_control:
-    st.button("데이터 새로고침", on_click=request_market_refresh, width="stretch")
+with st.container(key="market_controls"):
+    market_control, mode_control, refresh_control = st.columns([2, 3, 2], vertical_alignment="bottom")
+    with market_control:
+        exchange = st.selectbox(
+            "거래소", ["Binance", "Upbit"], index=int(os.getenv("BTC_DEFAULT_EXCHANGE") == "Upbit")
+        )
+    with mode_control:
+        source = st.selectbox(
+            "데이터 모드",
+            ["Demo · 합성 데이터", "Live · 공개 거래소 데이터"],
+            index=int(os.getenv("BTC_DEFAULT_SOURCE", "live" if PUBLIC else "demo").lower() == "live"),
+        )
+    with refresh_control:
+        st.button("데이터 새로고침", on_click=request_market_refresh, width="stretch")
 demo = source.startswith("Demo")
 symbol, quote_currency = ("BTC/USDT", "USDT") if exchange == "Binance" else ("KRW-BTC", "KRW")
 if demo:

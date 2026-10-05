@@ -8,6 +8,7 @@ from numpy.lib.stride_tricks import sliding_window_view
 
 from btc_analyzer.candles import candle_boundary, candle_close, candle_grid
 from btc_analyzer.config import COMPOSITE_TIMEFRAMES
+from btc_analyzer.analysis.forecast_context import CONTEXT_SCALES, context_indicators
 from btc_analyzer.data.base_provider import utc
 
 HISTORY_BARS = {"1h": 3000, "4h": 3000, "1d": 3000, "1w": 520, "1M": 120}
@@ -41,6 +42,7 @@ class HistoricalMatch:
     lowest_return: float
     highest_return: float
     volatility: float
+    context_similarity: float | None = None
 
 
 @dataclass(frozen=True)
@@ -59,6 +61,7 @@ class SimilarityReport:
     matches: tuple[HistoricalMatch, ...]
     anchor_price: float
     volatility: float
+    context_used: bool = False
 
 
 def prepare_history(
@@ -117,6 +120,9 @@ class PreparedHistory:
     def __init__(self, frame, timeframe, window):
         self.frame, self.timeframe, self.window = frame, timeframe, window
         self.close = frame.close.to_numpy()
+        self.high, self.low = frame.high.to_numpy(), frame.low.to_numpy()
+        self._context = None
+        self._score_cache = None
         breaks = np.r_[0, (frame.index[1:] != candle_close(frame.index[:-1], timeframe)).astype(int)]
         self.gaps = np.cumsum(breaks)
         self.paths = sliding_window_view(np.log(self.close), window)
@@ -127,7 +133,13 @@ class PreparedHistory:
         self.means = volumes.mean(axis=1)
         self.profiles = np.log1p(volumes / np.maximum(self.means[:, None], 1e-12))
 
-    def compare(self, forward, *, query_end=None, max_matches=5, min_similarity=60):
+    @property
+    def context(self):
+        if self._context is None:
+            self._context = context_indicators(self.frame, self.gaps)
+        return self._context
+
+    def compare(self, forward, *, query_end=None, max_matches=5, min_similarity=60, use_context=False):
         frame, timeframe, window = self.frame, self.timeframe, self.window
         close, gaps = self.close, self.gaps
         last = len(frame) - 1 if query_end is None else query_end
@@ -138,21 +150,47 @@ class PreparedHistory:
             raise ValueError("최근 비교 구간에 빠진 봉이 있습니다. 누락된 가격은 채워 넣지 않습니다.")
         # Never score windows after the query, even though their descriptors
         # may have been prepared for a later, separate evaluation origin.
-        paths = self.paths[: query_start + 1]
-        query = paths[query_start]
-        scale = np.maximum(self.scales[: query_start + 1], max(self.scales[query_start], 0.005))
-        price_scores = 100 * np.exp(-np.sqrt(np.mean((paths - query) ** 2, axis=1)) / scale)
-        volatility = self.volatility[: query_start + 1]
-        volatility_scores = 100 * np.exp(-np.abs(np.log(volatility / volatility[query_start])))
-        volume_used = bool(self.means[query_start] > 0)
-        if volume_used:
-            profiles = self.profiles[: query_start + 1]
-            volume_scores = 100 * np.exp(-np.sqrt(np.mean((profiles - profiles[query_start]) ** 2, axis=1)))
-            volume_scores[self.means[: query_start + 1] <= 0] = 0
-            scores = 0.65 * price_scores + 0.20 * volatility_scores + 0.15 * volume_scores
+        if self._score_cache is not None and self._score_cache[0] == query_start:
+            _, price_scores, volatility, volatility_scores, volume_used, volume_scores, scores = (
+                self._score_cache
+            )
         else:
-            volume_scores = None
-            scores = (0.65 * price_scores + 0.20 * volatility_scores) / 0.85
+            paths = self.paths[: query_start + 1]
+            query = paths[query_start]
+            scale = np.maximum(self.scales[: query_start + 1], max(self.scales[query_start], 0.005))
+            price_scores = 100 * np.exp(-np.sqrt(np.mean((paths - query) ** 2, axis=1)) / scale)
+            volatility = self.volatility[: query_start + 1]
+            volatility_scores = 100 * np.exp(-np.abs(np.log(volatility / volatility[query_start])))
+            volume_used = bool(self.means[query_start] > 0)
+            if volume_used:
+                profiles = self.profiles[: query_start + 1]
+                volume_scores = 100 * np.exp(
+                    -np.sqrt(np.mean((profiles - profiles[query_start]) ** 2, axis=1))
+                )
+                volume_scores[self.means[: query_start + 1] <= 0] = 0
+                scores = 0.65 * price_scores + 0.20 * volatility_scores + 0.15 * volume_scores
+            else:
+                volume_scores = None
+                scores = (0.65 * price_scores + 0.20 * volatility_scores) / 0.85
+            self._score_cache = (
+                query_start,
+                price_scores,
+                volatility,
+                volatility_scores,
+                volume_used,
+                volume_scores,
+                scores,
+            )
+        context_scores = None
+        context_used = bool(use_context and np.isfinite(self.context[last]).all())
+        if context_used:
+            values = self.context[window - 1 : last + 1]
+            valid_context = np.isfinite(values).all(axis=1)
+            context_scores = 100 * np.exp(
+                -np.mean(np.abs((values - self.context[last]) / CONTEXT_SCALES), axis=1)
+            )
+            # Missing context is not evidence of agreement with the current market.
+            scores = np.where(valid_context, 0.8 * scores + 0.2 * context_scores, -np.inf)
         # Future outcomes are not read until after the similarity ranking.
         starts = np.arange(max(0, query_start - window - forward + 1))
         ends = starts + window - 1
@@ -170,7 +208,6 @@ class PreparedHistory:
                 continue
             intervals.append((int(start), observed_end))
             anchor = close[end]
-            after = frame.iloc[end + 1 : observed_end + 1]
             selected.append(
                 HistoricalMatch(
                     start=frame.index[start],
@@ -182,9 +219,10 @@ class PreparedHistory:
                     volume_similarity=float(volume_scores[start]) if volume_used else None,
                     path=tuple((close[start : observed_end + 1] / anchor * 100).tolist()),
                     forward_return=float(close[observed_end] / anchor - 1),
-                    lowest_return=float(min(0, after.low.min() / anchor - 1)),
-                    highest_return=float(max(0, after.high.max() / anchor - 1)),
+                    lowest_return=float(min(0, self.low[end + 1 : observed_end + 1].min() / anchor - 1)),
+                    highest_return=float(max(0, self.high[end + 1 : observed_end + 1].max() / anchor - 1)),
                     volatility=float(volatility[start]),
+                    context_similarity=float(context_scores[start]) if context_used else None,
                 )
             )
             if len(selected) == max_matches:
@@ -199,11 +237,12 @@ class PreparedHistory:
             candle_close(frame.index[last], timeframe),
             tuple((close[query_start : last + 1] / close[last] * 100).tolist()),
             len(starts),
-            float(scores[ranked[0]]) if len(ranked) else None,
+            float(scores[ranked[0]]) if len(ranked) and np.isfinite(scores[ranked[0]]) else None,
             volume_used,
             tuple(selected),
             float(close[last]),
             float(volatility[query_start]),
+            context_used,
         )
 
 

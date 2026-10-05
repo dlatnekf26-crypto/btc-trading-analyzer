@@ -8,7 +8,9 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from btc_analyzer.analysis.forecast import ForecastReport, MIN_CALIBRATION, MODEL_VERSION, forecast_dates
+from btc_analyzer.analysis.historical_similarity import prepare_history
 from btc_analyzer.candles import candle_close
+from btc_analyzer.ui.cache_keys import MARKET_HASH_FUNCS
 from btc_analyzer.ui.charts import style_chart
 
 
@@ -124,13 +126,27 @@ def prediction_spec(result, timezone, quote, show_range):
 
 @st.fragment
 def render_prediction(
-    result: ForecastReport, timezone: str, quote: str, period: str, *, demo: bool, exchange: str, symbol: str
+    result: ForecastReport,
+    timezone: str,
+    quote: str,
+    period: str,
+    *,
+    demo: bool,
+    exchange: str,
+    symbol: str,
+    context_frame=None,
 ):
     prediction = result.prediction
     if prediction is None:
         st.info(result.reason)
         return
     report = result.history
+    if result.context_values:
+        st.caption(
+            "추세·매수세 반영 · RSI · ADX · CMF"
+            if result.model == "context"
+            else "가격 패턴 중심 · 모멘텀과 매수세는 아래 예측 근거에서 확인하세요."
+        )
     move = prediction.center[-1] / report.anchor_price - 1
     direction = "상승 쪽" if move >= 0.005 else "하락 쪽" if move <= -0.005 else "횡보 쪽"
     status = f"{len(result.validation)}회 과거 검증" if result.mae is not None else "검증 자료 부족"
@@ -190,6 +206,24 @@ def render_prediction(
             st.write(
                 "각 과거 시점에서 당시까지 확정된 자료만으로 예측하고 이후 실제 종가와 비교합니다. 검증 기간은 서로 겹치지 않으며, 변동 범위 보정에도 앞선 검증의 오차만 사용합니다."
             )
+            context_values = result.context_values
+            if not context_values and context_frame is not None:
+                context_values = latest_context(
+                    context_frame, report.timeframe, report.query_end, report.window, report.forward
+                )
+            if context_values:
+                labels = ("모멘텀 · RSI 14", "추세 강도 · ADX 14", "매수세 · CMF 20")
+                for column, label, value in zip(st.columns(3), labels, context_values):
+                    column.metric(label, f"{value:.2f}" if value is not None else "자료 부족")
+                st.caption(
+                    "RSI는 상승·하락 강도, ADX는 추세의 강도, CMF는 거래량을 반영한 매수·매도 압력을 비교해요. "
+                    "추가 지표는 참고값입니다. 실제 자료 검증에서 모든 기간의 개선이 확인되지 않아 기본 예상 가격에는 반영하지 않습니다."
+                )
+                if result.pattern_mae is not None:
+                    st.caption(
+                        f"최근 {min(12, result.context_cases)}쌍 비교 · 기본 패턴 오차 {result.pattern_mae:.2%}p · "
+                        f"보조 지표 후보 오차 {result.context_mae:.2%}p. 다음 예측의 개선을 보장하지는 않아요."
+                    )
             if result.mae is not None:
                 a, b, c = st.columns(3)
                 a.metric("평균 변화율 오차", f"{result.mae * 100:.2f}%p")
@@ -216,6 +250,7 @@ def render_prediction(
                             "페어": symbol,
                             "시간대": report.timeframe,
                             "모델": MODEL_VERSION,
+                            "반영 방식": case.model,
                             "예측 시점": case.origin.tz_convert(timezone).strftime("%Y.%m.%d %H:%M"),
                             "실제 확인 시점": case.observed_until.tz_convert(timezone).strftime(
                                 "%Y.%m.%d %H:%M"
@@ -241,6 +276,7 @@ def render_prediction(
                     "symbol": symbol,
                     "timeframe": report.timeframe,
                     "model": MODEL_VERSION,
+                    "selection": result.model,
                     "forecast_origin_utc": report.query_end.isoformat(),
                     "future_close_utc": [date.isoformat() for date in prediction.dates],
                     "predicted_price": prediction.center,
@@ -254,3 +290,10 @@ def render_prediction(
             st.caption(
                 "최대 최근 24회 · 현재 확보된 과거 자료 안에서 평가합니다. 거래 수익률이나 종합 신호의 백테스트 성적은 아닙니다."
             )
+
+
+@st.cache_data(ttl=3600, max_entries=12, show_spinner=False, hash_funcs=MARKET_HASH_FUNCS)
+def latest_context(frame, timeframe, end, window, forward):
+    """Compute optional evidence only when its details are actually opened."""
+    prepared = prepare_history(frame, timeframe, end, window, forward)
+    return tuple(float(v) if np.isfinite(v) else None for v in prepared.context[-1])

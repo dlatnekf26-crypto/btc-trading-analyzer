@@ -195,6 +195,16 @@ def test_calculation_cache_invalidates_actual_price_changes_without_changing_oth
 def test_default_prediction_and_lazy_details_show_measured_error_and_keep_private_decision(
     monkeypatch, tmp_path
 ):
+    from btc_analyzer.ui import forecast_view
+
+    context_calls = []
+    original = forecast_view.latest_context
+
+    def context(*args):
+        context_calls.append(True)
+        return original(*args)
+
+    monkeypatch.setattr(forecast_view, "latest_context", context)
     st.cache_data.clear()
     monkeypatch.setenv("BTC_DB_PATH", str(tmp_path / "demo.sqlite"))
     monkeypatch.setenv("BTC_DEFAULT_SOURCE", "demo")
@@ -206,10 +216,13 @@ def test_default_prediction_and_lazy_details_show_measured_error_and_keep_privat
     assert any('aria-label="예측 요약"' in item.value for item in app.markdown)
     assert len(app.get("plotly_chart")) == 1
     assert not app.get("dataframe") and not app.get("download_button")
+    assert not context_calls
     app.session_state["forecast_validation_details"] = True
     choose_history(app)
     assert not app.exception and not app.error
     assert {item.label for item in app.metric} >= {"평균 변화율 오차", "가격 유지 가정 오차", "방향 적중률"}
+    assert context_calls == [True]
+    assert {item.label for item in app.metric} >= {"모멘텀 · RSI 14", "추세 강도 · ADX 14", "매수세 · CMF 20"}
     assert {item.label for item in app.get("download_button")} >= {"과거 예측 검증 CSV", "예상 가격 경로 CSV"}
     assert any("자료 모드" in column for item in app.dataframe for column in item.value.columns)
     assert next(item.value for item in app.markdown if 'aria-label="분석 요약"' in item.value) == decision
@@ -245,7 +258,7 @@ def test_quick_horizons_have_exact_end_dates_and_a_focused_case_comparison(monke
     app = AppTest.from_file(ROOT / "app.py", default_timeout=45).run()
     choose_history(app)
     origin = pd.Timestamp("2026-01-01T09:00:00")
-    for horizon in ("1w", "1mo", "6mo", "1y"):
+    for horizon in ("1w", "1mo", "6mo", "3mo"):
         next(item for item in app.get("button_group") if item.label == "예측 기간").set_value(horizon)
         choose_history(app)
         assert not app.exception and not app.error
@@ -254,6 +267,11 @@ def test_quick_horizons_have_exact_end_dates_and_a_focused_case_comparison(monke
         assert len(chart["data"][3]["x"]) == expected_days + 1
         assert pd.Timestamp(chart["data"][3]["x"][-1]) == origin + pd.Timedelta(days=expected_days)
         assert any("일봉" in item.value and "자료:" in item.value for item in app.caption)
+
+    def unexpected_forecast(*args, **kwargs):
+        raise AssertionError("Past comparison must not run forecast validation")
+
+    monkeypatch.setattr(history_view, "forecast_analysis", unexpected_forecast)
     next(item for item in app.get("button_group") if item.label == "분석 보기").set_value("과거 비교")
     choose_history(app)
     fig = json.loads(app.get("plotly_chart")[0].proto.spec)
@@ -269,4 +287,19 @@ def test_quick_horizons_have_exact_end_dates_and_a_focused_case_comparison(monke
     next(item for item in app.toggle if item.label == "모든 사례 겹쳐보기").set_value(True)
     choose_history(app)
     assert len(json.loads(app.get("plotly_chart")[0].proto.spec)["data"]) > 3
+    st.cache_data.clear()
+
+
+def test_previous_year_selection_migrates_to_three_months(monkeypatch, tmp_path):
+    st.cache_data.clear()
+    monkeypatch.setenv("BTC_DEFAULT_SOURCE", "demo")
+    monkeypatch.setenv("BTC_DB_PATH", str(tmp_path / "migrate.sqlite"))
+    app = AppTest.from_file(ROOT / "app.py", default_timeout=45)
+    app.session_state["dashboard_tab"] = "미래 예측"
+    app.session_state["forecast_horizon"] = "1y"
+    app.run()
+    assert not app.exception and not app.error
+    control = next(item for item in app.get("button_group") if item.label == "예측 기간")
+    assert control.value == "3mo"
+    assert any("예측 도착일 2026.04.01" in item.value for item in app.caption)
     st.cache_data.clear()

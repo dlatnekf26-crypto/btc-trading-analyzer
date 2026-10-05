@@ -24,10 +24,7 @@ def widget_html():
     )
 
 
-def verify(browser, width, app_url=None):
-    page = browser.new_page(viewport={"width": width, "height": 1000})
-    page.clock.install()
-    errors = []
+def install_quote_transport(page):
     # Only replace the two public quote transports. Streamlit's own socket stays real.
     # Packet parsing, timers, drawing, DOM and the reconnect/fallback code remain production code.
     page.add_init_script(r"""
@@ -49,6 +46,13 @@ def verify(browser, width, app_url=None):
       };
     })();
     """)
+
+
+def verify(browser, width, app_url=None):
+    page = browser.new_page(viewport={"width": width, "height": 1000})
+    page.clock.install()
+    errors = []
+    install_quote_transport(page)
     fixture = {"rest": True, "time": int(time.time() * 1000)}
     page.on("pageerror", lambda error: errors.append(str(error)))
 
@@ -175,6 +179,9 @@ def verify(browser, width, app_url=None):
         assert widget.locator("#binance .price span").inner_text() == "90,123.45"
         page.get_by_role("tab", name="시장 개요", exact=True).click()
         page.get_by_text("차트로 확인하기", exact=True).wait_for()
+    assert widget.evaluate(
+        "document.getElementById('upbit').getBoundingClientRect().bottom <= innerHeight"
+    ), "Live cards clipped by iframe"
     assert widget.evaluate("document.documentElement.scrollWidth <= innerWidth")
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     page.screenshot(path=f"/tmp/btc-lean-{width}.png", full_page=bool(app_url))
