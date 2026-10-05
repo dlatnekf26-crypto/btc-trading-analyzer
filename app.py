@@ -26,6 +26,7 @@ from btc_analyzer.strategy.composite import FRAME_LABELS, FRAME_WEIGHTS
 from btc_analyzer.ui.analysis_cache import market_snapshot
 from btc_analyzer.ui.presentation import BRAND, CSS, LABELS, korean, composite_cards, decision_panel
 from btc_analyzer.ui.live_prices import render_live_prices
+from btc_analyzer.ui.market_context import render_market_context
 
 load_dotenv(override=False)
 logging.basicConfig(level=os.getenv("BTC_LOG_LEVEL", "INFO"))
@@ -59,6 +60,7 @@ with st.container(key="market_controls"):
         st.button("데이터 새로고침", on_click=request_market_refresh, width="stretch")
 # Render before any server-side candle request. Quote ticks never rerun Python.
 render_live_prices()
+render_market_context()
 st.caption(f"분석 기준 {exchange} {symbol} · 확정 봉으로 계산 · 실시간 현재가와 구분해요.")
 
 

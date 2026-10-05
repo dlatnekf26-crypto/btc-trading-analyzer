@@ -28,14 +28,14 @@ def verify(browser, width, url, event_log):
     plot = panel.locator(".js-plotly-plot")
     plot.wait_for()
     page.wait_for_function(
-        "() => [...document.querySelectorAll('.js-plotly-plot')].some(el=>el.getBoundingClientRect().width>0 && el.data?.length===5 && el.data[3].x.length>=90)"
+        "() => [...document.querySelectorAll('.js-plotly-plot')].some(el=>el.getBoundingClientRect().width>0 && el.data?.length>=5 && el.data[3].x.length>=90)"
     )
     before = plot.evaluate("el=>el.data.map(t=>({name:t.name,y:t.y,x:t.x}))")
     assert before[4]["name"] == "과거 사례 재현"
     baseline = event_log.read_text() if event_log and event_log.exists() else None
     page.get_by_text("2위", exact=True).click()
     page.wait_for_function(
-        """(before)=>{const el=[...document.querySelectorAll('.js-plotly-plot')].find(e=>e.getBoundingClientRect().width>0 && e.data?.[4]?.name==='과거 사례 재현');return el?.data?.length===5 && JSON.stringify(el.data[4].y)!==before}""",
+        """(before)=>{const el=[...document.querySelectorAll('.js-plotly-plot')].find(e=>e.getBoundingClientRect().width>0 && e.data?.[4]?.name==='과거 사례 재현');return el?.data?.length>=5 && JSON.stringify(el.data[4].y)!==before}""",
         arg=json.dumps(before[4]["y"], separators=(",", ":")),
     )
     after = plot.evaluate("el=>el.data.map(t=>({name:t.name,y:t.y,x:t.x}))")

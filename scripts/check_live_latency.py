@@ -70,8 +70,6 @@ def verify(browser, source, width, archived):
         urls = page.evaluate("window.__quoteSockets.map(s=>s.url)")
         assert sum("data-stream.binance.vision" in url for url in urls) == 1
         assert "ethusdt@aggTrade" in urls[0] and "btcusdt@aggTrade" in urls[0]
-        # A failed macro widget cannot interrupt quotes or invent a yield.
-        fixture.macro_fail = True
         page.evaluate(
             "Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'))"
         )
@@ -79,16 +77,14 @@ def verify(browser, source, width, archived):
         page.evaluate(
             "Object.defineProperty(document,'hidden',{configurable:true,value:false});document.dispatchEvent(new Event('visibilitychange'))"
         )
-        page.get_by_text("시세 연결 제한 · 아래 링크에서 확인", exact=True).first.wait_for()
-        assert page.locator(".macro iframe").count() == 0
-        assert page.locator("#nasdaq a").get_attribute("href").endswith("CME_MINI-NQ1!/")
+        assert page.locator("iframe").count() == 0
         emit(page, {"s": "BTCUSDT", "e": "aggTrade", "p": "102346.67", "E": page.evaluate("Date.now()")})
         page.clock.run_for(100)
         assert page.locator("#binance .price span").inner_text() == "102,346.67"
         calls = [t for url, t in fixture.requests if "/ticker/24hr?symbols=" in url]
         assert calls and all(b - a >= 5000 for a, b in zip(calls, calls[1:]))
         assert not any("/ticker/24hr?symbol=" in url for url, _ in fixture.requests)
-        result.update(trade_packet="passed", macro_failure="isolated", binance_connections=1)
+        result.update(trade_packet="passed", external_embeds=0, binance_connections=1)
     cleanup(page, page.main_frame)
     return result
 

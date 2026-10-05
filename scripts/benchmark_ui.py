@@ -20,6 +20,7 @@ def main():
     parser.add_argument("--checkout", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--repeats", type=int, default=5)
     args = parser.parse_args()
+    args.checkout = args.checkout.resolve()
     if not 1 <= args.repeats <= 30:
         parser.error("repeats must be 1–30")
     with TemporaryDirectory(prefix="btc-ui-benchmark-") as directory, offline_market_data(args.checkout):

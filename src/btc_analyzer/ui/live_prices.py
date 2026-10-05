@@ -13,7 +13,6 @@ LIVE_PRICES_HTML = r"""<!doctype html>
 .change{font-size:11px;min-height:14px;color:#66758b}.status{font-size:10px;margin-top:5px;color:#66758b;min-height:13px}.dot{display:inline-block;width:6px;height:6px;background:#98a5b5;border-radius:50%;margin-right:5px}.fresh .dot{background:#10a878}.reference .dot{background:#3182f6}.stale .price{color:#8793a4}
 .plot{min-width:0;position:relative;margin-top:5px}canvas{width:100%;height:42px;display:block;touch-action:pan-y}.range{display:flex;justify-content:space-between;gap:3px;font-size:9px;color:#66758b;margin-top:2px}.empty{position:absolute;inset:12px 0 auto;text-align:center;font-size:10px;color:#8793a4}
 .aux{min-height:114px}.aux .change{font-size:10px;min-height:26px}.note{margin:7px 2px 0;color:#7b8797;font-size:10px;line-height:1.45}
-.macro .vendor{height:126px;min-width:0;margin:2px -6px 0}.macro .status{min-height:27px}.macro a{color:#3182f6;text-decoration:none;font-size:10px}.macro .name b{font-size:12px}.macro .name{font-size:9px}
 @media(max-width:450px){.market{padding:11px 10px;border-radius:16px}.name b{font-size:12px}.name{font-size:10px}.price{font-size:clamp(17px,5.2vw,23px)}.status{font-size:9px}.aux .change{font-size:9px}.range{font-size:8px}}
 </style></head><body><div class="dashboard">
 <section class="market crypto stale" id="binance" aria-label="비트코인 실시간 가격">
@@ -30,14 +29,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
 <section class="market aux stale" id="premium" aria-label="비트코인 김치프리미엄">
 <div class="name"><b>김치프리미엄</b>BTC</div><div class="price"><span>—</span><small>%</small></div><div class="change">Upbit / Binance · 환산 반영</div><div class="status"><i class="dot"></i><span>계산 자료 대기</span></div>
 </section>
-<section class="market macro" id="nasdaq" aria-label="나스닥100 선물 NQ">
-<div class="name"><b>나스닥100 선물</b>NQ 연속물</div><div class="vendor"></div><div class="status">거래소 제공 지연 시세 · CME</div>
-<a href="https://www.tradingview.com/symbols/CME_MINI-NQ1!/" target="_blank" rel="noopener noreferrer">TradingView에서 보기 ↗</a>
-</section>
-<section class="market macro" id="treasury" aria-label="미국 국채 10년물 금리">
-<div class="name"><b>미국채 10년물</b>금리 (%)</div><div class="vendor"></div><div class="status">참고 금리 · TVC:US10Y</div>
-<a href="https://www.tradingview.com/symbols/TVC-US10Y/" target="_blank" rel="noopener noreferrer">TradingView에서 보기 ↗</a>
-</section></div><p class="note">환율은 고시 시각 기준 · 김프는 USDT/USD 환산 포함 · NQ는 공개 지연 시세, 미국채는 금리(%)예요.</p>
+</div><p class="note">환율은 고시 시각 기준 · 김프는 USDT/USD 환산 포함이에요.</p>
 <script>
 (() => {
   'use strict';
@@ -274,35 +266,6 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     for (const controller of s.controllers) controller.abort();
     s.lastRx=0;
   }
-  const macros=[{id:'nasdaq',symbol:'CME_MINI:NQ1!',label:'거래소 제공 지연 시세 · CME'},
-    {id:'treasury',symbol:'TVC:US10Y',label:'참고 금리 · TVC:US10Y'}].map(x=>({...x,loaded:false,generation:0}));
-  function loadMacros() {
-    if (disposed || document.hidden) return;
-    for (const s of macros) {
-      if (s.loaded) continue;
-      const el=document.getElementById(s.id), vendor=el.querySelector('.vendor'), generation=++s.generation;
-      s.loaded=true;
-      const host=document.createElement('div'); host.className='tradingview-widget-container';
-      const widget=document.createElement('div'); widget.className='tradingview-widget-container__widget';
-      const script=document.createElement('script'); script.async=true;
-      script.src='https://s3.tradingview.com/external-embedding/embed-widget-single-quote.js';
-      script.textContent=JSON.stringify({symbol:s.symbol,width:'100%',isTransparent:true,colorTheme:'light',locale:'kr'});
-      script.onerror=()=>{
-        if (disposed || generation!==s.generation) return;
-        el.querySelector('.status').textContent='시세 연결 제한 · 아래 링크에서 확인';
-      };
-      script.onload=()=>{
-        if (!disposed && generation===s.generation) el.querySelector('.status').textContent=s.label;
-      };
-      host.append(widget,script); vendor.replaceChildren(host);
-    }
-  }
-  function stopMacros() {
-    for (const s of macros) {
-      s.generation++; s.loaded=false;
-      document.getElementById(s.id).querySelector('.vendor').replaceChildren();
-    }
-  }
   const rateState=id=>({id,rate:null,asOf:0,fetched:0,source:'',daily:false,pending:false,nextPoll:0,
     restGap:60000,nextRestAt:0,controllers:new Set()});
   const fx=rateState('fx'), peg=rateState('peg'), rates=[fx,peg];
@@ -402,22 +365,22 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     }
     if (document.hidden) {
       rates.forEach(s=>s.controllers.forEach(c=>c.abort()));
-      binanceRequest.controllers.forEach(c=>c.abort()); stopMacros();
-    } else {pollRates(); loadMacros();}
+      binanceRequest.controllers.forEach(c=>c.abort());
+    } else {pollRates();}
     schedulePaint();
   });
   const observer=new ResizeObserver(()=>{ for (const s of states) s.dirty=true; schedulePaint(); });
   observer.observe(document.body);
   window.addEventListener('pagehide',()=>{
     disposed=true; clearInterval(heartbeat); clearTimeout(paintTimer); observer.disconnect(); states.forEach(stop); rates.forEach(s=>s.controllers.forEach(c=>c.abort()));
-    binanceRequest.controllers.forEach(c=>c.abort()); stopMacros();
+    binanceRequest.controllers.forEach(c=>c.abort());
   });
   for (const s of states) { restore(s); history(s); connect(s); poll(s); }
-  restoreRates(); pollRates(); schedulePaint(); loadMacros();
+  restoreRates(); pollRates(); schedulePaint();
 })();
 </script></body></html>"""
 
 
 def render_live_prices() -> None:
     """Keep a stable iframe outside analysis fragments so tab clicks keep sockets."""
-    components.html(LIVE_PRICES_HTML, height=592, scrolling=False)
+    components.html(LIVE_PRICES_HTML, height=362, scrolling=False)

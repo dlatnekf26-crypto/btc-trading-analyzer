@@ -62,9 +62,6 @@ class MarketFixture:
         self.fx_price = 1300.0
         self.history_failures = {}
         self.requests = []
-        self.macro_fail = False
-        self.macro_requests = []
-        page.route("https://s3.tradingview.com/**", self.macro_route)
         for host in (
             "data-api.binance.vision",
             "api.upbit.com",
@@ -73,25 +70,6 @@ class MarketFixture:
             "api.exchange.coinbase.com",
         ):
             page.route("https://" + host + "/**", self.route)
-
-    def macro_route(self, route):
-        self.macro_requests.append(route.request.url)
-        if self.macro_fail:
-            route.abort("blockedbyclient")
-            return
-        # Exercise the vendor integration contract, not TradingView's prices.
-        route.fulfill(
-            content_type="application/javascript",
-            body=r"""
-        (()=>{
-          const script=document.currentScript, config=JSON.parse(script.textContent);
-          const frame=document.createElement('iframe');frame.dataset.symbol=config.symbol;
-          frame.style='border:0;width:100%;height:126px';frame.title=config.symbol;
-          frame.srcdoc='<div style="font:20px sans-serif;padding:12px">'+(config.symbol==='TVC:US10Y' ? '4.25%' : '22,345.50')+'<p style="font-size:11px">Fixture quote</p></div>';
-          script.parentNode.querySelector('.tradingview-widget-container__widget').append(frame);
-        })();
-        """,
-        )
 
     def route(self, route):
         from datetime import datetime, timedelta, timezone
@@ -212,12 +190,8 @@ def verify(browser, width, app_url=None, event_log=None):
         widget = page.main_frame
     widget.locator('#premium[data-ready="true"]').wait_for(timeout=20000)
     assert widget.locator("#upbit").count() == 0
-    assert widget.locator(".market").count() == 6
-    widget.locator('#nasdaq iframe[data-symbol="CME_MINI:NQ1!"]').wait_for()
-    widget.locator('#treasury iframe[data-symbol="TVC:US10Y"]').wait_for()
-    assert "금리 (%)" in widget.locator("#treasury").inner_text()
-    assert "지연 시세" in widget.locator("#nasdaq").inner_text()
-    assert 1 <= len(fixture.macro_requests) <= 2  # Concurrent loads may share the same script request.
+    assert widget.locator(".market").count() == 4
+    assert widget.locator("iframe").count() == 0
     assert widget.evaluate("window.__quoteSockets.length") == 2
     assert widget.locator("#ethereum .price span").inner_text() == "3,000.25"
     assert widget.locator("#forex .price span").inner_text() == "1,300.00"
@@ -318,14 +292,12 @@ def verify(browser, width, app_url=None, event_log=None):
         "Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'))"
     )
     assert widget.evaluate("window.__quoteSockets.every(s=>s.readyState===3)")
-    assert widget.locator(".macro iframe").count() == 0
     count = widget.evaluate("window.__quoteSockets.length")
     widget.evaluate(
         "Object.defineProperty(document,'hidden',{configurable:true,value:false});document.dispatchEvent(new Event('visibilitychange'))"
     )
     page.clock.run_for(400)
     assert widget.evaluate("window.__quoteSockets.length") == count + 2
-    widget.locator(".macro iframe").first.wait_for()
     assert not errors, errors
     cleanup(page, widget)
     return {

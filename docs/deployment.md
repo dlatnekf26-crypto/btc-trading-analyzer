@@ -43,13 +43,15 @@ BTC_CHECK_STALE_IMPORTS=1 python -I scripts/check_deployment.py
 
 로컬과 공개 앱 모두 Binance BTC/USDT Live로 고정합니다. 상단은 BTC/ETH·환율·김프·NQ 연속 선물·미국 10년물 금리의 여섯 카드입니다. Upbit BTC는 김프 산출용으로만 수신합니다. Binance는 연결 하나의 BTC/ETH aggTrade+ticker를 사용하며 REST 대체 조회는 두 심볼을 묶어 5초마다 수행합니다. Upbit는 11초 간격을 유지합니다. API 키는 필요하지 않습니다.
 
-NQ와 미국 10년물 카드는 TradingView 공개 single-quote 위젯입니다. `CME_MINI:NQ1!`는 연속 선물(공개 지연 시세), `TVC:US10Y`는 금리(%)입니다. `s3.tradingview.com` 스크립트·`s.tradingview.com` iframe·TradingView 시세 서버(`data.tradingview.com`, `widgetdata.tradingview.com`)에 방문자 브라우저가 접근해야 합니다. `www.tradingview.com`은 원본 시세 링크와 공식 문서입니다. 비동기 위젯이 차단돼도 코인/분석은 유지하며 출처 링크를 제공합니다. iframe을 로딩한 것이 실제 시세 수신을 증명하지는 않습니다.
+NQ와 미국 10년물은 서버가 `query1.finance.yahoo.com`의 공개 chart v8 자료를 직접 읽고 작은 SVG 그래프를 그립니다. `NQ=F`는 NQ 선물, `^TNX`는 CBOE 10년물 수익률 지표(%)입니다. 현물 지수·CFD·국채 가격으로 대체하지 않으며 ^TNX를 10으로 나누지 않습니다. Yahoo 제공 시각과 지연 정보, 휴장 시 마지막 거래 시세를 표시합니다. 지원하지 않는 TradingView 외부 임베드는 제거했습니다. 요청 실패는 대기/갱신 지연으로 표시하며 실제 시세를 만들어 넣지 않습니다.
+
+뉴스는 서버에서 `news.google.com` 한국어·영어 RSS를 읽습니다. 자료원별 한 요청만 진행하며 최대 4개 백그라운드 작업, 시세 60초·뉴스 300초 캐시, 연결/읽기 제한과 본문 크기 제한, 오류 시 지수 대기와 Retry-After를 적용합니다. 첫 코인 화면은 이 요청 완료를 기다리지 않습니다. 자료원이 늦어도 정상 시세/봉 분석을 유지합니다. 뉴스·거시 카드 fragment는 5초마다 캐시만 확인하고, 예측 fragment는 60초마다 최근 뉴스 시나리오를 갱신합니다. API 키나 새 운영 의존성은 필요하지 않습니다.
 
 환율·김프에는 브라우저에서 `quotation-api-cdn.dunamu.com`(은행 고시), `api.frankfurter.dev`(일별 대체 환율), `api.exchange.coinbase.com`(USDT/USD)도 접근 가능해야 합니다. 인증키를 요구하지 않는 공개 조회이며 요청에 계좌 정보를 넣지 않습니다. 환율과 USDT/USD는 분 단위로 조회합니다. CORS·지역·서비스 제한으로 접근하지 못하면 숫자를 만들어 넣지 않고 대기/지연으로 표시합니다.
 
 개발 클라우드의 기존 허용 목록은 Binance·Upbit만 포함했습니다. 새 세 자료원은 실제 요청에서 프록시 CONNECT 403이었고 필요한 도메인을 보존·추가한 환경 설정 **초안**을 저장했습니다. 환경 설정의 저장/적용 후 실제 요청을 다시 검사해야 하며, 이 초안이 Streamlit Community Cloud나 현재 프록시에 자동 적용된 것은 아닙니다. 응답을 주입한 브라우저 검사는 실제 외부 연결 성공과 구분합니다.
 
-이번 NQ 요청의 TradingView 공식 문서/심볼/스크립트도 개발 프록시 CONNECT 403이었습니다. 위 다섯 TradingView 호스트를 기존 목록에 추가한 초안을 저장했습니다. 환경 설정에서 검토·저장하고 환경을 게시한 뒤 차단된 실제 요청만 확인합니다. Community Cloud나 방문자 브라우저의 허용 정책은 별개입니다.
+현재 개발 환경에서 새 Yahoo·Google News 요청은 프록시 CONNECT 403으로 실제 응답을 확인하지 못했습니다. 기존 허용 목록을 보존하고 `query1.finance.yahoo.com`, `news.google.com`을 환경 설정 초안에 추가했습니다. 환경 설정에서 검토·저장하고 환경을 게시한 뒤 차단된 실제 요청만 다시 확인합니다. 이 초안은 Streamlit Community Cloud나 방문자 네트워크에 자동 적용되지 않습니다. 결정적인 외부 시세 수신·뉴스 기사 제공은 호스팅에서 별도로 확인해야 합니다. 테스트용 응답의 숫자와 기사를 운영 데이터로 사용하지 않습니다.
 
 분석 서버는 공개 REST에 접근할 수 있어야 하고, 방문자 브라우저는 자신의 네트워크에서 시세 API에 접근할 수 있어야 합니다. 연결 제한이나 인증서 오류를 숨기거나 검증을 끄지 않습니다. WebSocket이 불가능하면 REST 조회로 전환하며 오래된 가격은 지연 상태로 표시합니다. Live 오류를 합성 가격으로 대체하지 않습니다.
 

@@ -56,7 +56,9 @@ def test_history_automatically_pages_the_bounded_same_exchange_and_reuses_closed
     pd.testing.assert_frame_equal(first, second)
 
 
-def test_live_tab_collects_only_when_open_and_controls_and_refresh_reuse_work(monkeypatch, tmp_path):
+def test_live_tab_collects_only_when_open_and_controls_and_refresh_reuse_work(
+    monkeypatch, tmp_path, offline_dashboard
+):
     st.cache_data.clear()
     monkeypatch.setenv("BTC_DEFAULT_SOURCE", "live")
     monkeypatch.setenv("BTC_DEFAULT_EXCHANGE", "Binance")
@@ -113,7 +115,9 @@ def test_live_tab_collects_only_when_open_and_controls_and_refresh_reuse_work(mo
     st.cache_data.clear()
 
 
-def test_live_history_failure_is_cached_and_never_replaced_with_demo(monkeypatch, tmp_path):
+def test_live_history_failure_is_cached_and_never_replaced_with_demo(
+    monkeypatch, tmp_path, offline_dashboard
+):
     st.cache_data.clear()
     monkeypatch.setenv("BTC_DEFAULT_SOURCE", "live")
     monkeypatch.setenv("BTC_DEFAULT_EXCHANGE", "Binance")

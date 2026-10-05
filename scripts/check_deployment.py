@@ -40,8 +40,8 @@ def main() -> None:
         assert any("BTC/USDT" in item.value for item in app.caption)
         assert not app.warning
         widget = app.get("iframe")[0].proto.srcdoc
-        assert 'id="nasdaq"' in widget and 'id="treasury"' in widget
-        assert "CME_MINI:NQ1!" in widget and "TVC:US10Y" in widget
+        assert "tradingview" not in widget.lower()
+        assert any('id="macro-nq"' in item.value and 'id="macro-tnx"' in item.value for item in app.markdown)
         assert any('aria-label="다섯 시간대 방향"' in item.value for item in app.markdown)
         assert "_btc_private_storage" not in app.session_state
         assert not app.sidebar.selectbox and not app.number_input

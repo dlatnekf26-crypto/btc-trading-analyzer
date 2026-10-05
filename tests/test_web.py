@@ -101,7 +101,7 @@ def test_research_gate_is_bounded_and_releases_after_failure():
 
 
 @pytest.mark.parametrize("entry", ["app.py", "web_app.py"])
-def test_public_default_live_binance_and_usdt_quote(monkeypatch, tmp_path, entry):
+def test_public_default_live_binance_and_usdt_quote(monkeypatch, tmp_path, entry, offline_dashboard):
     import streamlit as st
 
     st.cache_data.clear()
@@ -142,7 +142,8 @@ def test_public_default_live_binance_and_usdt_quote(monkeypatch, tmp_path, entry
     assert "BTCUSDT" in widget and "ETHUSDT" in widget and "KRW-BTC" in widget
     assert 'id="upbit"' not in widget
     assert 'id="forex"' in widget and 'id="premium"' in widget
-    assert 'id="nasdaq"' in widget and 'id="treasury"' in widget
+    assert "tradingview" not in widget.lower()
+    assert any('id="macro-nq"' in item.value and 'id="macro-tnx"' in item.value for item in app.markdown)
     assert not any(item.label in ("거래소", "데이터 모드") for item in app.selectbox)
     assert captured["cache"] == tmp_path / "web" / "market-cache.sqlite3"
     assert "_btc_private_storage" not in app.session_state
@@ -170,7 +171,7 @@ def test_public_visitors_never_read_or_write_existing_private_records(
     assert not (tmp_path / "web" / "sessions").exists()
 
 
-def test_live_analysis_failure_keeps_independent_quote_widget(monkeypatch, tmp_path):
+def test_live_analysis_failure_keeps_independent_quote_widget(monkeypatch, tmp_path, offline_dashboard):
     import streamlit as st
     from btc_analyzer.data.base_provider import DataError
 
