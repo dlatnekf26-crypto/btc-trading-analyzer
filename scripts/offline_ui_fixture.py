@@ -87,6 +87,23 @@ def offline_context_data():
     def get(url, **kwargs):
         host = urlsplit(url).hostname
         now = datetime.now(timezone.utc)
+        if host == "nfs.faireconomy.media":
+            events = [
+                {
+                    "title": title,
+                    "country": "USD",
+                    "date": (now + timedelta(days=days)).isoformat(),
+                    "impact": "High",
+                    "forecast": forecast,
+                    "previous": previous,
+                }
+                for title, days, forecast, previous in (
+                    ("Core CPI m/m", 2, "0.3%", "0.2%"),
+                    ("Non-Farm Employment Change", 4, "150K", "120K"),
+                    ("FOMC Statement", 6, "", ""),
+                )
+            ]
+            return Response(json.dumps(events).encode())
         if host == "query1.finance.yahoo.com":
             symbol = unquote(urlsplit(url).path.rsplit("/", 1)[-1])
             price = {"NQ=F": 22345.50, "^TNX": 4.25, "KRW=X": 1345.5}[symbol]
@@ -139,3 +156,6 @@ def offline_context_data():
         module = sys.modules.get("btc_analyzer.ui.market_context")
         if module is not None:
             module.cached_context_service.clear()
+        correction = sys.modules.get("btc_analyzer.ui.correction_view")
+        if correction is not None:
+            correction.calendar_service.clear()

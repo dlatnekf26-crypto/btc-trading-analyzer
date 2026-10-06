@@ -219,6 +219,11 @@ def render_history_view(
         return
     quote = symbol.split("/")[-1] if exchange == "Binance" else symbol.split("-")[0]
     if mode == "예측 경로":
-        render_prediction(result, timezone, quote, period)
+        from btc_analyzer.ui.correction_view import correction_context
+
+        current, past = correction_context(
+            frame, tf, report.query_end, tuple(match.end for match in report.matches)
+        )
+        render_prediction(result, timezone, quote, period, current, past)
     else:
         render_comparison(report, timezone, duration_label(tf, forward))

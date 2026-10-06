@@ -96,3 +96,5 @@ docker run --rm -p 8501:8501 btc-trading-analyzer:web
 | `BTC_LOG_LEVEL` | `INFO` · 서버 로그 |
 
 두 진입점 모두 개인 DB와 분리된 시장 캐시를 사용합니다. 로컬 실행은 `python -m streamlit run app.py`입니다. `BTC_DEFAULT_SOURCE`·`BTC_DEFAULT_EXCHANGE`는 웹 앱에서 더 이상 사용하지 않습니다. `BTC_DB_PATH`는 기존 CLI용이며 웹 화면의 시장 캐시 위치를 바꾸지 않습니다.
+
+예정 경제 발표/시장 예상치에는 서버의 `nfs.faireconomy.media` HTTPS 접근이 추가로 필요합니다. 거래/API 키는 필요하지 않습니다. 이번 주 공개 캘린더를 30분마다 공유 조회하며 화면은 기다리지 않고 가격 분석을 계속 표시합니다. 오류/오래된 자료에는 실제 시각·예상치를 만들어 넣지 않고 발표 시나리오를 보류합니다. 2026-10-06 Codex 환경의 실제 요청은 프록시 거부였고 도메인을 기존 허용 목록에 더한 설정 초안을 저장했습니다. 초안 저장은 현재 실행 환경에 적용/게시하거나 Streamlit 재배포·자료 수신을 검증한 결과가 아닙니다. 설정 검토/저장·게시 후 실제 캘린더 수신을 확인해야 합니다. Streamlit 서버의 네트워크는 Codex와 별개입니다.

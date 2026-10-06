@@ -29,6 +29,9 @@ def prediction_chart(
     show_range: bool = True,
     analogue_index: int | None = 0,
     news_projection=None,
+    correction=None,
+    event=None,
+    event_projection=None,
 ):
     report, prediction = result.history, result.prediction
     if prediction is None:
@@ -188,13 +191,73 @@ def prediction_chart(
         tickformat="%m.%d<br>%H:%M" if report.timeframe in ("1h", "4h") else "%y.%m.%d",
         nticks=5,
     )
+    if correction is not None and correction.window_start is not None:
+        fig.add_vrect(
+            x0=correction.window_start.tz_convert(timezone).strftime("%Y-%m-%d %H:%M"),
+            x1=correction.window_end.tz_convert(timezone).strftime("%Y-%m-%d %H:%M"),
+            fillcolor="#f59f35",
+            opacity=0.09,
+            line_width=0,
+            layer="below",
+        )
+    if event is not None:
+        release = pd.Timestamp(event.at).tz_convert(timezone).strftime("%Y-%m-%d %H:%M")
+        fig.add_shape(
+            type="line",
+            x0=release,
+            x1=release,
+            y0=0,
+            y1=1,
+            yref="paper",
+            line={"color": "#936624", "dash": "dot", "width": 1},
+        )
+        fig.add_annotation(
+            x=release,
+            y=0.90,
+            yref="paper",
+            text="주요 발표",
+            showarrow=False,
+            font={"size": 11, "color": "#936624"},
+            bgcolor="rgba(255,255,255,0.85)",
+        )
+    if event_projection is not None:
+        fig.add_trace(
+            go.Scatter(
+                x=future,
+                y=np.round(event_projection.center, 2).tolist(),
+                name="발표 조건부 경로",
+                mode="lines",
+                line={"color": "#d84f86", "width": 2, "dash": "dash"},
+                hovertemplate=f"%{{y:,.2f}} {quote}<extra>발표 결과 가정 · 미검증</extra>",
+            )
+        )
     fig.update_yaxes(title=quote, tickformat=",.0f")
     return fig
 
 
 @st.cache_data(ttl=3600, max_entries=24, show_spinner=False)
-def prediction_spec(result, timezone, quote, show_range, analogue_index=0, news_projection=None):
-    return prediction_chart(result, timezone, quote, show_range, analogue_index, news_projection).to_dict()
+def prediction_spec(
+    result,
+    timezone,
+    quote,
+    show_range,
+    analogue_index=0,
+    news_projection=None,
+    correction=None,
+    event=None,
+    event_projection=None,
+):
+    return prediction_chart(
+        result,
+        timezone,
+        quote,
+        show_range,
+        analogue_index,
+        news_projection,
+        correction,
+        event,
+        event_projection,
+    ).to_dict()
 
 
 @st.fragment(run_every=15)
@@ -203,17 +266,38 @@ def render_prediction(
     timezone: str,
     quote: str,
     period: str,
+    context_values=None,
+    past_values=(),
 ):
     prediction = result.prediction
     if prediction is None:
         st.info(result.reason)
         return
     report = result.history
-    news = project_news(result, current_context(), datetime.now(UTC))
+    now = datetime.now(UTC)
+    news = project_news(result, current_context(), now)
     use_news = st.toggle("뉴스 영향 함께 반영", value=True, key="forecast_use_news")
     active_news = news if use_news and news.effects else None
-    shown = active_news or prediction
-    scope = "뉴스 반영 시나리오" if active_news else "기본 모델 예상"
+    from btc_analyzer.ui.correction_view import render_correction
+
+    correction, event, release_projection = render_correction(
+        result,
+        context_values or {},
+        past_values,
+        active_news,
+        active_news or prediction,
+        now,
+        timezone,
+        quote,
+    )
+    shown = release_projection or active_news or prediction
+    scope = (
+        "발표 조건부 예상"
+        if release_projection
+        else "뉴스 반영 시나리오"
+        if active_news
+        else "기본 모델 예상"
+    )
     if result.context_values:
         st.caption(
             "추세·매수세 반영 · RSI · ADX · CMF"
@@ -227,10 +311,10 @@ def render_prediction(
         f'<div class="btc-forecast-cards" aria-label="예측 요약">'
         f"<article><p>{escape(period)} 뒤 {scope} · {direction}</p><strong>{shown.center[-1]:,.2f}</strong>"
         f"<span>{escape(quote)} · 기준 종가 대비 {move:+.1%}</span></article>"
-        f"<article><p>{'뉴스 가정 포함 범위' if active_news else '예상 변동 범위'}</p><strong>{shown.lower[-1]:,.0f} ~ {shown.upper[-1]:,.0f}</strong>"
+        f"<article><p>{'발표 조건부 범위' if release_projection else '뉴스 가정 포함 범위' if active_news else '예상 변동 범위'}</p><strong>{shown.lower[-1]:,.0f} ~ {shown.upper[-1]:,.0f}</strong>"
         f"<span>{escape(quote)} · 보장된 가격 범위가 아니에요</span></article>"
         f"<article><p>기술 모델의 과거 검증</p><strong>{status}</strong>"
-        f"<span>{len(report.matches)}개 유사 사례 · 뉴스 시나리오는 미검증</span></article></div>",
+        f"<span>{len(report.matches)}개 유사 사례 · 조정 시점·뉴스·발표 가정은 미검증</span></article></div>",
         unsafe_allow_html=True,
     )
     if active_news:
@@ -292,7 +376,9 @@ def render_prediction(
         unsafe_allow_html=True,
     )
     st.plotly_chart(
-        prediction_spec(result, timezone, quote, show_range, selected, active_news),
+        prediction_spec(
+            result, timezone, quote, show_range, selected, active_news, correction, event, release_projection
+        ),
         width="stretch",
         key="future_price_chart",
         theme=None,
@@ -305,6 +391,9 @@ def render_prediction(
         st.caption(
             "보라색은 최근 뉴스가 영향을 준다는 가정의 가격 경로예요. 보라색 범위는 추가 불확실성이며 특정 확률이나 뉴스 정확도를 뜻하지 않습니다."
         )
+    st.caption(
+        "옅은 주황 세로 구간은 과거 조정 시점의 중간 50%, 갈색 점선은 선택한 발표 시각이에요. 분홍 점선이 있으면 선택한 발표 결과 가정의 조건부 경로예요. 조정 날짜나 발표 결과를 확정하는 뜻은 아닙니다."
+    )
     st.caption(
         "상승·하락 사례가 섞이면 평균 예상은 평평해질 수 있어요. 주황색 경로는 움직임을 줄이지 않은 과거 재현이며, 같은 미래가 온다는 뜻은 아닙니다."
     )

@@ -14,6 +14,8 @@ from xml.etree import ElementTree
 
 import requests
 
+from btc_analyzer.data.economic_calendar import EconomicEvent
+
 UTC = timezone.utc
 MAX_BYTES = 512_000
 NEWS_MAX_AGE = timedelta(hours=24)
@@ -57,7 +59,7 @@ class NewsItem:
 @dataclass(frozen=True)
 class FeedState:
     key: str
-    value: MacroQuote | tuple[NewsItem, ...] | None = None
+    value: MacroQuote | tuple[NewsItem, ...] | tuple[EconomicEvent, ...] | None = None
     updated_at: datetime | None = None
     error: str = ""
     loading: bool = False
@@ -342,11 +344,22 @@ def fetch_feed(key: str, now: datetime):
 class MarketContextService:
     """Shared resources: one in-flight request per feed, independent last-good results."""
 
-    def __init__(self, fetcher=fetch_feed, clock=lambda: datetime.now(UTC)):
+    def __init__(
+        self,
+        fetcher=fetch_feed,
+        clock=lambda: datetime.now(UTC),
+        *,
+        keys=None,
+        refresh_intervals=None,
+        workers=4,
+    ):
         self._fetcher, self._clock = fetcher, clock
         self._lock = RLock()
-        self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="market-context")
-        self._states = {key: FeedState(key) for key in (*SYMBOLS, "news_ko", "news_en")}
+        self._executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="market-context")
+        self._states = {
+            key: FeedState(key) for key in (keys if keys is not None else (*SYMBOLS, "news_ko", "news_en"))
+        }
+        self._refresh_intervals = refresh_intervals or {}
         self._next = dict.fromkeys(self._states, datetime.min.replace(tzinfo=UTC))
         self._failures = dict.fromkeys(self._states, 0)
         self._closed = False
@@ -370,9 +383,11 @@ class MarketContextService:
                 self._states[key] = FeedState(key, value, now)
                 self._failures[key] = 0
                 delay = NEWS_REFRESH_SECONDS if key.startswith("news") else QUOTE_REFRESH_SECONDS
+                delay = self._refresh_intervals.get(key, delay)
             except Exception as exc:
                 self._failures[key] += 1
                 delay = min(1800, 60 * 2 ** min(self._failures[key] - 1, 5))
+                delay = max(delay, self._refresh_intervals.get(key, 0))
                 if isinstance(exc, requests.HTTPError) and exc.response is not None:
                     retry = exc.response.headers.get("Retry-After", "")
                     if retry.isdigit():
