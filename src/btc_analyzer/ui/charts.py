@@ -12,6 +12,16 @@ if TYPE_CHECKING:
     from btc_analyzer.strategy.signal_engine import Analysis
 from btc_analyzer.candles import candle_shift
 
+READ_CHART_CONFIG = {
+    "displaylogo": False,
+    "displayModeBar": False,
+    "scrollZoom": False,
+    "doubleClick": False,
+    "showAxisDragHandles": False,
+    "showAxisRangeEntryBoxes": False,
+    "responsive": True,
+}
+
 
 def style_chart(fig: go.Figure, height: int = 540) -> go.Figure:
     fig.update_layout(
@@ -23,12 +33,20 @@ def style_chart(fig: go.Figure, height: int = 540) -> go.Figure:
         font={"family": "Inter, Arial, sans-serif", "color": "#53647b", "size": 11},
         margin={"t": 55, "b": 40, "l": 8, "r": 8},
         hovermode="x unified",
-        legend={"orientation": "h", "y": 1.04, "x": 0, "font": {"size": 11}},
+        dragmode=False,
+        legend={
+            "orientation": "h",
+            "y": 1.04,
+            "x": 0,
+            "font": {"size": 11},
+            "itemclick": False,
+            "itemdoubleclick": False,
+        },
         hoverlabel={"bgcolor": "#ffffff", "font_color": "#191f28"},
         modebar={"bgcolor": "rgba(255,255,255,0.95)", "color": "#66758b", "activecolor": "#3182f6"},
     )
-    fig.update_xaxes(gridcolor="#edf1f7", zeroline=False, automargin=True)
-    fig.update_yaxes(gridcolor="#edf1f7", zeroline=False, tickformat=",.0f", automargin=True)
+    fig.update_xaxes(gridcolor="#edf1f7", zeroline=False, automargin=True, fixedrange=True)
+    fig.update_yaxes(gridcolor="#edf1f7", zeroline=False, tickformat=",.0f", automargin=True, fixedrange=True)
     return fig
 
 

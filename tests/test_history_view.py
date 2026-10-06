@@ -193,19 +193,14 @@ def test_calculation_cache_invalidates_actual_price_changes_without_changing_oth
     history_view.history_comparison.clear()
 
 
-def test_default_prediction_and_lazy_details_show_measured_error_and_keep_private_decision(
+def test_removed_forecast_footers_never_build_tables_or_downloads_and_keep_decision(
     monkeypatch, tmp_path, offline_dashboard
 ):
-    from btc_analyzer.ui import forecast_view
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Removed forecast tables and downloads must never execute")
 
-    context_calls = []
-    original = forecast_view.latest_context
-
-    def context(*args):
-        context_calls.append(True)
-        return original(*args)
-
-    monkeypatch.setattr(forecast_view, "latest_context", context)
+    monkeypatch.setattr(st, "download_button", forbidden)
+    monkeypatch.setattr(st, "dataframe", forbidden)
     st.cache_data.clear()
     monkeypatch.setenv("BTC_DB_PATH", str(tmp_path / "demo.sqlite"))
     monkeypatch.setenv("BTC_DEFAULT_SOURCE", "demo")
@@ -217,15 +212,12 @@ def test_default_prediction_and_lazy_details_show_measured_error_and_keep_privat
     assert any('aria-label="예측 요약"' in item.value for item in app.markdown)
     assert len(app.get("plotly_chart")) == 1
     assert not app.get("dataframe") and not app.get("download_button")
-    assert not context_calls
     app.session_state["forecast_validation_details"] = True
+    app.session_state["history_downloads"] = True
     choose_history(app)
     assert not app.exception and not app.error
-    assert {item.label for item in app.metric} >= {"평균 변화율 오차", "가격 유지 가정 오차", "방향 적중률"}
-    assert context_calls == [True]
-    assert {item.label for item in app.metric} >= {"모멘텀 · RSI 14", "추세 강도 · ADX 14", "매수세 · CMF 20"}
-    assert {item.label for item in app.get("download_button")} >= {"과거 예측 검증 CSV", "예상 가격 경로 CSV"}
-    assert any("자료 모드" in column for item in app.dataframe for column in item.value.columns)
+    assert not app.metric and not app.get("dataframe") and not app.get("download_button")
+    assert not any("과거 예측 성적" in item.label or "세부 유사도" in item.label for item in app.expander)
     assert next(item.value for item in app.markdown if 'aria-label="분석 요약"' in item.value) == decision
     next(item for item in app.get("button_group") if item.label == "분석 보기").set_value("과거 비교")
     choose_history(app)

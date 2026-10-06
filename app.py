@@ -21,7 +21,6 @@ from btc_analyzer.config import AppConfig, COMPOSITE_TIMEFRAMES
 from btc_analyzer.candles import candle_boundary
 from btc_analyzer.data.service import DataService
 from btc_analyzer.data.base_provider import DataError
-from btc_analyzer.storage.database import dumps
 from btc_analyzer.strategy.composite import FRAME_LABELS, FRAME_WEIGHTS
 from btc_analyzer.ui.analysis_cache import market_snapshot
 from btc_analyzer.ui.presentation import BRAND, CSS, LABELS, korean, composite_cards, decision_panel
@@ -137,7 +136,7 @@ def dashboard() -> None:
             st.button("예측과 과거 차트 함께 보기", on_click=open_history_comparison)
     if tabs[1].open:
         with tabs[1]:
-            from btc_analyzer.ui.charts import indicator_chart
+            from btc_analyzer.ui.charts import indicator_chart, READ_CHART_CONFIG
 
             selected = (
                 st.segmented_control(
@@ -153,7 +152,12 @@ def dashboard() -> None:
                 st.info("이 시간대의 확정 봉이 아직 없습니다.")
             else:
                 st.subheader("모멘텀과 변동성")
-                st.plotly_chart(indicator_chart(features, display_timezone), width="stretch", theme=None)
+                st.plotly_chart(
+                    indicator_chart(features, display_timezone),
+                    width="stretch",
+                    theme=None,
+                    config=READ_CHART_CONFIG,
+                )
                 with st.expander("전체 지표 원본 값", key="indicator_values", on_change="rerun") as details:
                     if details.open:
                         st.dataframe(features.tail(100), width="stretch")
@@ -226,12 +230,6 @@ def dashboard() -> None:
                 st.write(
                     "급락·지지 이탈·거래량 부족은 신규 매수를 보류해요. 다섯 시간대의 핵심 지표가 부족하면 판단을 보류해요. 가격 매력은 기술적 상대 위치이며 적정 가치나 수익 확률이 아니에요."
                 )
-            st.download_button(
-                "종합 분석 JSON 다운로드",
-                dumps(combined),
-                "composite-analysis.json",
-                "application/json",
-            )
     if tabs[3].open:
         with tabs[3]:
             from btc_analyzer.ui.history_view import render_history_view

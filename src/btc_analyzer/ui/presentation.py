@@ -39,6 +39,9 @@ p, li { line-height: 1.7; }
 [data-baseweb="tab"] { padding: 10px 14px; border-radius: 12px; font-weight: 600; }
 [data-baseweb="tab"][aria-selected="true"] { background: #eaf2ff; color: #216bdd; }
 [data-testid="stPlotlyChart"] { border-radius: 20px; overflow: hidden; background: #fff; border: 1px solid #e7ecf3; }
+[data-testid="stPlotlyChart"] .js-plotly-plot,
+[data-testid="stPlotlyChart"] .main-svg,
+[data-testid="stPlotlyChart"] .draglayer rect { touch-action: pan-y !important; }
 .btc-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
 .btc-logo {
     display: grid; place-items: center; width: 42px; height: 42px; border-radius: 15px;

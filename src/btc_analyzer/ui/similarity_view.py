@@ -10,7 +10,7 @@ import streamlit as st
 
 from btc_analyzer.analysis.forecast import forecast_dates
 from btc_analyzer.candles import candle_close
-from btc_analyzer.ui.charts import style_chart
+from btc_analyzer.ui.charts import style_chart, READ_CHART_CONFIG
 
 
 def comparison_chart(report, timezone: str, selected: int = 0, all_matches: bool = False):
@@ -151,7 +151,7 @@ def render_comparison(report, timezone, period):
         width="stretch",
         key="historical_similarity_chart",
         theme=None,
-        config={"displaylogo": False, "displayModeBar": False, "scrollZoom": False},
+        config=READ_CHART_CONFIG,
     )
     st.caption(
         "가격 수준이 달라도 모양을 비교하도록 각 구간 마지막 종가를 0%에 맞췄어요. 아래 선은 당시 이후 실제 가격이며 현재의 예측선이 아닙니다."

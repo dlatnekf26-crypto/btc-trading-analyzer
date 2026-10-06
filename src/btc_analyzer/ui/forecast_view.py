@@ -8,12 +8,10 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from btc_analyzer.analysis.forecast import ForecastReport, MIN_CALIBRATION, MODEL_VERSION, forecast_dates
+from btc_analyzer.analysis.forecast import ForecastReport, MIN_CALIBRATION, forecast_dates
 from btc_analyzer.analysis.news_projection import project_news
-from btc_analyzer.analysis.historical_similarity import prepare_history
 from btc_analyzer.candles import candle_close
-from btc_analyzer.ui.cache_keys import MARKET_HASH_FUNCS
-from btc_analyzer.ui.charts import style_chart
+from btc_analyzer.ui.charts import style_chart, READ_CHART_CONFIG
 from btc_analyzer.ui.market_context import current_context
 from btc_analyzer.data.market_context import UTC
 
@@ -205,11 +203,6 @@ def render_prediction(
     timezone: str,
     quote: str,
     period: str,
-    *,
-    demo: bool,
-    exchange: str,
-    symbol: str,
-    context_frame=None,
 ):
     prediction = result.prediction
     if prediction is None:
@@ -225,7 +218,7 @@ def render_prediction(
         st.caption(
             "추세·매수세 반영 · RSI · ADX · CMF"
             if result.model == "context"
-            else "가격 패턴 중심 · 모멘텀과 매수세는 아래 예측 근거에서 확인하세요."
+            else "가격 패턴 중심 · 추가 지표 연구 후보는 기본 예상에 반영하지 않습니다."
         )
     move = shown.center[-1] / report.anchor_price - 1
     direction = "상승 쪽" if move >= 0.005 else "하락 쪽" if move <= -0.005 else "횡보 쪽"
@@ -263,7 +256,7 @@ def render_prediction(
             )
     elif use_news:
         st.caption(news.reason)
-    st.caption("아래 과거 검증 성적과 오차 보정은 뉴스 조정 전 기술 모델만 평가한 결과예요.")
+    st.caption("과거 검증과 오차 보정은 뉴스 조정 전 기술 모델만 평가한 결과예요.")
     if result.mae is None or len(result.validation) < MIN_CALIBRATION:
         st.info("과거 검증이 12회 미만이라 신뢰도를 충분히 평가하기 어렵습니다. 참고용 예상으로 봐 주세요.")
     elif result.mae >= result.baseline_mae:
@@ -303,7 +296,7 @@ def render_prediction(
         width="stretch",
         key="future_price_chart",
         theme=None,
-        config={"displaylogo": False, "displayModeBar": False, "scrollZoom": False},
+        config=READ_CHART_CONFIG,
     )
     st.caption(
         "회색은 확정 가격, 파란 점선은 여러 사례를 종합한 모델 예상, 주황색은 한 과거 사례의 실제 움직임을 현재 가격에 맞춘 경로예요. 옅은 영역은 예상 변동 범위입니다."
@@ -326,117 +319,3 @@ def render_prediction(
         st.caption(
             "변동 범위는 유사 사례의 분산과 현재 변동성으로 추정했습니다. 과거 오차 보정에 필요한 12회 검증이 아직 부족합니다."
         )
-    details = st.expander(
-        "과거 예측 성적 · 어떻게 계산했나요?", key="forecast_validation_details", on_change="rerun"
-    )
-    if details.open:
-        with details:
-            st.write(
-                f"모델 {MODEL_VERSION} · 유사도 가중 평균 경로를 현재 변동성에 맞추고, 사례 수와 유사도가 낮을수록 가격 유지 쪽으로 줄여 계산합니다."
-            )
-            st.write(
-                "각 과거 시점에서 당시까지 확정된 자료만으로 예측하고 이후 실제 종가와 비교합니다. 검증 기간은 서로 겹치지 않으며, 변동 범위 보정에도 앞선 검증의 오차만 사용합니다."
-            )
-            context_values = result.context_values
-            if not context_values and context_frame is not None:
-                context_values = latest_context(
-                    context_frame, report.timeframe, report.query_end, report.window, report.forward
-                )
-            if context_values:
-                labels = ("모멘텀 · RSI 14", "추세 강도 · ADX 14", "매수세 · CMF 20")
-                for column, label, value in zip(st.columns(3), labels, context_values):
-                    column.metric(label, f"{value:.2f}" if value is not None else "자료 부족")
-                st.caption(
-                    "RSI는 상승·하락 강도, ADX는 추세의 강도, CMF는 거래량을 반영한 매수·매도 압력을 비교해요. "
-                    "추가 지표는 참고값입니다. 실제 자료 검증에서 모든 기간의 개선이 확인되지 않아 기본 예상 가격에는 반영하지 않습니다."
-                )
-                if result.pattern_mae is not None:
-                    st.caption(
-                        f"최근 {min(12, result.context_cases)}쌍 비교 · 기본 패턴 오차 {result.pattern_mae:.2%}p · "
-                        f"보조 지표 후보 오차 {result.context_mae:.2%}p. 다음 예측의 개선을 보장하지는 않아요."
-                    )
-            if result.mae is not None:
-                a, b, c = st.columns(3)
-                a.metric("평균 변화율 오차", f"{result.mae * 100:.2f}%p")
-                b.metric("가격 유지 가정 오차", f"{result.baseline_mae * 100:.2f}%p")
-                c.metric(
-                    "방향 적중률",
-                    f"{result.directional_accuracy:.0%}"
-                    if result.directional_accuracy is not None
-                    else "평가 불가",
-                )
-                st.caption(
-                    "방향 적중률은 실제 변화가 ±0.5% 이상인 검증에서 평가합니다. 그보다 작은 모델 예상은 횡보로 처리합니다."
-                )
-                if result.coverage is not None:
-                    count = sum(case.calibration_cases >= MIN_CALIBRATION for case in result.validation)
-                    st.caption(
-                        f"오차 보정이 가능했던 {count}회 검증의 종가 범위 포함률 {result.coverage:.0%}. 모든 미래 가격이나 경로가 이 안에 든다는 뜻은 아니에요."
-                    )
-                rows = pd.DataFrame(
-                    [
-                        {
-                            "자료 모드": "Demo" if demo else "Live",
-                            "거래소": exchange,
-                            "페어": symbol,
-                            "시간대": report.timeframe,
-                            "모델": MODEL_VERSION,
-                            "반영 방식": case.model,
-                            "예측 시점": case.origin.tz_convert(timezone).strftime("%Y.%m.%d %H:%M"),
-                            "실제 확인 시점": case.observed_until.tz_convert(timezone).strftime(
-                                "%Y.%m.%d %H:%M"
-                            ),
-                            "예상 변화 · %": case.predicted_return * 100,
-                            "실제 변화 · %": case.actual_return * 100,
-                            "오차 · %p": abs(case.predicted_return - case.actual_return) * 100,
-                            "범위 보정 사례": case.calibration_cases,
-                        }
-                        for case in result.validation
-                    ]
-                )
-                st.dataframe(rows.round(2), hide_index=True, width="stretch")
-                st.download_button(
-                    "과거 예측 검증 CSV", rows.to_csv(index=False), "forecast-validation.csv", "text/csv"
-                )
-            else:
-                st.info("이 설정으로 완료된 과거 예측 검증이 없습니다.")
-            forecast_rows = pd.DataFrame(
-                {
-                    "data_mode": "Demo" if demo else "Live",
-                    "exchange": exchange,
-                    "symbol": symbol,
-                    "timeframe": report.timeframe,
-                    "model": MODEL_VERSION,
-                    "selection": result.model,
-                    "forecast_origin_utc": report.query_end.isoformat(),
-                    "future_close_utc": [date.isoformat() for date in prediction.dates],
-                    "predicted_price": prediction.center,
-                    "lower_price": prediction.lower,
-                    "upper_price": prediction.upper,
-                    "analogue_replay_price": analogue_path(report, selected)[report.window - 1 :],
-                    "analogue_start_utc": match.start.isoformat(),
-                    "analogue_end_utc": match.end.isoformat(),
-                    "news_scenario_enabled": bool(active_news),
-                    "news_scenario_model": news.version,
-                    "news_as_of_utc": news.as_of.isoformat(),
-                    "news_scenario_price_unvalidated": shown.center,
-                    "news_scenario_lower_unvalidated": shown.lower,
-                    "news_scenario_upper_unvalidated": shown.upper,
-                    "news_evidence_urls": " | ".join(
-                        url for effect in (active_news.effects if active_news else ()) for url in effect.urls
-                    ),
-                }
-            )
-            st.download_button(
-                "예상 가격 경로 CSV", forecast_rows.to_csv(index=False), "forecast-prices.csv", "text/csv"
-            )
-            st.caption(
-                "최대 최근 24회 · 현재 확보된 과거 자료 안에서 평가합니다. 거래 수익률이나 종합 신호의 백테스트 성적은 아닙니다."
-            )
-
-
-@st.cache_data(ttl=3600, max_entries=12, show_spinner=False, hash_funcs=MARKET_HASH_FUNCS)
-def latest_context(frame, timeframe, end, window, forward):
-    """Compute optional evidence only when its details are actually opened."""
-    prepared = prepare_history(frame, timeframe, end, window, forward)
-    return tuple(float(v) if np.isfinite(v) else None for v in prepared.context[-1])

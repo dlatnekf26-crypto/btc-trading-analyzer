@@ -13,7 +13,7 @@ from btc_analyzer.analysis.historical_similarity import (
     WINDOW_OPTIONS,
     find_similar_history,
 )
-from btc_analyzer.candles import candle_boundary, candle_close
+from btc_analyzer.candles import candle_boundary
 from btc_analyzer.config import COMPOSITE_TIMEFRAMES, TIMEFRAMES
 from btc_analyzer.data.base_provider import DataError, utc
 from btc_analyzer.data.service import DataService, demo_bundle
@@ -151,7 +151,7 @@ def render_history_view(
             forward = horizon_days(candle_boundary(utc(cutoff), "1d"), horizon)
         minimum = st.select_slider("최소 유사도 · 점", (50, 60, 70, 80), value=60)
         st.caption(
-            "가격 경로·변동성·상대 거래량을 비교합니다. RSI·ADX·CMF는 예측 근거에서 참고 지표로 확인할 수 있어요. 이후 결과로 사례를 고르지 않으며 서로 겹치는 기간을 제외합니다. 유사도는 상승 확률이 아니에요."
+            "가격 경로·변동성·상대 거래량을 비교합니다. 이후 결과로 사례를 고르지 않으며 서로 겹치는 기간을 제외합니다. 유사도는 상승 확률이 아니에요."
         )
         manual_refresh = st.button("비교 자료 새로고침")
     period = HORIZON_LABELS.get(horizon, duration_label(tf, forward))
@@ -219,66 +219,6 @@ def render_history_view(
         return
     quote = symbol.split("/")[-1] if exchange == "Binance" else symbol.split("-")[0]
     if mode == "예측 경로":
-        render_prediction(
-            result, timezone, quote, period, demo=demo, exchange=exchange, symbol=symbol, context_frame=frame
-        )
+        render_prediction(result, timezone, quote, period)
     else:
         render_comparison(report, timezone, duration_label(tf, forward))
-    downloads = st.expander("세부 유사도 · 비교 자료 다운로드", key="history_downloads", on_change="rerun")
-    if not downloads.open:
-        return
-    with downloads:
-        st.caption(
-            f"수집 범위: {stamp(report.history_start)} ~ {stamp(report.history_end)} · {report.candidate_count:,}개 과거 구간 비교"
-        )
-        st.caption(f"최근 비교 구간: {stamp(report.query_start)} ~ {stamp(report.query_end)} · {timezone}")
-        details = pd.DataFrame(
-            [
-                {
-                    "data_mode": "Demo" if demo else "Live",
-                    "exchange": exchange,
-                    "symbol": symbol,
-                    "timeframe": tf,
-                    "window_bars": window,
-                    "forward_bars": forward,
-                    "query_start_utc": report.query_start.isoformat(),
-                    "query_end_utc": report.query_end.isoformat(),
-                    "match_start_utc": match.start.isoformat(),
-                    "match_end_utc": candle_close(match.end, tf).isoformat(),
-                    "observed_until_utc": match.observed_until.isoformat(),
-                    "similarity": match.similarity,
-                    "price_similarity": match.price_similarity,
-                    "volatility_similarity": match.volatility_similarity,
-                    "volume_similarity": match.volume_similarity,
-                    "context_similarity": match.context_similarity,
-                    "forward_return_pct": match.forward_return * 100,
-                    "lowest_return_pct": match.lowest_return * 100,
-                    "highest_return_pct": match.highest_return * 100,
-                }
-                for match in report.matches
-            ]
-        )
-        st.dataframe(
-            details[["match_start_utc", "price_similarity", "volatility_similarity", "volume_similarity"]]
-            .rename(
-                columns={
-                    "match_start_utc": "과거 시작 · UTC",
-                    "price_similarity": "가격 경로 · 점",
-                    "volatility_similarity": "변동성 · 점",
-                    "volume_similarity": "거래량 · 점",
-                }
-            )
-            .round(1),
-            hide_index=True,
-            width="stretch",
-        )
-        st.download_button(
-            "유사 구간 CSV", details.to_csv(index=False), "historical-similarity.csv", "text/csv"
-        )
-        candles = frame.loc[
-            (frame.index >= report.history_start) & (candle_close(frame.index, tf) <= report.history_end)
-        ].copy()
-        candles.index.name = "open_time_utc"
-        candles["data_mode"] = "Demo" if demo else "Live"
-        candles["exchange"], candles["symbol"], candles["timeframe"] = exchange, symbol, tf
-        st.download_button("비교 가격·거래량 CSV", candles.to_csv(), "historical-candles.csv", "text/csv")

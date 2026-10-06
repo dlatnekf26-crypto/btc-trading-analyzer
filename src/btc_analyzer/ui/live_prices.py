@@ -33,6 +33,77 @@ LIVE_PRICES_HTML = r"""<!doctype html>
 <script>
 (() => {
   'use strict';
+  // Delegate touch inspection to the existing parent charts. No extra iframe,
+  // data requests or Streamlit events; passive listeners preserve page scrolling.
+  const disposeChartTouch=(()=>{
+    let doc, root;
+    try {root=window.parent; doc=root.document;} catch (_) {return ()=>{};}
+    let active=null, lastChart=null, pending=null, frame=null, painted=0;
+    function clear() {
+      if (frame!==null) root.cancelAnimationFrame(frame);
+      frame=null; pending=null; active=null;
+      if (lastChart?.isConnected) root.Plotly?.Fx?.unhover(lastChart);
+      lastChart=null;
+    }
+    function show(point) {
+      if (!point.chart.isConnected || !root.Plotly?.Fx) return;
+      const bounds=point.rect.getBoundingClientRect();
+      const pixel=Math.max(0,Math.min(bounds.width,point.x-bounds.left));
+      const vertical=Math.max(0,Math.min(bounds.height,point.y-bounds.top));
+      // Use the same Plotly tooltip as the mouse, with a real axis coordinate.
+      root.Plotly.Fx.hover(point.chart,{xval:point.axis.p2c(pixel),yval:point.yaxis.p2c(vertical)},[point.subplot]);
+      lastChart=point.chart;
+    }
+    function paint(now) {
+      if (now-painted<33) {frame=root.requestAnimationFrame(paint); return;}
+      frame=null; painted=now;
+      if (pending) {const point=pending; pending=null; show(point);}
+    }
+    function start(event) {
+      clear();
+      const rect=event.target.closest?.('.nsewdrag'), chart=rect?.closest('.js-plotly-plot');
+      if (!chart || chart._fullLayout?.dragmode!==false || !root.Plotly?.Fx) return;
+      const subplot=Object.keys(chart._fullLayout._plots || {}).find(key=>rect.parentElement.classList.contains(key));
+      const axis=chart._fullLayout._plots[subplot]?.xaxis;
+      const yaxis=chart._fullLayout._plots[subplot]?.yaxis;
+      if (!axis || !yaxis || !event.touches.length) return;
+      // Stop Plotly's native touch-drag handler from setting _dragging, which
+      // suppresses hover until release. Do not prevent the browser's pan gesture.
+      event.stopPropagation();
+      if (event.touches.length!==1) return;
+      const touch=event.touches[0];
+      active={chart,rect,axis,yaxis,subplot,x:touch.clientX,y:touch.clientY};
+      show(active);
+    }
+    function move(event) {
+      if (!active) return;
+      event.stopPropagation();
+      if (event.touches.length!==1) {clear(); return;}
+      const touch=event.touches[0], dx=touch.clientX-active.x, dy=touch.clientY-active.y;
+      if (Math.abs(dy)>8 && Math.abs(dy)>Math.abs(dx)) {clear(); return;}
+      pending={...active,x:touch.clientX,y:touch.clientY};
+      if (frame===null) frame=root.requestAnimationFrame(paint);
+    }
+    function end(event) {
+      if (!active) return;
+      event.stopPropagation();
+      if (pending) show(pending);
+      if (frame!==null) root.cancelAnimationFrame(frame);
+      frame=null; pending=null; active=null;
+    }
+    const options={capture:true,passive:true};
+    doc.addEventListener('touchstart',start,options);
+    doc.addEventListener('touchmove',move,options);
+    doc.addEventListener('touchend',end,options);
+    doc.addEventListener('touchcancel',clear,options);
+    return ()=>{
+      clear();
+      doc.removeEventListener('touchstart',start,true);
+      doc.removeEventListener('touchmove',move,true);
+      doc.removeEventListener('touchend',end,true);
+      doc.removeEventListener('touchcancel',clear,true);
+    };
+  })();
   const MAX_POINTS = 61, STALE_MS = 15000, DRAW_MS = 100;
   const configs = [
     {id:'binance', market:'binance', symbol:'BTCUSDT', decimals:2, changeLabel:'24시간', restGap:1000,
@@ -372,6 +443,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
   const observer=new ResizeObserver(()=>{ for (const s of states) s.dirty=true; schedulePaint(); });
   observer.observe(document.body);
   window.addEventListener('pagehide',()=>{
+    disposeChartTouch();
     disposed=true; clearInterval(heartbeat); clearTimeout(paintTimer); observer.disconnect(); states.forEach(stop); rates.forEach(s=>s.controllers.forEach(c=>c.abort()));
     binanceRequest.controllers.forEach(c=>c.abort());
   });

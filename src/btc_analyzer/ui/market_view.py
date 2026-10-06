@@ -9,7 +9,7 @@ from btc_analyzer.ui.cache_keys import MARKET_HASH_FUNCS
 from btc_analyzer.config import COMPOSITE_TIMEFRAMES
 from btc_analyzer.candles import candle_close
 from btc_analyzer.strategy.composite import FRAME_LABELS
-from btc_analyzer.ui.charts import price_chart
+from btc_analyzer.ui.charts import price_chart, READ_CHART_CONFIG
 
 
 @st.cache_data(ttl=3600, max_entries=24, show_spinner=False, hash_funcs=MARKET_HASH_FUNCS)
@@ -101,23 +101,16 @@ def render_market_chart(*, bundle, enriched, cfg, display_timezone, average_line
             width="stretch",
             key="chart_01",
             theme=None,
-            config={
-                "displaylogo": False,
-                "displayModeBar": detailed_chart,
-                "scrollZoom": False,
-                "modeBarButtonsToAdd": ["drawline", "drawrect", "eraseshape"] if detailed_chart else [],
-                "toImageButtonOptions": {"format": "png", "filename": "btc-signal-lab"},
-            },
+            config=READ_CHART_CONFIG,
         )
         st.caption(
             f"{FRAME_LABELS[chart_tf]} · {len(chart_features):,}개 확정 봉 · 실시간 현재가는 상단에서 확인하세요."
         )
         if "일목균형표" in overlays:
             st.caption("일목 구름은 과거 가격을 이동 표시한 지표이며 미래 가격 예측이 아닙니다.")
-        if detailed_chart:
-            st.caption(
-                "상세 차트의 도구로 확대, 선·영역 그리기, 이미지 저장을 할 수 있어요. 그린 도형은 분석 신호를 바꾸지 않아요."
-            )
+        st.caption(
+            "차트에 손가락을 대거나 마우스를 올리면 가격을 확인해요. 위아래로 밀면 페이지가 스크롤됩니다."
+        )
     else:
         st.info(
             f"{FRAME_LABELS[chart_tf]} 데이터를 받지 못했습니다. 다중 시간대 탭에서 수집 상태를 확인하세요."
