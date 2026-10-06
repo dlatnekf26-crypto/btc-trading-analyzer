@@ -22,7 +22,9 @@ def verify(browser, width, url, event_log):
     page.locator("#macro-nq .btc-macro-value").get_by_text("22,345.50", exact=True).wait_for(timeout=15000)
     page.locator("#macro-tnx .btc-macro-value").get_by_text("4.25", exact=True).wait_for(timeout=15000)
     assert "수익률 지표" in page.locator("#macro-tnx").inner_text()
-    assert page.locator(".btc-macro-card svg").count() == 2
+    page.locator("#macro-oil .btc-macro-value").get_by_text("87.42", exact=True).wait_for(timeout=15000)
+    page.locator("#macro-tyx .btc-macro-value").get_by_text("4.80", exact=True).wait_for(timeout=15000)
+    assert page.locator(".btc-macro-card svg").count() == 4
     page.locator(".btc-news-item:visible").first.wait_for(timeout=15000)
     assert page.locator(".btc-news-item:visible").count() == 3
     assert "Fixture News" in page.locator(".btc-news-item").first.inner_text()

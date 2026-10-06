@@ -35,7 +35,7 @@ def quote_payload(symbol="NQ=F", price=22345.5, age=15):
                         "symbol": symbol,
                         "regularMarketPrice": price,
                         "regularMarketTime": stamp,
-                        "instrumentType": "FUTURE" if symbol == "NQ=F" else "INDEX",
+                        "instrumentType": "FUTURE" if symbol in ("NQ=F", "CL=F") else "INDEX",
                         "chartPreviousClose": price / 1.01,
                         "exchangeDataDelayedBy": 15,
                     },
@@ -47,7 +47,7 @@ def quote_payload(symbol="NQ=F", price=22345.5, age=15):
     }
 
 
-@pytest.mark.parametrize("symbol,price", [("NQ=F", 22345.5), ("^TNX", 4.25)])
+@pytest.mark.parametrize("symbol,price", [("NQ=F", 22345.5), ("CL=F", 87.42), ("^TNX", 4.25), ("^TYX", 4.80)])
 def test_instruments_and_units_are_exact_and_no_tnx_division(symbol, price):
     parsed = parse_quote(quote_payload(symbol, price), symbol, NOW)
     assert parsed.price == price
@@ -75,6 +75,45 @@ def test_quote_age_yield_scale_and_future_source_timestamps():
     assert "마지막 거래 시세" in html and "KST" in html and "실시간" not in html
     failed = macro_cards(MarketContext((FeedState("nq", error="자료원 연결 지연"),)), NOW)
     assert "—" in failed and "22,345" not in failed and "iframe" not in failed
+
+
+@pytest.mark.parametrize("symbol", ["CL=F", "^TYX"])
+def test_new_quotes_keep_exact_instrument_units_and_reject_mislabeled_feeds(symbol):
+    payload = quote_payload(symbol, 87.42 if symbol == "CL=F" else 4.80)
+    assert parse_quote(payload, symbol, NOW).symbol == symbol
+    meta = payload["chart"]["result"][0]["meta"]
+    meta["instrumentType"] = "INDEX" if symbol == "CL=F" else "FUTURE"
+    with pytest.raises(ValueError):
+        parse_quote(payload, symbol, NOW)
+    payload = quote_payload(symbol, 4.8 if symbol == "^TYX" else 87.42)
+    payload["chart"]["result"][0]["meta"]["currency"] = "KRW"
+    with pytest.raises(ValueError):
+        parse_quote(payload, symbol, NOW)
+    if symbol == "^TYX":
+        with pytest.raises(ValueError, match="yield units"):
+            parse_quote(quote_payload(symbol, 48), symbol, NOW)
+
+
+def test_four_macro_cards_show_wti_barrels_and_both_yields_as_percentage_points():
+    context = MarketContext(
+        tuple(
+            FeedState(key, parse_quote(quote_payload(symbol, price), symbol, NOW), NOW)
+            for key, symbol, price in (
+                ("nq", "NQ=F", 22345.5),
+                ("oil", "CL=F", 87.42),
+                ("tnx", "^TNX", 4.25),
+                ("tyx", "^TYX", 4.8),
+            )
+        )
+    )
+    html = macro_cards(context, NOW)
+    assert html.count('class="btc-macro-card"') == 4
+    assert "WTI 원유 선물" in html and "USD/배럴" in html
+    assert "미국채 30년물" in html and "CBOE ^TYX" in html and "+0.048%p" in html
+    assert "실시간" not in html
+    payload = quote_payload("^TYX", 4.8)
+    payload["chart"]["result"][0]["meta"]["exchangeDataDelayedBy"] = True
+    assert parse_quote(payload, "^TYX", NOW).delay_minutes is None
 
 
 @pytest.mark.parametrize(
@@ -237,7 +276,7 @@ def test_blocked_provider_does_not_block_fast_quotes_or_spawn_duplicate_requests
         release.set()
         snapshot = await_idle(service)
         assert snapshot.feed("tnx").value.price == 4.25
-        assert sorted(calls) == ["fx", "news_en", "news_ko", "nq", "tnx"]
+        assert sorted(calls) == ["fx", "news_en", "news_ko", "nq", "oil", "tnx", "tyx"]
     finally:
         release.set()
         service.close()

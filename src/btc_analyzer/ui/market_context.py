@@ -15,10 +15,14 @@ CONTEXT_CSS = """<style>
 .btc-macro-card,.btc-news-item{background:linear-gradient(135deg,#fff,#f9fbff);border:1px solid #e7ecf3;border-radius:20px;padding:16px;min-width:0}
 .btc-macro-name{font-size:14px;font-weight:700;margin:0 0 6px;color:#191f28}.btc-macro-value{font-size:26px;font-weight:750;letter-spacing:-.6px;font-variant-numeric:tabular-nums}
 .btc-macro-card p{font-size:11px;color:#66758b;margin:5px 0}.btc-macro-card a,.btc-news-item a{color:#25496e;text-decoration:none}.btc-macro-card svg{width:100%;height:42px;display:block;margin:8px 0}
+.btc-macro-graph{height:58px;display:flex;align-items:center}.btc-macro-card .btc-macro-status{min-height:34px;line-height:1.55}
+.btc-macro-heading{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;margin-bottom:7px}.btc-macro-heading .btc-macro-name{margin:0}.btc-macro-badge{font-size:10px;color:#66758b;background:#eff2f7;border-radius:7px;padding:3px 6px;white-space:nowrap}
+.btc-macro-card[data-status="stream"] .btc-macro-badge{background:#e7f6f0;color:#087f5b}.btc-macro-card[data-status="delayed"] .btc-macro-badge{background:#fff5e3;color:#986309}
 .btc-news-item{margin:8px 0;padding:14px 16px}.btc-news-title{font-size:15px;font-weight:650;line-height:1.55;display:block;margin:7px 0;overflow-wrap:anywhere}.btc-news-meta,.btc-news-explain{font-size:12px;color:#66758b;line-height:1.55;margin:4px 0}
 .btc-news-badge{font-size:11px;display:inline-block;padding:3px 8px;border-radius:8px;background:#f0f3f8;color:#59677c;margin-right:6px}.btc-news-badge.up{background:#e7f6f0;color:#087f5b}.btc-news-badge.down{background:#fff0ed;color:#c44d40}
 .btc-news-scenario{background:#f4f0ff;border:1px solid #e5ddfa;border-radius:16px;padding:14px 16px;font-size:13px;color:#665086;line-height:1.6;margin:12px 0;overflow-wrap:anywhere}
 @media(max-width:450px){.btc-macro-card{padding:12px;border-radius:16px}.btc-macro-value{font-size:22px}.btc-macro-name{font-size:12px}.btc-news-title{font-size:14px}}
+@media(min-width:1000px){.btc-macro-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 </style>"""
 
 
@@ -46,14 +50,16 @@ def sparkline(points):
         f"{i * 240 / (len(points) - 1):.1f},{38 - (value - low) / span * 32:.1f}"
         for i, value in enumerate(points)
     )
-    return f'<svg viewBox="0 0 240 42" role="img" aria-label="최근 거래 가격 그래프"><polyline points="{path}" fill="none" stroke="#3182f6" stroke-width="2" stroke-linejoin="round"/></svg>'
+    return f'<svg viewBox="0 0 240 42" preserveAspectRatio="none" role="img" aria-label="최근 거래 가격 그래프"><polyline points="{path}" fill="none" stroke="#3182f6" stroke-width="2" stroke-linejoin="round"/></svg>'
 
 
 def macro_cards(context, now):
     cards = []
-    for key, title, unit, link in (
-        ("nq", "나스닥100 선물", "pt · NQ=F", "https://finance.yahoo.com/quote/NQ%3DF/"),
-        ("tnx", "미국채 10년물", "% · 수익률 지표", "https://finance.yahoo.com/quote/%5ETNX/"),
+    for key, title, unit, link, source in (
+        ("nq", "나스닥100 선물", "pt · NQ=F", "https://finance.yahoo.com/quote/NQ%3DF/", "CME NQ"),
+        ("oil", "WTI 원유 선물", "USD/배럴 · CL=F", "https://finance.yahoo.com/quote/CL%3DF/", "NYMEX WTI"),
+        ("tnx", "미국채 10년물", "% · 수익률 지표", "https://finance.yahoo.com/quote/%5ETNX/", "CBOE ^TNX"),
+        ("tyx", "미국채 30년물", "% · 수익률 지표", "https://finance.yahoo.com/quote/%5ETYX/", "CBOE ^TYX"),
     ):
         feed = context.feed(key)
         value = feed.value
@@ -73,11 +79,16 @@ def macro_cards(context, now):
             change = (
                 "기준값 대기" if value.change is None else f"조회 구간 시작 종가 대비 {value.change:+.2%}"
             )
+            if key in ("tnx", "tyx") and value.change is not None and value.change > -1:
+                change = f"기준 종가 대비 {value.price - value.price / (1 + value.change):+.3f}%p"
+            badge = "마지막 시세" if age > timedelta(hours=2) else "공개 조회"
+            tone = "stale" if age > timedelta(hours=2) else "delayed"
             info = f"{status} · {stamp:%m.%d %H:%M} KST{delay}"
         else:
             price, graph, change = "—", "<p>시세 자료를 기다리고 있어요</p>", "수신한 값만 표시해요"
             info = feed.error or "공개 자료원 연결 중…"
-        source = "Yahoo Finance · CME 선물" if key == "nq" else "Yahoo Finance · CBOE ^TNX"
+            badge, tone = "연결 중", "stale"
+        source = "Yahoo Finance · " + source
         attributes = ""
         if isinstance(value, MacroQuote):
             attributes = (
@@ -88,7 +99,7 @@ def macro_cards(context, now):
                 f' data-points="{",".join(str(point) for point in value.points)}"'
             )
         cards.append(
-            f'<article class="btc-macro-card" id="macro-{key}"{attributes}><div class="btc-macro-name">{title}</div><div class="btc-macro-value">{price}</div><p class="btc-macro-change">{unit} · {escape(change)}</p><div class="btc-macro-graph">{graph}</div><p class="btc-macro-status">{escape(info)}</p><p><a href="{link}" target="_blank" rel="noopener noreferrer">{source} ↗</a></p></article>'
+            f'<article class="btc-macro-card" id="macro-{key}" data-status="{tone}"{attributes}><div class="btc-macro-heading"><div class="btc-macro-name">{title}</div><span class="btc-macro-badge">{badge}</span></div><div class="btc-macro-value">{price}</div><p class="btc-macro-change">{unit} · {escape(change)}</p><div class="btc-macro-graph">{graph}</div><p class="btc-macro-status">{escape(info)}</p><p><a href="{link}" target="_blank" rel="noopener noreferrer">{source} ↗</a></p></article>'
         )
     fx = context.feed("fx").value
     bridge = (

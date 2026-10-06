@@ -498,19 +498,23 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     }
     return value;
   }
-  const macroSymbols=['NQ=F','^TNX','KRW=X'];
-  const macros=Object.fromEntries(['nq','tnx'].map((id,i)=>[macroSymbols[i],{
-    id,price:null,asOf:0,received:0,stream:false,change:null,points:[],bucket:0,delay:-1,dirty:false
+  const macros=Object.fromEntries([
+    ['NQ=F','nq','pt · NQ 선물',false],['CL=F','oil','USD/배럴 · WTI 선물',false],
+    ['^TNX','tnx','% · 10년물 금리',true],['^TYX','tyx','% · 30년물 금리',true]
+  ].map(([symbol,id,label,yieldIndex])=>[symbol,{
+    id,label,yieldIndex,price:null,asOf:0,received:0,stream:false,change:null,points:[],bucket:0,delay:-1,
+    dirty:false,graphDirty:false,node:null,nodes:null,statusSecond:-1
   }]));
+  const macroSymbols=[...Object.keys(macros),'KRW=X'];
   let macroSocket=null, macroRetry=null, macroRetries=0, macroOpened=0, macroRx=0, macroSubscribed=0;
   let parentDoc=null;
   try {parentDoc=window.parent.document;} catch (_) {}
   function acceptMacro(value) {
     if (!macroSymbols.includes(value.symbol) || !validNumber(value.price) || value.price<=0 ||
         !Number.isSafeInteger(value.time) || value.time<=0 || value.time>Date.now()+5000 || Date.now()-value.time>7*86400000 ||
-        (value.symbol==='^TNX' && value.price>30) ||
-        (value.symbol==='KRW=X' && value.currency!=='KRW') ||
-        (value.symbol==='NQ=F' && value.currency && value.currency!=='USD')) return;
+        (macros[value.symbol]?.yieldIndex && value.price>30) ||
+        (value.symbol==='KRW=X' && (value.currency ? value.currency!=='KRW' : value.exchange!=='CCY')) ||
+        (value.symbol!=='KRW=X' && value.currency && value.currency!=='USD')) return;
     if (value.symbol==='KRW=X') {
       if (value.time<fx.asOf || Date.now()-value.time>180000) return;
       saveRate(fx,{rate:value.price,asOf:value.time,source:'Yahoo 시장',market:true,daily:false});
@@ -518,16 +522,21 @@ LIVE_PRICES_HTML = r"""<!doctype html>
       const s=macros[value.symbol];
       if (value.time<s.asOf) return;
       const bucket=Math.floor(value.time/60000);
+      const change=validNumber(value.change) && value.change>-100 ? value.change : null;
+      s.dirty ||= s.price!==value.price || s.change!==change || !s.stream;
+      s.graphDirty ||= s.price!==value.price || bucket!==s.bucket;
       if (bucket===s.bucket && s.points.length) s.points[s.points.length-1]=value.price;
       else s.points.push(value.price);
       Object.assign(s,{price:value.price,asOf:value.time,received:Date.now(),stream:true,
-        change:validNumber(value.change) ? value.change : null,bucket,dirty:true});
+        change,bucket});
       s.points=s.points.slice(-60);
     }
     macroRx=Date.now(); macroRetries=0; schedulePaint();
   }
   function paintMacro() {
     if (!parentDoc) return;
+    const now=Date.now(), second=Math.floor(now/1000);
+    const write=(node,text)=>{if (node && node.textContent!==text) node.textContent=text;};
     for (const [symbol,s] of Object.entries(macros)) {
       const el=parentDoc.getElementById('macro-'+s.id);
       if (!el) continue;
@@ -537,22 +546,51 @@ LIVE_PRICES_HTML = r"""<!doctype html>
       if (el.dataset.symbol===symbol && validNumber(price) && price>0 && asOf>0 && asOf>s.asOf) {
         Object.assign(s,{price,asOf,received:Number(el.dataset.fetched),stream:false});
       }
-      if (s.points.length<2 && el.dataset.points) s.points=[...el.dataset.points.split(',').map(Number).filter(p=>validNumber(p)&&p>0),...s.points].slice(-60);
+      if (s.points.length<2 && el.dataset.points) {
+        s.points=[...el.dataset.points.split(',').map(Number).filter(p=>validNumber(p)&&p>0),...s.points].slice(-60);
+        s.graphDirty=true;
+      }
       if (!s.stream || s.price===null) continue;
-      el.dataset.transport='ws';
-      el.querySelector('.btc-macro-value').textContent=s.price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-      const age=Math.max(0,Math.floor((Date.now()-s.asOf)/1000));
-      const status=Date.now()-s.received<15000 && macroSocket?.readyState===1 ? '스트림 수신' : '수신 지연 · 마지막 값';
-      el.querySelector('.btc-macro-status').textContent=status+' · 원자료 '+(age<60 ? age+'초' : Math.floor(age/60)+'분')+' 전 · '+clock(s.asOf)+' KST · '+(s.delay>=0 ? '제공 지연 '+s.delay+'분' : '제공 지연 미확인');
-      el.querySelector('.btc-macro-change').textContent=(s.id==='nq' ? 'pt · NQ 선물' : '% · 수익률 지표')+' · '+(s.change===null ? '변동률 자료 대기' : '24시간 '+(s.change>=0 ? '+' : '')+s.change.toFixed(2)+'%');
-      const graph=el.querySelector('.btc-macro-graph');
-      if (s.dirty || graph.dataset.asof!==String(s.asOf)) {
+      const rebound=s.node!==el || Object.values(s.nodes || {}).some(node=>node && !node.isConnected);
+      if (rebound) {
+        s.node=el;
+        s.nodes=Object.fromEntries(['value','change','status','badge','graph'].map(name=>[name,el.querySelector('.btc-macro-'+name)]));
+        s.dirty=true; s.graphDirty=true; s.statusSecond=-1;
+      }
+      if (el.dataset.transport!=='ws') el.dataset.transport='ws';
+      if (s.dirty) {
+        s.priceText=s.price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+        const movement=s.change===null ? '변동률 자료 대기' : s.yieldIndex
+          ? ((s.price-s.price/(1+s.change/100))>=0 ? '+' : '')+(s.price-s.price/(1+s.change/100)).toFixed(3)+'%p'
+          : (s.change>=0 ? '+' : '')+s.change.toFixed(2)+'%';
+        s.changeText=s.label+' · '+(s.change===null ? movement : '기준 종가 대비 '+movement);
+        s.dirty=false;
+      }
+      // Streamlit may replace children while keeping the article itself.
+      // Compare cached text, without formatting or rewriting unchanged values.
+      write(s.nodes.value,s.priceText); write(s.nodes.change,s.changeText);
+      // Source age changes once a second. Crypto ticks don't rewrite macro DOM.
+      if (s.statusSecond!==second) {
+        const age=Math.max(0,Math.floor((now-s.asOf)/1000));
+        const connected=now-s.received<15000 && macroSocket?.readyState===1;
+        const tone=connected ? (age<=15 && s.delay===0 ? 'stream' : 'delayed') : 'stale';
+        s.tone=tone;
+        s.badgeText=connected ? (age>30 || s.delay>0 ? '지연 스트림' : '스트림') : '마지막 시세';
+        s.statusText=(connected ? '스트림 수신' : '수신 지연 · 마지막 값')+' · 원자료 '+(age<60 ? age+'초' : Math.floor(age/60)+'분')+' 전 · '+clock(s.asOf)+' KST · '+(s.delay>=0 ? '제공 지연 '+s.delay+'분' : '제공 지연 미확인');
+        s.statusSecond=second;
+      }
+      if (el.dataset.status!==s.tone) el.dataset.status=s.tone;
+      write(s.nodes.status,s.statusText);write(s.nodes.badge,s.badgeText);
+      const graph=s.nodes.graph;
+      if (graph && (s.graphDirty || graph.firstElementChild!==s.svgNode)) {
         if (s.points.length>1) {
           const low=Math.min(...s.points), high=Math.max(...s.points), span=high-low || Math.max(low*.001,.001);
           const points=s.points.map((p,i)=>(i*240/(s.points.length-1)).toFixed(1)+','+(38-(p-low)/span*32).toFixed(1)).join(' ');
-          graph.innerHTML='<svg viewBox="0 0 240 42" role="img" aria-label="최근 표시 시세 그래프"><polyline points="'+points+'" fill="none" stroke="#3182f6" stroke-width="2" stroke-linejoin="round"/></svg>';
+          graph.innerHTML='<svg viewBox="0 0 240 42" preserveAspectRatio="none" role="img" aria-label="최근 표시 시세 그래프"><polyline points="'+points+'" fill="none" stroke="#3182f6" stroke-width="2" stroke-linejoin="round"/></svg>';
+        } else if (s.points.length===1) {
+          graph.innerHTML='<svg viewBox="0 0 240 42" preserveAspectRatio="none" role="img" aria-label="현재 수신 시세, 이력 대기"><circle cx="236" cy="21" r="3" fill="#3182f6"/></svg>';
         }
-        graph.dataset.asof=String(s.asOf); s.dirty=false;
+        graph.dataset.asof=String(s.asOf); s.svgNode=graph.firstElementChild; s.graphDirty=false;
       }
     }
     const reference=parentDoc.getElementById('macro-fx-reference');
@@ -594,8 +632,12 @@ LIVE_PRICES_HTML = r"""<!doctype html>
   }
   // Restore stream values promptly if a native quote fragment replaces its DOM.
   const macroObserver=parentDoc ? new MutationObserver(records=>{
-    const selector='.btc-macro-grid,#macro-nq,#macro-tnx,#macro-fx-reference,#btc-news-bridge,#btc-move-alerts';
-    if (records.some(r=>[...r.addedNodes].some(n=>n.nodeType===1 && (n.matches?.(selector) || n.querySelector?.(selector))))) schedulePaint();
+    const fields='.btc-macro-value,.btc-macro-change,.btc-macro-status,.btc-macro-badge,.btc-macro-graph';
+    const selector='.btc-macro-grid,.btc-macro-card,#macro-fx-reference,#btc-news-bridge,#btc-move-alerts,'+fields;
+    const overwritten=records.some(r=>r.target.matches?.(fields) && Object.values(macros).some(s=>s.stream &&
+      [[s.nodes?.value,s.priceText],[s.nodes?.change,s.changeText],[s.nodes?.status,s.statusText],[s.nodes?.badge,s.badgeText]]
+        .some(([node,text])=>node===r.target && node.textContent!==text)));
+    if (overwritten || records.some(r=>[...r.addedNodes].some(n=>n.nodeType===1 && (n.matches?.(selector) || n.querySelector?.(selector))))) schedulePaint();
   }) : null;
   if (parentDoc?.body) macroObserver?.observe(parentDoc.body,{childList:true,subtree:true});
 
@@ -682,6 +724,7 @@ def render_live_prices() -> None:
     st.markdown(
         """<style>
 #btc-move-alerts[hidden]{display:none}#btc-move-alerts{display:grid;gap:10px;margin:0 0 12px}
+[data-testid="stElementContainer"]:has(#btc-move-alerts[hidden]){display:none}
 .btc-move-card{border:1px solid #e7eaf2;border-left:4px solid #ce4260;background:#fff;border-radius:16px;padding:14px 16px;overflow-wrap:anywhere}
 .btc-move-card.up{border-left-color:#0a996e}.btc-move-card strong{font-size:16px;color:#192434}
 .btc-move-card p{font-size:13px;color:#59677c;line-height:1.5;margin:6px 0}

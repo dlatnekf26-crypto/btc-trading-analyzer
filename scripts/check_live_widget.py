@@ -178,7 +178,7 @@ def cleanup(page, widget):
     page.close()
 
 
-def send_macro(widget, symbol, price, now, *, currency="USD", change=1.25):
+def send_macro(widget, symbol, price, now, *, currency="USD", change=1.25, exchange=None):
     """Encode the provider's independent PricingData schema, including sint64 time."""
     import base64
     import struct
@@ -201,7 +201,8 @@ def send_macro(widget, symbol, price, now, *, currency="USD", change=1.25):
         + struct.pack("<f", price)
         + bytes([3 * 8])
         + varint(now * 2 if now >= 0 else -now * 2 - 1)
-        + string(4, currency)
+        + (string(4, currency) if currency is not None else b"")
+        + (string(5, exchange) if exchange is not None else b"")
         + bytes([8 * 8 + 5])
         + struct.pack("<f", change)
     )

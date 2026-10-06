@@ -106,7 +106,7 @@ def offline_context_data():
             return Response(json.dumps(events).encode())
         if host == "query1.finance.yahoo.com":
             symbol = unquote(urlsplit(url).path.rsplit("/", 1)[-1])
-            price = {"NQ=F": 22345.50, "^TNX": 4.25, "KRW=X": 1345.5}[symbol]
+            price = {"NQ=F": 22345.50, "CL=F": 87.42, "^TNX": 4.25, "^TYX": 4.80, "KRW=X": 1345.5}[symbol]
             stamp = int(
                 (now - timedelta(seconds=2) if symbol == "KRW=X" else now - timedelta(minutes=15)).timestamp()
             )
@@ -116,9 +116,13 @@ def offline_context_data():
                         {
                             "meta": {
                                 "symbol": symbol,
-                                "instrumentType": {"NQ=F": "FUTURE", "^TNX": "INDEX", "KRW=X": "CURRENCY"}[
-                                    symbol
-                                ],
+                                "instrumentType": {
+                                    "NQ=F": "FUTURE",
+                                    "CL=F": "FUTURE",
+                                    "^TNX": "INDEX",
+                                    "^TYX": "INDEX",
+                                    "KRW=X": "CURRENCY",
+                                }[symbol],
                                 "currency": "KRW" if symbol == "KRW=X" else "USD",
                                 "regularMarketPrice": price,
                                 "regularMarketTime": stamp,

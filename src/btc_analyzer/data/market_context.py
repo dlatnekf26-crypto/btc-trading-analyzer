@@ -21,7 +21,7 @@ MAX_BYTES = 512_000
 NEWS_MAX_AGE = timedelta(hours=24)
 QUOTE_REFRESH_SECONDS = 10
 NEWS_REFRESH_SECONDS = 30
-SYMBOLS = {"nq": "NQ=F", "tnx": "^TNX", "fx": "KRW=X"}
+SYMBOLS = {"nq": "NQ=F", "tnx": "^TNX", "fx": "KRW=X", "oil": "CL=F", "tyx": "^TYX"}
 TOPICS = {
     "oil": "유가",
     "geopolitics": "전쟁·지정학",
@@ -101,17 +101,23 @@ def _finite_positive(value):
 
 
 def parse_quote(payload: dict, symbol: str, now: datetime) -> MacroQuote:
-    """Use provider units: NQ futures points, ^TNX yield percentage (not /10)."""
+    """NQ points, WTI USD/barrel, CBOE 10/30-year yield % (never /10)."""
     result = payload["chart"]["result"][0]
     meta = result["meta"]
     if symbol not in SYMBOLS.values() or meta["symbol"] != symbol:
         raise ValueError("Unexpected instrument")
-    if symbol == "NQ=F" and meta.get("instrumentType", "FUTURE") != "FUTURE":
-        raise ValueError("Expected NQ futures")
+    if symbol in ("NQ=F", "CL=F") and (
+        meta.get("instrumentType", "FUTURE") != "FUTURE" or meta.get("currency", "USD") != "USD"
+    ):
+        raise ValueError("Expected USD futures")
+    if symbol in ("^TNX", "^TYX") and (
+        meta.get("instrumentType", "INDEX") != "INDEX" or meta.get("currency", "USD") != "USD"
+    ):
+        raise ValueError("Expected Treasury yield index")
     if symbol == "KRW=X" and (meta.get("instrumentType") != "CURRENCY" or meta.get("currency") != "KRW"):
         raise ValueError("Expected USD/KRW market quote")
     price = _finite_positive(meta["regularMarketPrice"])
-    if symbol == "^TNX" and price > 30:
+    if symbol in ("^TNX", "^TYX") and price > 30:
         raise ValueError("Unrecognized yield units")
     as_of = datetime.fromtimestamp(_finite_positive(meta["regularMarketTime"]), UTC)
     if not timedelta(0) <= now - as_of <= timedelta(days=7):
@@ -133,7 +139,10 @@ def parse_quote(payload: dict, symbol: str, now: datetime) -> MacroQuote:
     delay = meta.get("exchangeDataDelayedBy")
     delay = (
         int(delay)
-        if isinstance(delay, (int, float)) and math.isfinite(delay) and 0 <= delay <= 1440
+        if not isinstance(delay, bool)
+        and isinstance(delay, (int, float))
+        and math.isfinite(delay)
+        and 0 <= delay <= 1440
         else None
     )
     return MacroQuote(symbol, price, as_of, now, tuple(points[-60:]), change, delay)
