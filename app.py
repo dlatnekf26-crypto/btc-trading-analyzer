@@ -17,7 +17,7 @@ import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
 
-from btc_analyzer.config import AppConfig, COMPOSITE_TIMEFRAMES
+from btc_analyzer.config import AppConfig
 from btc_analyzer.candles import candle_boundary
 from btc_analyzer.data.service import DataService
 from btc_analyzer.data.base_provider import DataError
@@ -136,31 +136,9 @@ def dashboard() -> None:
             st.button("예측과 과거 차트 함께 보기", on_click=open_history_comparison)
     if tabs[1].open:
         with tabs[1]:
-            from btc_analyzer.ui.charts import indicator_chart, READ_CHART_CONFIG
+            from btc_analyzer.ui.indicators_view import render_indicators
 
-            selected = (
-                st.segmented_control(
-                    "지표 시간대",
-                    COMPOSITE_TIMEFRAMES,
-                    default="1d",
-                    format_func=FRAME_LABELS.get,
-                )
-                or "1d"
-            )
-            features = enriched.get(selected)
-            if features is None or features.empty:
-                st.info("이 시간대의 확정 봉이 아직 없습니다.")
-            else:
-                st.subheader("모멘텀과 변동성")
-                st.plotly_chart(
-                    indicator_chart(features, display_timezone),
-                    width="stretch",
-                    theme=None,
-                    config=READ_CHART_CONFIG,
-                )
-                with st.expander("전체 지표 원본 값", key="indicator_values", on_change="rerun") as details:
-                    if details.open:
-                        st.dataframe(features.tail(100), width="stretch")
+            render_indicators(enriched, cfg.indicators, display_timezone)
     if tabs[2].open:
         with tabs[2]:
             st.subheader("다섯 시간대 통합 분석")

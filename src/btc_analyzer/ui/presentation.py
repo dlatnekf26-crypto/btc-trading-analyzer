@@ -72,6 +72,20 @@ p, li { line-height: 1.7; }
 .btc-card-hint { font-size: 11px; color: #66758b; margin-top: 4px; }
 .btc-meter { height: 4px; background: #e8eff9; border-radius: 10px; margin-top: 12px; overflow: hidden; }
 .btc-meter span { height: 100%; display: block; background: #3182f6; }
+.btc-indicator-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 10px 0; }
+.btc-indicator-card { background: #fff; border: 1px solid #e7ecf3; border-radius: 18px; padding: 18px; min-width: 0; }
+.btc-indicator-label { color: #53647b; font-size: 13px; margin-bottom: 9px; }
+.btc-indicator-card strong { display: block; font-size: 20px; letter-spacing: -.03em; line-height: 1.4; }
+.btc-indicator-value { font-size: 15px; color: #333d4b; font-variant-numeric: tabular-nums; margin-top: 7px; overflow-wrap: anywhere; }
+.btc-indicator-card p { color: #53647b; font-size: 13px; line-height: 1.6; margin: 10px 0 0; }
+.btc-indicator-up strong { color: #087855; } .btc-indicator-down strong { color: #c02c46; }
+.btc-indicator-caution strong { color: #95600b; }
+@media (max-width: 760px) {
+    .btc-indicator-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+    .btc-indicator-card { padding: 14px 12px; }
+    .btc-indicator-card strong { font-size: 17px; }
+}
+@media (max-width: 350px) { .btc-indicator-grid { grid-template-columns: 1fr; } }
 .btc-section-label { font-size: 12px; font-weight: 650; color: #3182f6; margin: 12px 0 5px; }
 .btc-horizons { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; margin-bottom: 16px; background: #fff; border: 1px solid #e7ecf3; border-radius: 18px; overflow: hidden; }
 .btc-horizon { padding: 13px 15px; border-right: 1px solid #edf1f6; text-align: center; }

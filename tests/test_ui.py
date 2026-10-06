@@ -46,6 +46,34 @@ def test_live_invalid_binance_symbol_shows_error(monkeypatch, tmp_path):
     assert any("INVALID/USDT" in x.value for x in app.error)
 
 
+def test_indicator_controls_and_korean_values_preserve_composite_analysis():
+    app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
+    original = next(x.value for x in app.markdown if 'aria-label="분석 요약"' in x.value)
+    app.session_state["dashboard_tab"] = "기술 지표"
+    app.run()
+    for kind in ("RSI", "MACD", "ATR", "BB", "VOLUME"):
+        next(x for x in app.get("button_group") if x.label == "자세히 볼 지표").set_value(kind)
+        # AppTest reruns the full script and does not serialize selected st.tabs
+        # state yet. Browser checks exercise actual fragment reruns separately.
+        app.session_state["dashboard_tab"] = "기술 지표"
+        app.run()
+        assert not app.exception and not app.error
+        assert len(app.get("plotly_chart")) == 1
+        assert next(x.value for x in app.markdown if 'aria-label="분석 요약"' in x.value) == original
+        assert any('aria-label="기술지표 현재 상태"' in x.value for x in app.markdown)
+    for timeframe in ("1h", "4h", "1d", "1w", "1M"):
+        next(x for x in app.get("button_group") if x.label == "지표 시간대").set_value(timeframe)
+        app.session_state["dashboard_tab"] = "기술 지표"
+        app.run()
+        assert not app.exception and not app.error
+    app.session_state["indicator_values"] = True
+    app.session_state["dashboard_tab"] = "기술 지표"
+    app.run()
+    table = app.dataframe[-1].value
+    assert list(table.columns) == ["지표", "현재값 · USDT"]
+    assert table.loc[table["지표"] == "볼린저밴드 · 중심", "현재값 · USDT"].iloc[0] != "자료 부족"
+
+
 def test_removed_tab_state_recovers_and_existing_database_is_untouched(monkeypatch, tmp_path):
     path = tmp_path / "existing.sqlite"
     original = b"do not open or replace an existing research database in Live"

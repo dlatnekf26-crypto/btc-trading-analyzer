@@ -287,7 +287,7 @@ def verify(browser, width, app_url=None, event_log=None):
         assert page.get_by_text("거래소", exact=True).count() == 0
         widget.evaluate("window.__quoteProbe='same-iframe'")
         page.get_by_role("tab", name="기술 지표", exact=True).click()
-        page.get_by_text("모멘텀과 변동성", exact=True).wait_for()
+        page.get_by_text("기술지표 한눈에 보기", exact=True).wait_for()
         assert widget.evaluate("window.__quoteProbe") == "same-iframe"
         page.get_by_role("tab", name="시장 개요", exact=True).click()
         page.get_by_text("차트로 확인하기", exact=True).wait_for()

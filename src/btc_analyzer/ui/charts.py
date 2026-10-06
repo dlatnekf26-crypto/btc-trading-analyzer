@@ -255,19 +255,75 @@ def price_chart(
     return style_chart(fig, 550)
 
 
-def indicator_chart(df: pd.DataFrame, timezone: str = "Asia/Seoul") -> go.Figure:
-    frame = df.tail(300)
+def indicator_chart(df: pd.DataFrame, timezone: str = "Asia/Seoul", kind: str = "RSI") -> go.Figure:
+    """One readable indicator at a time, using existing closed-candle features."""
+    frame = df.tail(120)
     x = frame.index.tz_convert(timezone)
-    fig = make_subplots(rows=3, cols=1, shared_xaxes=True, subplot_titles=["RSI", "MACD", "ATR% / BB width%"])
-    fig.add_trace(go.Scatter(x=x, y=frame.rsi, name="RSI"), row=1, col=1)
-    for level in (30, 70):
-        fig.add_hline(y=level, line_dash="dot", row=1, col=1)
-    for key in ("macd", "macd_signal"):
-        fig.add_trace(go.Scatter(x=x, y=frame[key], name=key), row=2, col=1)
-    fig.add_trace(go.Bar(x=x, y=frame.macd_hist, name="Histogram"), row=2, col=1)
-    fig.add_trace(go.Scatter(x=x, y=frame.atr_pct, name="ATR%"), row=3, col=1)
-    fig.add_trace(go.Scatter(x=x, y=frame.bb_width * 100, name="BB width%"), row=3, col=1)
-    return style_chart(fig, 640)
+    fig = go.Figure()
+    if kind == "RSI":
+        fig.add_hrect(y0=70, y1=100, fillcolor="#fff1f3", line_width=0, layer="below")
+        fig.add_hrect(y0=0, y1=30, fillcolor="#eaf3ff", line_width=0, layer="below")
+        for level in (30, 50, 70):
+            fig.add_hline(y=level, line_color="#c5cfdd", line_dash="dot")
+        fig.add_trace(
+            go.Scatter(x=x, y=frame.rsi, name="매수·매도 힘", line={"color": "#3182f6", "width": 2.5})
+        )
+        unit, axis = "점", "RSI · 0~100점"
+    elif kind == "MACD":
+        fig.add_trace(
+            go.Bar(
+                x=x,
+                y=frame.macd_hist,
+                name="두 선의 차이",
+                marker_color=["#09845c" if value >= 0 else "#d63851" for value in frame.macd_hist],
+                opacity=0.35,
+            )
+        )
+        fig.add_trace(go.Scatter(x=x, y=frame.macd, name="MACD", line={"color": "#3182f6", "width": 2.5}))
+        fig.add_trace(
+            go.Scatter(x=x, y=frame.macd_signal, name="기준선", line={"color": "#f59f35", "width": 2})
+        )
+        fig.add_hline(y=0, line_color="#c5cfdd", line_dash="dot")
+        unit, axis = " USDT", "가격 차이 · USDT"
+    else:
+        column, name, multiplier = {
+            "ATR": ("atr_pct", "평균 변동 폭", 1),
+            "BB": ("bb_width", "볼린저밴드 폭", 100),
+            "VOLUME": ("volume_ratio", "평균 대비 거래량", 1),
+        }[kind]
+        fig.add_trace(
+            go.Scatter(x=x, y=frame[column] * multiplier, name=name, line={"color": "#3182f6", "width": 2.5})
+        )
+        if kind == "VOLUME":
+            fig.add_hline(y=1, line_color="#c5cfdd", line_dash="dot")
+        unit, axis = (
+            ("배", "평균 대비 · 배")
+            if kind == "VOLUME"
+            else ("%", "중심선 대비 · %" if kind == "BB" else "종가 대비 · %")
+        )
+    style_chart(fig, 360)
+    for trace in fig.data:
+        trace.hovertemplate = f"%{{y:,.2f}}{unit}<extra>%{{fullData.name}}</extra>"
+    fig.update_layout(
+        uirevision=f"indicators-{kind}-{df.attrs.get('timeframe')}",
+        showlegend=kind == "MACD",
+        font_size=12,
+        hoverlabel_font_size=13,
+        hoverdistance=-1,
+    )
+    fig.update_yaxes(
+        title_text=axis,
+        tickformat=".0f" if kind == "RSI" else ".2f",
+        rangemode="tozero" if kind != "MACD" else "normal",
+    )
+    if kind == "RSI":
+        fig.update_yaxes(range=[0, 100], tickvals=[0, 30, 50, 70, 100])
+    fig.update_xaxes(
+        tickformat="%m.%d<br>%H:%M" if df.attrs.get("timeframe") in ("1h", "4h") else "%y.%m.%d",
+        nticks=4,
+        hoverformat=f"%Y.%m.%d %H:%M {timezone}",
+    )
+    return fig
 
 
 def equity_chart(equity: pd.DataFrame, quote: str = "USDT") -> go.Figure:
