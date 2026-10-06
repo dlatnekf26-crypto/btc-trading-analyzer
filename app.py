@@ -130,6 +130,9 @@ def dashboard() -> None:
                 average_lines=average_lines,
                 quote_currency=quote_currency,
             )
+            from btc_analyzer.ui.session_patterns import render_session_patterns
+
+            render_session_patterns(bundle.get("1h"), cutoff)
             with st.expander("종합 판단의 전체 근거"):
                 for reason in combined.reasons:
                     st.write(f"• {reason}")

@@ -20,7 +20,7 @@ UTC = timezone.utc
 MAX_BYTES = 512_000
 NEWS_MAX_AGE = timedelta(hours=24)
 QUOTE_REFRESH_SECONDS = 10
-NEWS_REFRESH_SECONDS = 60
+NEWS_REFRESH_SECONDS = 30
 SYMBOLS = {"nq": "NQ=F", "tnx": "^TNX", "fx": "KRW=X"}
 TOPICS = {
     "oil": "유가",

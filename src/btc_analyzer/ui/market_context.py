@@ -5,6 +5,7 @@ from html import escape
 from zoneinfo import ZoneInfo
 
 import streamlit as st
+from btc_analyzer.analysis.move_news import news_bridge
 
 from btc_analyzer import __checkout_signature__
 from btc_analyzer.data.market_context import MarketContextService, MacroQuote, TOPICS, UTC, crypto_relevance
@@ -121,12 +122,13 @@ def render_macro_quotes():
     st.markdown(CONTEXT_CSS + macro_cards(context, now), unsafe_allow_html=True)
 
 
-@st.fragment(run_every=15)
+@st.fragment(run_every=10)
 def render_coin_news():
     now = datetime.now(UTC)
     context = current_context()
+    st.markdown(news_bridge(context, now), unsafe_allow_html=True)
     st.markdown("**코인에 영향을 주는 주요 뉴스**")
-    st.caption("코인 수급·규제 + 코인과 연결된 금리·유가·전쟁 | 1분마다 자료 갱신")
+    st.caption("코인 수급·규제 + 코인과 연결된 금리·유가·전쟁 | 30초마다 자료 조회 · 기사 제공 지연은 별도")
     news = context.news(now)
     if not news:
         loading = any(feed.loading for feed in context.feeds if feed.key.startswith("news"))

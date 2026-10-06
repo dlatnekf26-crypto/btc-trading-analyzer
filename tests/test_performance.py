@@ -70,6 +70,7 @@ def test_incomplete_boundary_is_not_persisted_as_fresh(tmp_path, monkeypatch):
 
 def test_one_provider_per_bundle_and_long_history_cache_reused(tmp_path, monkeypatch):
     instances, calls = [], []
+    windows = {}
     clock = [1000.0]
 
     class Provider:
@@ -78,6 +79,7 @@ def test_one_provider_per_bundle_and_long_history_cache_reused(tmp_path, monkeyp
 
         def fetch(self, symbol, tf, start, end):
             calls.append(tf)
+            windows[tf] = (start, end)
             return provider_frame(tf, end)
 
     monkeypatch.setattr("btc_analyzer.data.service.BinanceProvider", Provider)
@@ -86,6 +88,7 @@ def test_one_provider_per_bundle_and_long_history_cache_reused(tmp_path, monkeyp
     path = tmp_path / "cache.sqlite"
     DataService(path).bundle(*args, include_macro=True)
     assert len(instances) == 1 and set(calls) == {"1h", "4h", "1d", "1w", "1M"}
+    assert windows["1h"][1] - windows["1h"][0] == pd.Timedelta(days=30)
     clock[0] += 600
     DataService(path).bundle(*args[:-1], args[-1] + pd.Timedelta(minutes=3), include_macro=True)
     assert len(instances) == 1 and len(calls) == 5

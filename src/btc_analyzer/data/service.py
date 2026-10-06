@@ -155,7 +155,10 @@ class DataService:
                     continue
                 # A latest snapshot needs a bounded window, not years of hourly
                 # candles just because a monthly chart is being viewed.
-                since = history_start(candle_boundary(utc(end), tf), tf, max(warmup, 260))
+                # Hour-of-day observations need 30 days. Still one Binance
+                # page (720 < 1000), reusing this same bundle/cache request.
+                bars = max(warmup, 720 if tf == "1h" else 260)
+                since = history_start(candle_boundary(utc(end), tf), tf, bars)
                 if exchange == "Binance":
                     since = max(since, utc("2017-08-01"))
                 try:

@@ -1,5 +1,6 @@
 """Browser-owned public quotes: no keys, Python polling, or chart dependencies."""
 
+import streamlit as st
 import streamlit.components.v1 as components
 
 LIVE_PRICES_HTML = r"""<!doctype html>
@@ -119,7 +120,8 @@ LIVE_PRICES_HTML = r"""<!doctype html>
   const states = configs.map(config => ({...config, el:document.getElementById(config.id), points:[],
     socketRef:null, retryTimer:null, retries:0, connectedAt:0, lastRx:0, lastEvent:0,
     lastPoll:0, lastWs:0, historyAt:0, transport:'', price:null, change:null, pending:false,
-    loadingHistory:false, historyReady:false, historyRetryAt:0, historyFailures:0, nextRestAt:0, storageAt:0, controllers:new Set(), dirty:true}));
+    loadingHistory:false, historyReady:false, historyRetryAt:0, historyFailures:0, nextRestAt:0, storageAt:0, controllers:new Set(), dirty:true,
+    moveSamples:[], move:null}));
   const binanceRequest={pending:false,lastPoll:0,restGap:1000,nextRestAt:0,controllers:new Set()};
   const validNumber = n => typeof n === 'number' && Number.isFinite(n);
   const timeFormat = new Intl.DateTimeFormat('en-GB', {hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23',timeZone:'Asia/Seoul'});
@@ -174,6 +176,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
       }
       paintAux();
       paintMacro();
+      paintMoves();
     }, DRAW_MS);
   }
   function addPoint(s, time, price) {
@@ -199,7 +202,31 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     s.lastEvent=time; s.lastRx=Date.now(); s.transport=transport;
     if (transport === 'ws') { s.lastWs=Date.now(); if (fresh(s)) s.retries=0; }
     if (s.history) addPoint(s,time,price);
+    detectMove(s,time,price);
     schedulePaint();
+  }
+  function detectMove(s,time,price) {
+    if (s.market!=='binance' || Date.now()-time>15000 || time>Date.now()+3000) return;
+    const samples=s.moveSamples, last=samples.at(-1);
+    if (last && time<last[0]) return;
+    if (last && time-last[0]>90000) s.move=null;
+    // Ten-second bins bound work and memory even during a burst of trades.
+    if (last && Math.floor(last[0]/10000)===Math.floor(time/10000)) samples[samples.length-1]=[time,price];
+    else samples.push([time,price]);
+    s.moveSamples=samples.filter(p=>p[0]>=time-660000).slice(-90);
+    let best=null;
+    for (const [window,threshold] of [[60000,0.005],[300000,0.01]]) {
+      let baseline=-1;
+      for (let i=0;i<s.moveSamples.length;i++) if (s.moveSamples[i][0]<=time-window) baseline=i;
+      if (baseline<0 || time-window-s.moveSamples[baseline][0]>30000) continue;
+      const path=s.moveSamples.slice(baseline);
+      if (path.some((p,i)=>i && p[0]-path[i-1][0]>90000)) continue;
+      const change=price/path[0][1]-1;
+      if (Math.abs(change)>=threshold && (!best || Math.abs(change)/threshold>best.strength)) {
+        best={direction:Math.sign(change),change,window,start:path[0][0],at:time,strength:Math.abs(change)/threshold};
+      }
+    }
+    if (best && (!s.move || s.move.direction!==best.direction || time-s.move.at>600000)) s.move=best;
   }
   function draw(s) {
     const canvas=s.el.querySelector('canvas'), width=canvas.clientWidth, height=42;
@@ -255,6 +282,11 @@ LIVE_PRICES_HTML = r"""<!doctype html>
         [Date.parse(/Z$|[+-]\d{2}:\d{2}$/.test(row.candle_date_time_utc) ? row.candle_date_time_utc : row.candle_date_time_utc+'Z'),row.trade_price]).filter(([t,p])=>
         validNumber(t) && validNumber(p) && p>0 && t<=Date.now() && t>=Date.now()-3660000);
       // A slower history response must never overwrite a newer streaming price.
+      const seed=rows.filter(row=>validNumber(Number(row[0])) && Number(row[0])%60000===0 &&
+        Number(row[6] ?? Number(row[0])+59999)===Number(row[0])+59999)
+        .map(row=>[Number(row[6] ?? Number(row[0])+59999),Number(row[4])]).filter(([t,p])=>
+        validNumber(t) && validNumber(p) && p>0 && t<=Date.now() && t>=Date.now()-660000);
+      s.moveSamples=[...new Map([...seed,...s.moveSamples].map(p=>[p[0],p])).values()].sort((a,b)=>a[0]-b[0]).slice(-90);
       const merged=new Map([...points,...s.points].map(p=>[p[0],p[1]]));
       s.points=[...merged].sort((a,b)=>a[0]-b[0]).filter(p=>p[0]>=Date.now()-3660000).slice(-MAX_POINTS);
       if (!points.length) throw new Error('Empty candle history');
@@ -562,9 +594,49 @@ LIVE_PRICES_HTML = r"""<!doctype html>
   }
   // Restore stream values promptly if a native quote fragment replaces its DOM.
   const macroObserver=parentDoc ? new MutationObserver(records=>{
-    if (records.some(r=>[...r.addedNodes].some(n=>n.nodeType===1 && (n.matches?.('.btc-macro-grid,#macro-nq,#macro-tnx,#macro-fx-reference') || n.querySelector?.('.btc-macro-grid,#macro-nq,#macro-tnx,#macro-fx-reference'))))) schedulePaint();
+    const selector='.btc-macro-grid,#macro-nq,#macro-tnx,#macro-fx-reference,#btc-news-bridge,#btc-move-alerts';
+    if (records.some(r=>[...r.addedNodes].some(n=>n.nodeType===1 && (n.matches?.(selector) || n.querySelector?.(selector))))) schedulePaint();
   }) : null;
   if (parentDoc?.body) macroObserver?.observe(parentDoc.body,{childList:true,subtree:true});
+
+  function paintMoves() {
+    const host=parentDoc?.getElementById('btc-move-alerts');
+    if (!host) return;
+    const now=Date.now(), alerts=[];
+    for (const s of states.slice(0,2)) {
+      const move=s.move;
+      if (!move || !fresh(s) || s.lastEvent>now+3000 || now-move.at>600000 || now<move.at) continue;
+      const news=[...(parentDoc.getElementById('btc-news-bridge')?.querySelectorAll('a') || [])].filter(link=>{
+        const published=Number(link.dataset.published),fetched=Number(link.dataset.fetched),direction=Number(link.dataset.direction);
+        let url; try {url=new URL(link.href);} catch (_) {return false;}
+        return ['http:','https:'].includes(url.protocol) && link.dataset.assets?.split(' ').includes(s.symbol) &&
+          validNumber(published) && validNumber(fetched) && published<=now && now-published<=1800000 &&
+          fetched<=now && now-fetched<=120000 && published>=move.start-1800000 && published<=move.at+300000 &&
+          (direction===0 || direction===move.direction);
+      }).slice(0,2);
+      alerts.push({symbol:s.symbol,move,news});
+    }
+    const signature=JSON.stringify(alerts.map(({symbol,move,news})=>[symbol,move.at,move.direction,...news.map(n=>[n.href,n.dataset.fetched])]));
+    if (host.dataset.signature===signature) return;
+    host.dataset.signature=signature; host.hidden=!alerts.length; host.replaceChildren();
+    const append=(parent,tag,text,className)=>{
+      const node=parentDoc.createElement(tag); node.textContent=text; if(className) node.className=className;
+      parent.appendChild(node); return node;
+    };
+    for (const {symbol,move,news} of alerts) {
+      const card=parentDoc.createElement('article'); card.className='btc-move-card '+(move.direction>0 ? 'up' : 'down');
+      card.dataset.symbol=symbol;card.dataset.detected=String(move.at);
+      append(card,'strong',`${symbol==='BTCUSDT' ? '비트코인' : '이더리움'} 급${move.direction>0 ? '상승' : '하락'} · 약 ${move.window/60000}분 ${move.change>=0 ? '+' : ''}${(move.change*100).toFixed(2)}%`);
+      append(card,'p',`${clock(move.at)} KST 감지 · 비교 ${Math.round((move.at-move.start)/1000)}초 · Binance`, 'btc-move-meta');
+      append(card,'p',news.length ? '관련 가능 · 움직임 전후의 소식' : '원인 확인 중 · 가까운 시각의 코인 관련 속보가 아직 없어요.');
+      for (const item of news) {
+        const link=append(card,'a',item.textContent+' ↗'); link.href=item.href;link.target='_blank';link.rel='noopener noreferrer';
+        append(card,'p',`${item.dataset.source} · 기사 ${clock(Number(item.dataset.published))} KST · 확인 ${clock(Number(item.dataset.fetched))} KST${Number(item.dataset.direction)===0 ? ' · 방향 미정' : ''}`,'btc-move-meta');
+      }
+      if (news.length) append(card,'p','기사 제목·시각으로 연결한 후보예요. 이 뉴스가 원인인지는 확인되지 않았어요.','btc-move-meta');
+      host.appendChild(card);
+    }
+  }
 
   const heartbeat=setInterval(()=>{
     if (disposed || document.hidden) return;
@@ -579,10 +651,11 @@ LIVE_PRICES_HTML = r"""<!doctype html>
   },1000);
   document.addEventListener('visibilitychange',()=>{
     for (const s of states) {
-      if (document.hidden) stop(s);
+      if (document.hidden) {stop(s);s.move=null;s.moveSamples=[];}
       else { history(s); connect(s); poll(s); }
     }
     if (document.hidden) {
+      const host=parentDoc?.getElementById('btc-move-alerts'); if(host) {host.hidden=true;host.dataset.signature='';host.replaceChildren();}
       stopMacro();
       rates.forEach(s=>s.controllers.forEach(c=>c.abort()));
       binanceRequest.controllers.forEach(c=>c.abort());
@@ -595,6 +668,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     disposeChartTouch();
     disposed=true; stopMacro(); macroObserver?.disconnect(); clearInterval(heartbeat); clearTimeout(paintTimer); observer.disconnect(); states.forEach(stop); rates.forEach(s=>s.controllers.forEach(c=>c.abort()));
     binanceRequest.controllers.forEach(c=>c.abort());
+    const host=parentDoc?.getElementById('btc-move-alerts'); if(host) {host.hidden=true;host.dataset.signature='';host.replaceChildren();}
   });
   for (const s of states) { restore(s); history(s); connect(s); poll(s); }
   restoreRates(); connectMacro(); pollRates(); schedulePaint();
@@ -605,3 +679,14 @@ LIVE_PRICES_HTML = r"""<!doctype html>
 def render_live_prices() -> None:
     """Keep a stable iframe outside analysis fragments so tab clicks keep sockets."""
     components.html(LIVE_PRICES_HTML, height=362, scrolling=False)
+    st.markdown(
+        """<style>
+#btc-move-alerts[hidden]{display:none}#btc-move-alerts{display:grid;gap:10px;margin:0 0 12px}
+.btc-move-card{border:1px solid #e7eaf2;border-left:4px solid #ce4260;background:#fff;border-radius:16px;padding:14px 16px;overflow-wrap:anywhere}
+.btc-move-card.up{border-left-color:#0a996e}.btc-move-card strong{font-size:16px;color:#192434}
+.btc-move-card p{font-size:13px;color:#59677c;line-height:1.5;margin:6px 0}
+.btc-move-card a{font-size:14px;font-weight:600;color:#3182f6;display:block;padding:4px 0;touch-action:manipulation}
+.btc-move-card .btc-move-meta{font-size:11px;color:#7b8798}
+</style><section hidden id="btc-move-alerts" aria-label="실시간 급등락과 관련 소식" aria-live="polite"></section>""",
+        unsafe_allow_html=True,
+    )
