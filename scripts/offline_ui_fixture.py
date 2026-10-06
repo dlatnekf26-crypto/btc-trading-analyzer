@@ -89,19 +89,24 @@ def offline_context_data():
         now = datetime.now(timezone.utc)
         if host == "query1.finance.yahoo.com":
             symbol = unquote(urlsplit(url).path.rsplit("/", 1)[-1])
-            price = 22345.50 if symbol == "NQ=F" else 4.25
-            stamp = int((now - timedelta(minutes=15)).timestamp())
+            price = {"NQ=F": 22345.50, "^TNX": 4.25, "KRW=X": 1345.5}[symbol]
+            stamp = int(
+                (now - timedelta(seconds=2) if symbol == "KRW=X" else now - timedelta(minutes=15)).timestamp()
+            )
             body = {
                 "chart": {
                     "result": [
                         {
                             "meta": {
                                 "symbol": symbol,
-                                "instrumentType": "FUTURE" if symbol == "NQ=F" else "INDEX",
+                                "instrumentType": {"NQ=F": "FUTURE", "^TNX": "INDEX", "KRW=X": "CURRENCY"}[
+                                    symbol
+                                ],
+                                "currency": "KRW" if symbol == "KRW=X" else "USD",
                                 "regularMarketPrice": price,
                                 "regularMarketTime": stamp,
                                 "chartPreviousClose": price * 0.99,
-                                "exchangeDataDelayedBy": 15,
+                                "exchangeDataDelayedBy": 0 if symbol == "KRW=X" else 15,
                             },
                             "timestamp": [stamp - 300 * i for i in reversed(range(60))],
                             "indicators": {
@@ -114,10 +119,11 @@ def offline_context_data():
             return Response(json.dumps(body).encode())
         if host == "news.google.com":
             titles = (
-                "유가 급등, 공급 우려 지속",
-                "중동 휴전 합의 체결",
-                "미국 CPI 발표 예정, 결과 대기",
-                "연준 금리 인하 발표",
+                "비트코인 시장, 유가 급등에 물가 부담",
+                "비트코인 시장 주목, 중동 휴전 합의 체결",
+                "비트코인, 미국 CPI 발표 예정 앞두고 결과 대기",
+                "연준 금리 인하 발표, 비트코인 시장 주목",
+                "국제 유가 급등, 공급 부족 우려",
             )
             nodes = []
             for i, title in enumerate(titles):

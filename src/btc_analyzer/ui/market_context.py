@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 import streamlit as st
 
 from btc_analyzer import __checkout_signature__
-from btc_analyzer.data.market_context import MarketContextService, MacroQuote, TOPICS, UTC
+from btc_analyzer.data.market_context import MarketContextService, MacroQuote, TOPICS, UTC, crypto_relevance
 
 CONTEXT_CSS = """<style>
 .btc-macro-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:0 0 12px}
@@ -77,10 +77,25 @@ def macro_cards(context, now):
             price, graph, change = "—", "<p>시세 자료를 기다리고 있어요</p>", "수신한 값만 표시해요"
             info = feed.error or "공개 자료원 연결 중…"
         source = "Yahoo Finance · CME 선물" if key == "nq" else "Yahoo Finance · CBOE ^TNX"
+        attributes = ""
+        if isinstance(value, MacroQuote):
+            attributes = (
+                f' data-symbol="{escape(value.symbol, quote=True)}" data-price="{value.price}"'
+                f' data-asof="{int(value.as_of.timestamp() * 1000)}"'
+                f' data-fetched="{int(value.fetched_at.timestamp() * 1000)}"'
+                f' data-delay="{value.delay_minutes if value.delay_minutes is not None else -1}"'
+                f' data-points="{",".join(str(point) for point in value.points)}"'
+            )
         cards.append(
-            f'<article class="btc-macro-card" id="macro-{key}"><div class="btc-macro-name">{title}</div><div class="btc-macro-value">{price}</div><p>{unit} · {escape(change)}</p>{graph}<p>{escape(info)}</p><p><a href="{link}" target="_blank" rel="noopener noreferrer">{source} ↗</a></p></article>'
+            f'<article class="btc-macro-card" id="macro-{key}"{attributes}><div class="btc-macro-name">{title}</div><div class="btc-macro-value">{price}</div><p class="btc-macro-change">{unit} · {escape(change)}</p><div class="btc-macro-graph">{graph}</div><p class="btc-macro-status">{escape(info)}</p><p><a href="{link}" target="_blank" rel="noopener noreferrer">{source} ↗</a></p></article>'
         )
-    return '<div class="btc-macro-grid" aria-label="대외 시장 시세">' + "".join(cards) + "</div>"
+    fx = context.feed("fx").value
+    bridge = (
+        f'<span hidden id="macro-fx-reference" data-symbol="KRW=X" data-price="{fx.price}" data-asof="{int(fx.as_of.timestamp() * 1000)}" data-fetched="{int(fx.fetched_at.timestamp() * 1000)}"></span>'
+        if isinstance(fx, MacroQuote)
+        else ""
+    )
+    return '<div class="btc-macro-grid" aria-label="대외 시장 시세">' + "".join(cards) + "</div>" + bridge
 
 
 def news_card(item):
@@ -95,16 +110,23 @@ def news_card(item):
     )
     color = "up" if item.direction > 0 else "down" if item.direction < 0 else ""
     stamp = item.published_at.astimezone(ZoneInfo("Asia/Seoul"))
-    return f'<article class="btc-news-item"><span class="btc-news-badge">{escape(TOPICS[item.topic])}</span><span class="btc-news-badge {color}">{direction}</span><a class="btc-news-title" href="{escape(item.url, quote=True)}" target="_blank" rel="noopener noreferrer">{escape(item.title)} ↗</a><p class="btc-news-meta">{escape(item.source)} · {stamp:%m.%d %H:%M} KST</p><p class="btc-news-explain">{escape(item.explanation)}</p></article>'
+    relevance = crypto_relevance(item.title) or ""
+    return f'<article class="btc-news-item"><span class="btc-news-badge">{escape(TOPICS[item.topic])}</span><span class="btc-news-badge {color}">{direction}</span><a class="btc-news-title" href="{escape(item.url, quote=True)}" target="_blank" rel="noopener noreferrer">{escape(item.title)} ↗</a><p class="btc-news-meta">{escape(item.source)} · {stamp:%m.%d %H:%M} KST</p><p class="btc-news-explain">{escape(relevance)} · {escape(item.explanation)}</p></article>'
 
 
-@st.fragment(run_every=5)
-def render_market_context():
+@st.fragment(run_every=2)
+def render_macro_quotes():
     now = datetime.now(UTC)
     context = current_context()
     st.markdown(CONTEXT_CSS + macro_cards(context, now), unsafe_allow_html=True)
-    st.markdown("**가격을 움직이는 주요 뉴스**")
-    st.caption("유가 · 전쟁 · 금리 · 물가 · 경제지표 | 5분마다 자료 갱신 · 제목 기반 영향 분류")
+
+
+@st.fragment(run_every=15)
+def render_coin_news():
+    now = datetime.now(UTC)
+    context = current_context()
+    st.markdown("**코인에 영향을 주는 주요 뉴스**")
+    st.caption("코인 수급·규제 + 코인과 연결된 금리·유가·전쟁 | 1분마다 자료 갱신")
     news = context.news(now)
     if not news:
         loading = any(feed.loading for feed in context.feeds if feed.key.startswith("news"))
@@ -114,7 +136,7 @@ def render_market_context():
             if loading
             else "뉴스 자료원 연결 지연 · 소식이 도착하면 표시해요."
             if failed
-            else "최근 72시간의 관련 소식이 아직 없습니다."
+            else "최근 24시간의 코인 관련 소식이 아직 없습니다."
         )
         return
     # First screen covers distinct topics; a flood of one event does not hide all others.
@@ -141,3 +163,8 @@ def render_market_context():
                 else "기사 원문에서 내용을 확인해 주세요."
             )
         )
+
+
+def render_market_context():
+    render_macro_quotes()
+    render_coin_news()

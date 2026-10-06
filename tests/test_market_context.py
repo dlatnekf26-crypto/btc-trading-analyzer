@@ -18,6 +18,7 @@ from btc_analyzer.data.market_context import (
     classify_headline,
     parse_news,
     parse_quote,
+    crypto_relevance,
 )
 from btc_analyzer.ui.market_context import macro_cards, news_card
 
@@ -107,8 +108,13 @@ def test_direction_requires_evidence_and_does_not_invent_release_results(title, 
     assert (actual[0], actual[1], actual[4]) == (topic, direction, pending)
 
 
-def rss(title="유가 급등", date=NOW, url="https://news.google.com/rss/articles/test"):
-    return f"<rss><channel><item><title>{escape(title)} - Example</title><source>Example</source><link>{escape(url)}</link><pubDate>{format_datetime(date, usegmt=True)}</pubDate></item></channel></rss>".encode()
+def rss(
+    title="비트코인 시장, 유가 급등",
+    date=NOW,
+    url="https://news.google.com/rss/articles/test",
+    source="Example",
+):
+    return f"<rss><channel><item><title>{escape(title)} - {escape(source)}</title><source>{escape(source)}</source><link>{escape(url)}</link><pubDate>{format_datetime(date, usegmt=True)}</pubDate></item></channel></rss>".encode()
 
 
 def test_rss_rejects_future_old_and_unsafe_links_and_escapes_content():
@@ -124,7 +130,7 @@ def test_rss_rejects_future_old_and_unsafe_links_and_escapes_content():
     for raw in (b"<!DOCTYPE rss><rss/>", b"<!ENTITY x 'test'><rss/>", b"x" * 512001):
         with pytest.raises(ValueError):
             parse_news(raw, NOW)
-    item = parse_news(rss("유가 급등 <script>alert(1)</script>"), NOW)[0]
+    item = parse_news(rss("비트코인 유가 급등 <script>alert(1)</script>"), NOW)[0]
     html = news_card(item)
     assert "<script>" not in html and "&lt;script&gt;" in html
     assert "Example" in html and "KST" in html
@@ -136,6 +142,67 @@ def test_rss_rejects_future_old_and_unsafe_links_and_escapes_content():
         )
         == ()
     )
+
+
+@pytest.mark.parametrize(
+    "title,accepted",
+    [
+        ("Oil surges after supply disruption", False),
+        ("Federal Reserve cuts rates", False),
+        ("S&P 500 ETF inflows jump", False),
+        ("비트코인 피자 축제 개최", False),
+        ("Bitcoin ETF inflows jump", True),
+        ("Ethereum price falls ahead of CPI", True),
+        ("비트코인, 연준 금리 인하 주목", True),
+        ("유가 급등에 비트코인 시장 위험 선호 약화", True),
+        ("유가 급등, 비트코인과 무관", False),
+        ("Oil surge unrelated to Bitcoin", False),
+        ("연준 금리 인하 - Bitcoin Exchange", False),
+    ],
+)
+def test_only_coin_linked_market_events_enter_feed_and_cached_news(title, accepted):
+    raw = (
+        rss(title.removesuffix(" - Bitcoin Exchange"), source="Bitcoin Exchange")
+        if title.endswith(" - Bitcoin Exchange")
+        else rss(title)
+    )
+    assert bool(parse_news(raw, NOW)) is accepted
+    # A syndicator name containing 'Bitcoin' cannot supply headline relevance.
+    if title.endswith(" - Bitcoin Exchange"):
+        assert crypto_relevance(title.removesuffix(" - Bitcoin Exchange")) is None
+    else:
+        assert bool(crypto_relevance(title)) is accepted
+    item = parse_news(rss(), NOW)[0]
+    generic = replace(item, title="Federal Reserve cuts rates")
+    assert MarketContext((FeedState("news_ko", (generic, item), NOW),)).news(NOW) == (item,)
+
+
+def test_fx_requires_market_pair_currency_and_quote_refreshes_independently_of_news():
+    payload = quote_payload("KRW=X", 1345.5, age=0)
+    payload["chart"]["result"][0]["meta"].update(instrumentType="CURRENCY", currency="KRW")
+    value = parse_quote(payload, "KRW=X", NOW)
+    assert value.price == 1345.5
+    payload["chart"]["result"][0]["meta"]["currency"] = "USD"
+    with pytest.raises(ValueError, match="USD/KRW"):
+        parse_quote(payload, "KRW=X", NOW)
+    clock, calls = [NOW], []
+
+    def fetch(key, now):
+        calls.append(key)
+        return value if key == "fx" else ()
+
+    service = MarketContextService(fetch, lambda: clock[0])
+    try:
+        await_idle(service)
+        clock[0] += timedelta(seconds=11)
+        await_idle(service)
+        assert calls.count("fx") == 2 and calls.count("nq") == 2
+        assert calls.count("news_ko") == 1 and calls.count("news_en") == 1
+        clock[0] = NOW + timedelta(seconds=61)
+        await_idle(service)
+        assert calls.count("news_ko") == 2 and calls.count("news_en") == 2
+    finally:
+        service.close()
 
 
 def await_idle(service):
@@ -170,7 +237,7 @@ def test_blocked_provider_does_not_block_fast_quotes_or_spawn_duplicate_requests
         release.set()
         snapshot = await_idle(service)
         assert snapshot.feed("tnx").value.price == 4.25
-        assert sorted(calls) == ["news_en", "news_ko", "nq", "tnx"]
+        assert sorted(calls) == ["fx", "news_en", "news_ko", "nq", "tnx"]
     finally:
         release.set()
         service.close()

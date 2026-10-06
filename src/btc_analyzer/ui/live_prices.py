@@ -24,12 +24,12 @@ LIVE_PRICES_HTML = r"""<!doctype html>
 <div class="plot"><canvas role="img" aria-label="이더리움 최근 1시간 가격 그래프"></canvas><div class="empty">가격을 기다리고 있어요</div><div class="range"><span>최근 1시간</span><span>지금</span></div></div>
 </section>
 <section class="market aux stale" id="forex" aria-label="미국 달러 원화 환율">
-<div class="name"><b>원·달러 환율</b>USD/KRW</div><div class="price"><span>—</span><small>원</small></div><div class="change">1 USD당 원화 · 고시 환율</div><div class="status"><i class="dot"></i><span>환율 연결 중…</span></div>
+<div class="name"><b>원·달러 환율</b>USD/KRW</div><div class="price"><span>—</span><small>원</small></div><div class="change">1 USD당 원화 · 시장 시세 대기</div><div class="status"><i class="dot"></i><span>환율 연결 중…</span></div>
 </section>
 <section class="market aux stale" id="premium" aria-label="비트코인 김치프리미엄">
 <div class="name"><b>김치프리미엄</b>BTC</div><div class="price"><span>—</span><small>%</small></div><div class="change">Upbit / Binance · 환산 반영</div><div class="status"><i class="dot"></i><span>계산 자료 대기</span></div>
 </section>
-</div><p class="note">환율은 고시 시각 기준 · 김프는 USDT/USD 환산 포함이에요.</p>
+</div><p class="note">환율은 시장 시세 우선 · 고시/일별 대체값은 구분해요. 김프는 USDT/USD 환산 포함.</p>
 <script>
 (() => {
   'use strict';
@@ -104,7 +104,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
       doc.removeEventListener('touchcancel',clear,true);
     };
   })();
-  const MAX_POINTS = 61, STALE_MS = 15000, DRAW_MS = 100;
+  const MAX_POINTS = 61, STALE_MS = 15000, DRAW_MS = 50;
   const configs = [
     {id:'binance', market:'binance', symbol:'BTCUSDT', decimals:2, changeLabel:'24시간', restGap:1000,
      socket:'wss://data-stream.binance.vision/stream?streams=btcusdt@aggTrade/ethusdt@aggTrade/btcusdt@ticker/ethusdt@ticker',
@@ -173,6 +173,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
         }
       }
       paintAux();
+      paintMacro();
     }, DRAW_MS);
   }
   function addPoint(s, time, price) {
@@ -337,22 +338,22 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     for (const controller of s.controllers) controller.abort();
     s.lastRx=0;
   }
-  const rateState=id=>({id,rate:null,asOf:0,fetched:0,source:'',daily:false,pending:false,nextPoll:0,
+  const rateState=id=>({id,rate:null,asOf:0,fetched:0,source:'',daily:false,market:false,pending:false,nextPoll:0,
     restGap:60000,nextRestAt:0,controllers:new Set()});
   const fx=rateState('fx'), peg=rateState('peg'), rates=[fx,peg];
   const fxEl=document.getElementById('forex'), premiumEl=document.getElementById('premium');
   let lastPremium=null;
   const dayFormat=new Intl.DateTimeFormat('ko-KR',{month:'2-digit',day:'2-digit',timeZone:'Asia/Seoul'});
   const validRate=s=>validNumber(s.rate) && s.rate>0 && validNumber(s.asOf) && validNumber(s.fetched) && s.asOf>0 && s.asOf<=Date.now()+60000 &&
-    Date.now()-s.asOf<=(s.id==='fx' ? 96*3600000 : 300000) && Date.now()-s.fetched<=180000;
+    Date.now()-s.asOf<=(s.id==='fx' ? (s.market ? 180000 : 96*3600000) : 300000) && Date.now()-s.fetched<=180000;
   function restoreRates() {
     for (const s of rates) {
       try {
         const saved=JSON.parse(sessionStorage.getItem('btc-reference-v1-'+s.id));
         if (!saved || !validNumber(saved.fetched) || saved.fetched>Date.now() || Date.now()-saved.fetched>60000) continue;
-        const value={...s,rate:saved.rate,asOf:saved.asOf,fetched:saved.fetched,source:saved.source,daily:saved.daily};
-        if (!validRate(value) || !['은행 고시','ECB 일별','Coinbase'].includes(value.source)) continue;
-        Object.assign(s,{rate:value.rate,asOf:value.asOf,fetched:value.fetched,source:value.source,daily:value.daily===true});
+        const value={...s,rate:saved.rate,asOf:saved.asOf,fetched:saved.fetched,source:saved.source,daily:saved.daily,market:saved.market===true};
+        if (!validRate(value) || !['은행 고시','ECB 일별','Coinbase','Yahoo 시장'].includes(value.source)) continue;
+        Object.assign(s,{rate:value.rate,asOf:value.asOf,fetched:value.fetched,source:value.source,daily:value.daily===true,market:value.market});
         s.nextPoll=s.fetched+60000;
       } catch (_) { /* Optional session cache. */ }
     }
@@ -362,10 +363,11 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     if (!validRate(value)) throw new Error('Invalid or expired reference');
     // A delayed response must not replace a more recent observation.
     if (s.asOf>value.asOf && validRate(s)) return;
-    Object.assign(s,{rate:value.rate,asOf:value.asOf,fetched:value.fetched,source:value.source,daily:value.daily});
-    try {sessionStorage.setItem('btc-reference-v1-'+s.id,JSON.stringify({rate:s.rate,asOf:s.asOf,fetched:s.fetched,source:s.source,daily:s.daily}));} catch (_) {}
+    Object.assign(s,{rate:value.rate,asOf:value.asOf,fetched:value.fetched,source:value.source,daily:value.daily,market:value.market===true});
+    try {sessionStorage.setItem('btc-reference-v1-'+s.id,JSON.stringify({rate:s.rate,asOf:s.asOf,fetched:s.fetched,source:s.source,daily:s.daily,market:s.market}));} catch (_) {}
   }
   async function pollRate(s) {
+    if (s===fx && s.market && validRate(s) && Date.now()-s.asOf<15000) return;
     if (s.pending || disposed || document.hidden || Date.now()<Math.max(s.nextPoll,s.nextRestAt)) return;
     s.pending=true; s.nextPoll=Date.now()+60000;
     try {
@@ -375,13 +377,13 @@ LIVE_PRICES_HTML = r"""<!doctype html>
           const row=Array.isArray(rows) ? rows.find(r=>r.code==='FRX.KRWUSD' && r.currencyCode==='USD') : null;
           if (!row || !validNumber(row.basePrice) || (row.currencyUnit!==undefined && row.currencyUnit!==1)) throw new Error('Invalid USD/KRW');
           if (disposed || document.hidden) return;
-          saveRate(s,{rate:row.basePrice,asOf:Date.parse(row.date+'T'+row.time+'+09:00'),source:'은행 고시',daily:false});
+          saveRate(s,{rate:row.basePrice,asOf:Date.parse(row.date+'T'+row.time+'+09:00'),source:'은행 고시',daily:false,market:false});
         } catch (error) {
           if (disposed || document.hidden) return;
           const row=await json(s,'https://api.frankfurter.dev/v1/latest?base=USD&symbols=KRW');
           if (row.base!=='USD' || row.amount!==1) throw new Error('Wrong FX base');
           if (disposed || document.hidden) return;
-          saveRate(s,{rate:row.rates?.KRW,asOf:Date.parse(row.date+'T00:00:00Z'),source:'ECB 일별',daily:true});
+          saveRate(s,{rate:row.rates?.KRW,asOf:Date.parse(row.date+'T00:00:00Z'),source:'ECB 일별',daily:true,market:false});
         }
       } else {
         const row=await json(s,'https://api.exchange.coinbase.com/products/USDT-USD/ticker');
@@ -394,11 +396,12 @@ LIVE_PRICES_HTML = r"""<!doctype html>
   function pollRates() {for (const s of rates) pollRate(s);}
   function paintAux() {
     const fxReady=validRate(fx), pegReady=validRate(peg);
-    fxEl.className='market aux '+(fxReady ? 'reference' : 'stale');
+    fxEl.className='market aux '+(fxReady ? (fx.market && Date.now()-fx.asOf<15000 ? 'fresh' : 'reference') : 'stale');
+    fxEl.dataset.market=String(fx.market);
     if (fx.rate!==null) fxEl.querySelector('.price span').textContent=fx.rate.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
     fxEl.querySelector('.change').textContent='1 USD당 원화 · '+(fx.source || '고시 환율');
     fxEl.querySelector('.status span').textContent=fx.rate===null ? '환율 연결 대기' :
-      (fxReady ? '' : '갱신 지연 · ')+dayFormat.format(new Date(fx.asOf))+(fx.daily ? ' 기준' : ' '+clock(fx.asOf).slice(0,5)+' 고시');
+      (fxReady ? '' : '갱신 지연 · ')+dayFormat.format(new Date(fx.asOf))+(fx.daily ? ' 기준' : ' '+clock(fx.asOf)+(fx.market ? ' 시장 시세' : ' 고시'));
     const btc=states[0], domestic=states[2];
     const quotesReady=fresh(btc) && fresh(domestic) && Math.abs(btc.lastEvent-domestic.lastEvent)<=15000;
     const ready=quotesReady && fxReady && pegReady;
@@ -415,10 +418,153 @@ LIVE_PRICES_HTML = r"""<!doctype html>
       }
     } else premiumEl.querySelector('.price span').style.color='#8793a4';
     premiumEl.querySelector('.status span').textContent=ready ?
-      (fx.daily ? '일별 환율 기반 · ' : '고시환율 기반 · ')+clock(Math.min(btc.lastEvent,domestic.lastEvent)) :
+      (fx.market ? '시장환율 기반 · ' : fx.daily ? '일별 환율 기반 · ' : '고시환율 기반 · ')+clock(Math.min(btc.lastEvent,domestic.lastEvent)) :
       (lastPremium===null ? '' : '마지막 값 · ')+(!fxReady ? '환율 대기' : !pegReady ? 'USDT 환산 대기' : '시세 지연');
     premiumEl.title='(Upbit BTC/KRW ÷ (Binance BTC/USDT × USDT/USD × USD/KRW) − 1) × 100. 수수료 제외.';
   }
+
+  // Yahoo's public PricingData wire format (yfinance/pricing.proto). Decode
+  // only bounded strings, price, time and change; no remote JS/protobuf library.
+  function decodeMacro(raw) {
+    if (typeof raw!=='string' || raw.length>16384) throw new Error('Quote size');
+    const encoded=raw.startsWith('{') ? JSON.parse(raw).message : raw;
+    if (typeof encoded!=='string' || encoded.length>8192) throw new Error('Quote message');
+    const bytes=Uint8Array.from(atob(encoded),c=>c.charCodeAt(0)), view=new DataView(bytes.buffer);
+    let at=0;
+    const read=()=>{
+      let value=0, scale=1;
+      for (let i=0;i<10;i++) {
+        if (at>=bytes.length) throw new Error('Truncated quote');
+        const byte=bytes[at++]; value+=(byte&127)*scale;
+        if (!Number.isSafeInteger(value)) throw new Error('Quote integer');
+        if (!(byte&128)) return value;
+        scale*=128;
+      }
+      throw new Error('Quote varint');
+    };
+    const value={};
+    while (at<bytes.length) {
+      const tag=read(), field=Math.floor(tag/8), wire=tag%8;
+      if (!field) throw new Error('Quote field');
+      if (wire===0) {
+        const number=read();
+        if (field===3) value.time=number%2 ? -(number+1)/2 : number/2;
+      } else if (wire===2) {
+        const size=read();
+        if (at+size>bytes.length) throw new Error('Quote string');
+        if ([1,4,5].includes(field)) value[{1:'symbol',4:'currency',5:'exchange'}[field]]=new TextDecoder('utf-8',{fatal:true}).decode(bytes.subarray(at,at+size));
+        at+=size;
+      } else if (wire===5) {
+        if (at+4>bytes.length) throw new Error('Quote float');
+        const number=view.getFloat32(at,true); at+=4;
+        if (field===2) value.price=number;
+        if (field===8) value.change=number;
+      } else if (wire===1) {
+        if (at+8>bytes.length) throw new Error('Quote double');
+        at+=8;
+      } else throw new Error('Quote wire type');
+    }
+    return value;
+  }
+  const macroSymbols=['NQ=F','^TNX','KRW=X'];
+  const macros=Object.fromEntries(['nq','tnx'].map((id,i)=>[macroSymbols[i],{
+    id,price:null,asOf:0,received:0,stream:false,change:null,points:[],bucket:0,delay:-1,dirty:false
+  }]));
+  let macroSocket=null, macroRetry=null, macroRetries=0, macroOpened=0, macroRx=0, macroSubscribed=0;
+  let parentDoc=null;
+  try {parentDoc=window.parent.document;} catch (_) {}
+  function acceptMacro(value) {
+    if (!macroSymbols.includes(value.symbol) || !validNumber(value.price) || value.price<=0 ||
+        !Number.isSafeInteger(value.time) || value.time<=0 || value.time>Date.now()+5000 || Date.now()-value.time>7*86400000 ||
+        (value.symbol==='^TNX' && value.price>30) ||
+        (value.symbol==='KRW=X' && value.currency!=='KRW') ||
+        (value.symbol==='NQ=F' && value.currency && value.currency!=='USD')) return;
+    if (value.symbol==='KRW=X') {
+      if (value.time<fx.asOf || Date.now()-value.time>180000) return;
+      saveRate(fx,{rate:value.price,asOf:value.time,source:'Yahoo 시장',market:true,daily:false});
+    } else {
+      const s=macros[value.symbol];
+      if (value.time<s.asOf) return;
+      const bucket=Math.floor(value.time/60000);
+      if (bucket===s.bucket && s.points.length) s.points[s.points.length-1]=value.price;
+      else s.points.push(value.price);
+      Object.assign(s,{price:value.price,asOf:value.time,received:Date.now(),stream:true,
+        change:validNumber(value.change) ? value.change : null,bucket,dirty:true});
+      s.points=s.points.slice(-60);
+    }
+    macroRx=Date.now(); macroRetries=0; schedulePaint();
+  }
+  function paintMacro() {
+    if (!parentDoc) return;
+    for (const [symbol,s] of Object.entries(macros)) {
+      const el=parentDoc.getElementById('macro-'+s.id);
+      if (!el) continue;
+      const asOf=Number(el.dataset.asof), price=Number(el.dataset.price);
+      s.delay=Number(el.dataset.delay ?? -1);
+      // REST is a seed/fallback. An older response never displaces a stream.
+      if (el.dataset.symbol===symbol && validNumber(price) && price>0 && asOf>0 && asOf>s.asOf) {
+        Object.assign(s,{price,asOf,received:Number(el.dataset.fetched),stream:false});
+      }
+      if (s.points.length<2 && el.dataset.points) s.points=[...el.dataset.points.split(',').map(Number).filter(p=>validNumber(p)&&p>0),...s.points].slice(-60);
+      if (!s.stream || s.price===null) continue;
+      el.dataset.transport='ws';
+      el.querySelector('.btc-macro-value').textContent=s.price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+      const age=Math.max(0,Math.floor((Date.now()-s.asOf)/1000));
+      const status=Date.now()-s.received<15000 && macroSocket?.readyState===1 ? '스트림 수신' : '수신 지연 · 마지막 값';
+      el.querySelector('.btc-macro-status').textContent=status+' · 원자료 '+(age<60 ? age+'초' : Math.floor(age/60)+'분')+' 전 · '+clock(s.asOf)+' KST · '+(s.delay>=0 ? '제공 지연 '+s.delay+'분' : '제공 지연 미확인');
+      el.querySelector('.btc-macro-change').textContent=(s.id==='nq' ? 'pt · NQ 선물' : '% · 수익률 지표')+' · '+(s.change===null ? '변동률 자료 대기' : '24시간 '+(s.change>=0 ? '+' : '')+s.change.toFixed(2)+'%');
+      const graph=el.querySelector('.btc-macro-graph');
+      if (s.dirty || graph.dataset.asof!==String(s.asOf)) {
+        if (s.points.length>1) {
+          const low=Math.min(...s.points), high=Math.max(...s.points), span=high-low || Math.max(low*.001,.001);
+          const points=s.points.map((p,i)=>(i*240/(s.points.length-1)).toFixed(1)+','+(38-(p-low)/span*32).toFixed(1)).join(' ');
+          graph.innerHTML='<svg viewBox="0 0 240 42" role="img" aria-label="최근 표시 시세 그래프"><polyline points="'+points+'" fill="none" stroke="#3182f6" stroke-width="2" stroke-linejoin="round"/></svg>';
+        }
+        graph.dataset.asof=String(s.asOf); s.dirty=false;
+      }
+    }
+    const reference=parentDoc.getElementById('macro-fx-reference');
+    if (reference?.dataset.symbol==='KRW=X') {
+      const asOf=Number(reference.dataset.asof), fetched=Number(reference.dataset.fetched), rate=Number(reference.dataset.price);
+      if (asOf>fx.asOf && fetched<=Date.now()+5000 && Date.now()-fetched<15000 &&
+          validRate({...fx,rate,asOf,fetched,market:true})) {
+        saveRate(fx,{rate,asOf,source:'Yahoo 시장',market:true,daily:false});
+        paintAux();
+      }
+    }
+  }
+  function subscribeMacro() {
+    if (macroSocket?.readyState!==1) return;
+    try {macroSocket.send(JSON.stringify({subscribe:macroSymbols})); macroSubscribed=Date.now();}
+    catch (_) {macroSocket.close();}
+  }
+  function connectMacro() {
+    if (disposed || document.hidden || macroSocket) return;
+    let ws;
+    try {ws=new WebSocket('wss://streamer.finance.yahoo.com/?version=2');}
+    catch (_) {retryMacro(); return;}
+    macroSocket=ws; macroOpened=Date.now();
+    ws.onopen=subscribeMacro;
+    ws.onmessage=event=>{
+      if (disposed || document.hidden || macroSocket!==ws) return;
+      try {acceptMacro(decodeMacro(event.data));} catch (_) {}
+    };
+    ws.onerror=()=>ws.close();
+    ws.onclose=()=>{if (macroSocket!==ws) return; macroSocket=null; retryMacro(); schedulePaint();};
+  }
+  function retryMacro() {
+    if (disposed || document.hidden || macroRetry) return;
+    macroRetry=setTimeout(()=>{macroRetry=null;connectMacro();},Math.min(30000,1000*2**Math.min(macroRetries++,5)));
+  }
+  function stopMacro() {
+    clearTimeout(macroRetry); macroRetry=null;
+    const ws=macroSocket; macroSocket=null; if (ws) ws.close();
+  }
+  // Restore stream values promptly if a native quote fragment replaces its DOM.
+  const macroObserver=parentDoc ? new MutationObserver(records=>{
+    if (records.some(r=>[...r.addedNodes].some(n=>n.nodeType===1 && (n.matches?.('.btc-macro-grid,#macro-nq,#macro-tnx,#macro-fx-reference') || n.querySelector?.('.btc-macro-grid,#macro-nq,#macro-tnx,#macro-fx-reference'))))) schedulePaint();
+  }) : null;
+  if (parentDoc?.body) macroObserver?.observe(parentDoc.body,{childList:true,subtree:true});
 
   const heartbeat=setInterval(()=>{
     if (disposed || document.hidden) return;
@@ -427,6 +573,8 @@ LIVE_PRICES_HTML = r"""<!doctype html>
       if (s.history && !s.historyReady) history(s);
       poll(s);
     }
+    if (macroSocket && Date.now()-Math.max(macroOpened,macroRx)>120000) macroSocket.close();
+    if (Date.now()-macroSubscribed>15000) subscribeMacro();
     pollRates(); schedulePaint();
   },1000);
   document.addEventListener('visibilitychange',()=>{
@@ -435,20 +583,21 @@ LIVE_PRICES_HTML = r"""<!doctype html>
       else { history(s); connect(s); poll(s); }
     }
     if (document.hidden) {
+      stopMacro();
       rates.forEach(s=>s.controllers.forEach(c=>c.abort()));
       binanceRequest.controllers.forEach(c=>c.abort());
-    } else {pollRates();}
+    } else {connectMacro();pollRates();}
     schedulePaint();
   });
   const observer=new ResizeObserver(()=>{ for (const s of states) s.dirty=true; schedulePaint(); });
   observer.observe(document.body);
   window.addEventListener('pagehide',()=>{
     disposeChartTouch();
-    disposed=true; clearInterval(heartbeat); clearTimeout(paintTimer); observer.disconnect(); states.forEach(stop); rates.forEach(s=>s.controllers.forEach(c=>c.abort()));
+    disposed=true; stopMacro(); macroObserver?.disconnect(); clearInterval(heartbeat); clearTimeout(paintTimer); observer.disconnect(); states.forEach(stop); rates.forEach(s=>s.controllers.forEach(c=>c.abort()));
     binanceRequest.controllers.forEach(c=>c.abort());
   });
   for (const s of states) { restore(s); history(s); connect(s); poll(s); }
-  restoreRates(); pollRates(); schedulePaint();
+  restoreRates(); connectMacro(); pollRates(); schedulePaint();
 })();
 </script></body></html>"""
 

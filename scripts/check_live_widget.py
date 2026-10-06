@@ -30,9 +30,16 @@ def install_quote_transport(page):
     (() => {
       const Native = window.WebSocket;
       window.__quoteSockets = []; window.__subscriptions = [];
+      const nativeFetch=window.fetch;
+      window.__quoteFetches=[];
+      window.fetch=(...args)=>{
+        const url=typeof args[0]==='string' ? args[0] : args[0].url;
+        if (url.startsWith('https://data-api.binance.vision/')) window.__quoteFetches.push({url,time:Date.now()});
+        return nativeFetch(...args);
+      };
       window.WebSocket = class {
         constructor(url) {
-          if (!url.includes('data-stream.binance.vision') && !url.includes('api.upbit.com/websocket')) return new Native(url);
+          if (!url.includes('data-stream.binance.vision') && !url.includes('api.upbit.com/websocket') && !url.includes('streamer.finance.yahoo.com')) return new Native(url);
           this.url=url; this.readyState=0; window.__quoteSockets.push(this);
           setTimeout(()=>{this.readyState=1; this.onopen?.({});},0);
         }
@@ -171,6 +178,40 @@ def cleanup(page, widget):
     page.close()
 
 
+def send_macro(widget, symbol, price, now, *, currency="USD", change=1.25):
+    """Encode the provider's independent PricingData schema, including sint64 time."""
+    import base64
+    import struct
+
+    def varint(number):
+        output = bytearray()
+        while number >= 128:
+            output.append((number & 127) | 128)
+            number >>= 7
+        output.append(number)
+        return bytes(output)
+
+    def string(field, value):
+        encoded = value.encode()
+        return varint(field * 8 + 2) + varint(len(encoded)) + encoded
+
+    wire = (
+        string(1, symbol)
+        + bytes([2 * 8 + 5])
+        + struct.pack("<f", price)
+        + bytes([3 * 8])
+        + varint(now * 2 if now >= 0 else -now * 2 - 1)
+        + string(4, currency)
+        + bytes([8 * 8 + 5])
+        + struct.pack("<f", change)
+    )
+    packet = json.dumps({"message": base64.b64encode(wire).decode()})
+    widget.evaluate(
+        "p=>window.__quoteSockets.filter(s=>s.url.includes('streamer.finance.yahoo.com')).at(-1).emit(p,false)",
+        packet,
+    )
+
+
 def verify(browser, width, app_url=None, event_log=None):
     page = browser.new_page(viewport={"width": width, "height": 1000})
     page.clock.install()
@@ -192,10 +233,17 @@ def verify(browser, width, app_url=None, event_log=None):
     assert widget.locator("#upbit").count() == 0
     assert widget.locator(".market").count() == 4
     assert widget.locator("iframe").count() == 0
-    assert widget.evaluate("window.__quoteSockets.length") == 2
+    assert widget.evaluate("window.__quoteSockets.length") == 3
     assert widget.locator("#ethereum .price span").inner_text() == "3,000.25"
-    assert widget.locator("#forex .price span").inner_text() == "1,300.00"
-    assert widget.locator("#premium .price span").inner_text() == "+2.00"
+    fx = float(widget.locator("#forex .price span").inner_text().replace(",", ""))
+    assert fx in (1300.0, 1345.5)
+    assert (
+        abs(
+            float(widget.locator("#premium").get_attribute("data-value"))
+            - (135252000 / (100000 * 1.02 * fx) - 1) * 100
+        )
+        < 1e-10
+    )
     assert "실시간" not in widget.locator("#forex").inner_text()
     assert all(
         int(v) >= 59 for v in widget.locator("canvas").evaluate_all("els=>els.map(x=>x.dataset.samples)")
@@ -217,7 +265,7 @@ def verify(browser, width, app_url=None, event_log=None):
     assert (
         abs(
             float(widget.locator("#premium").get_attribute("data-value"))
-            - (135252000 / (101000 * 1.02 * 1300) - 1) * 100
+            - (135252000 / (101000 * 1.02 * fx) - 1) * 100
         )
         < 1e-10
     )
@@ -274,7 +322,14 @@ def verify(browser, width, app_url=None, event_log=None):
     )
     send(widget, "KRW-BTC", 132600000, now)
     page.clock.run_for(400)
-    assert widget.locator("#premium .price span").inner_text() == "+0.00"
+    fx = float(widget.locator("#forex .price span").inner_text().replace(",", ""))
+    assert (
+        abs(
+            float(widget.locator("#premium").get_attribute("data-value"))
+            - (132600000 / (100000 * 1.02 * fx) - 1) * 100
+        )
+        < 1e-10
+    )
     count = widget.evaluate("window.__quoteSockets.filter(s=>s.url.includes('btcusdt@')).length")
     widget.evaluate("window.__quoteSockets.filter(s=>s.url.includes('btcusdt@')).at(-1).close()")
     page.clock.run_for(1700)
@@ -297,7 +352,7 @@ def verify(browser, width, app_url=None, event_log=None):
         "Object.defineProperty(document,'hidden',{configurable:true,value:false});document.dispatchEvent(new Event('visibilitychange'))"
     )
     page.clock.run_for(400)
-    assert widget.evaluate("window.__quoteSockets.length") == count + 2
+    assert widget.evaluate("window.__quoteSockets.length") == count + 3
     assert not errors, errors
     cleanup(page, widget)
     return {

@@ -101,7 +101,7 @@ def verify(browser, width, url, event_log):
         assert any(char.isdigit() for char in plot.locator(".hoverlayer").text_content())
     inspect(page, cdp, page.locator(".js-plotly-plot:visible").first, event_log, "market")
     # A control still receives a touch after swiping on the chart.
-    page.get_by_text("상세", exact=True).tap()
+    page.get_by_role("radio", name="상세", exact=True).tap()
     page.get_by_text("표시할 봉 수", exact=True).wait_for()
     inspect(page, cdp, page.locator(".js-plotly-plot:visible").first, event_log, "detailed market")
     page.get_by_role("tab", name="미래 예측", exact=True).tap()
@@ -110,7 +110,7 @@ def verify(browser, width, url, event_log):
     plot.wait_for()
     inspect(page, cdp, plot, event_log, "forecast")
     page.screenshot(path=f"/tmp/btc-touch-forecast-{width}.png")
-    page.get_by_text("과거 비교", exact=True).tap()
+    page.get_by_role("radio", name="과거 비교", exact=True).tap()
     page.get_by_text("비슷했던 시기", exact=True).wait_for()
     plot = page.locator(".js-plotly-plot:visible").first
     for subplot in range(plot.locator(".nsewdrag").count()):
@@ -121,9 +121,11 @@ def verify(browser, width, url, event_log):
     for subplot in range(plot.locator(".nsewdrag").count()):
         inspect(page, cdp, plot, event_log, f"indicators {subplot + 1}", subplot)
     page.get_by_role("tab", name="미래 예측", exact=True).tap()
-    page.get_by_text("예측 경로", exact=True).tap()
+    # Target the actual button so Playwright waits for enabled state after the
+    # tab rerun; tapping a text child can be dropped while its button is disabled.
+    page.get_by_role("radio", name="예측 경로", exact=True).tap()
     page.get_by_text("함께 볼 과거 경로 · 유사도 순", exact=True).wait_for()
-    page.get_by_text("2위", exact=True).tap()
+    page.get_by_role("radio", name="2위", exact=True).tap()
     page.get_by_text("당시에는", exact=False).first.wait_for()
     removed = ("과거 예측 성적", "세부 유사도", "CSV", "다운로드")
     labels = page.locator(
@@ -154,5 +156,14 @@ if __name__ == "__main__":
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(executable_path="/usr/bin/chromium", args=["--no-sandbox"])
         for width in (390, 820, 1440):
-            print(json.dumps(verify(browser, width, args.app_url, args.event_log)), flush=True)
+            try:
+                print(json.dumps(verify(browser, width, args.app_url, args.event_log)), flush=True)
+            except Exception:
+                for context in browser.contexts:
+                    for page in context.pages:
+                        page.screenshot(path=f"/tmp/btc-touch-failure-{width}.png")
+                        Path(f"/tmp/btc-touch-failure-{width}.txt").write_text(
+                            page.locator("body").inner_text()
+                        )
+                raise
         browser.close()

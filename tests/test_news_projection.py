@@ -23,7 +23,7 @@ def article(result, title, hours=1):
     now = result.prediction.dates[0].to_pydatetime() + timedelta(hours=12)
     topic, direction, uncertainty, explanation, pending = classify_headline(title)
     return NewsItem(
-        title,
+        "Bitcoin market: " + title,
         "https://news.google.com/rss/articles/" + str(len(title)),
         "Example",
         now - timedelta(hours=hours),
@@ -71,13 +71,23 @@ def test_before_origin_future_old_and_stale_feed_cannot_adjust_forecast(result):
         assert actual.effects == () and actual.center == result.prediction.center
 
 
+def test_generic_macro_news_without_coin_connection_cannot_adjust_price(result):
+    generic = replace(article(result, "Fed cuts rates"), title="Fed cuts rates")
+    actual = projection(result, [generic])
+    assert actual.effects == () and actual.center == result.prediction.center
+
+
 def test_syndication_and_conflicting_same_topic_do_not_multiply_shocks(result):
     item = article(result, "Oil surges")
     single = projection(result, [item])
     many = projection(
         result,
         [
-            replace(item, title=f"Oil surges, report {i}", url=f"https://news.google.com/rss/articles/{i}")
+            replace(
+                item,
+                title=f"Bitcoin market: Oil surges, report {i}",
+                url=f"https://news.google.com/rss/articles/{i}",
+            )
             for i in range(20)
         ],
     )

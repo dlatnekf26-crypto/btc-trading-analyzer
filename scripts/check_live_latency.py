@@ -44,7 +44,7 @@ def verify(browser, source, width, archived):
     fixture = MarketFixture(page)
     page.route("http://widget.test/", lambda r: r.fulfill(body=source, content_type="text/html"))
     page.goto("http://widget.test/")
-    page.wait_for_timeout(100)
+    page.locator("#ethereum .price span").get_by_text("3,000.25", exact=True).wait_for()
     page.clock.run_for(1310)
     samples = []
     for i in range(9):
@@ -59,14 +59,14 @@ def verify(browser, source, width, archived):
         page.clock.run_for(300)
     result = {"width": width, "tick_to_dom_median_ms": statistics.median(samples), "samples_ms": samples}
     if not archived:
-        assert max(samples) <= 100
+        assert max(samples) <= 50
         # Trade packets arrive independently of the one-second ticker, and
         # retain the last valid 24-hour percentage rather than clearing it.
         emit(page, {"s": "BTCUSDT", "e": "aggTrade", "p": "102345.67", "E": page.evaluate("Date.now()")})
         page.clock.run_for(100)
         assert page.locator("#binance .price span").inner_text() == "102,345.67"
         assert "+2.34%" in page.locator("#binance .change").inner_text()
-        assert page.evaluate("window.__quoteSockets.length") == 2
+        assert page.evaluate("window.__quoteSockets.length") == 3
         urls = page.evaluate("window.__quoteSockets.map(s=>s.url)")
         assert sum("data-stream.binance.vision" in url for url in urls) == 1
         assert "ethusdt@aggTrade" in urls[0] and "btcusdt@aggTrade" in urls[0]
@@ -81,8 +81,11 @@ def verify(browser, source, width, archived):
         emit(page, {"s": "BTCUSDT", "e": "aggTrade", "p": "102346.67", "E": page.evaluate("Date.now()")})
         page.clock.run_for(100)
         assert page.locator("#binance .price span").inner_text() == "102,346.67"
-        calls = [t for url, t in fixture.requests if "/ticker/24hr?symbols=" in url]
-        assert calls and all(b - a >= 5000 for a, b in zip(calls, calls[1:]))
+        # Measure fetch dispatch, not asynchronous route-handler completion.
+        calls = page.evaluate(
+            "window.__quoteFetches.filter(r=>r.url.includes('/ticker/24hr?symbols=')).map(r=>r.time)"
+        )
+        assert calls and all(b - a >= 5000 for a, b in zip(calls, calls[1:])), calls
         assert not any("/ticker/24hr?symbol=" in url for url, _ in fixture.requests)
         result.update(trade_packet="passed", external_embeds=0, binance_connections=1)
     cleanup(page, page.main_frame)

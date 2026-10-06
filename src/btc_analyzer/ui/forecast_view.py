@@ -197,7 +197,7 @@ def prediction_spec(result, timezone, quote, show_range, analogue_index=0, news_
     return prediction_chart(result, timezone, quote, show_range, analogue_index, news_projection).to_dict()
 
 
-@st.fragment(run_every=60)
+@st.fragment(run_every=15)
 def render_prediction(
     result: ForecastReport,
     timezone: str,

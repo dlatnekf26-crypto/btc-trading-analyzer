@@ -16,15 +16,17 @@ import requests
 
 UTC = timezone.utc
 MAX_BYTES = 512_000
-NEWS_MAX_AGE = timedelta(hours=72)
-SYMBOLS = {"nq": "NQ=F", "tnx": "^TNX"}
+NEWS_MAX_AGE = timedelta(hours=24)
+QUOTE_REFRESH_SECONDS = 10
+NEWS_REFRESH_SECONDS = 60
+SYMBOLS = {"nq": "NQ=F", "tnx": "^TNX", "fx": "KRW=X"}
 TOPICS = {
     "oil": "유가",
     "geopolitics": "전쟁·지정학",
     "rates": "금리·연준",
     "inflation": "물가",
     "economy": "경제지표",
-    "crypto": "비트코인 수급",
+    "crypto": "코인 수급·규제",
 }
 
 
@@ -78,7 +80,9 @@ class MarketContext:
             ):
                 continue
             items.extend(
-                item for item in feed.value if timedelta(0) <= now - item.published_at <= NEWS_MAX_AGE
+                item
+                for item in feed.value
+                if timedelta(0) <= now - item.published_at <= NEWS_MAX_AGE and crypto_relevance(item.title)
             )
         return deduplicate_news(items)
 
@@ -102,6 +106,8 @@ def parse_quote(payload: dict, symbol: str, now: datetime) -> MacroQuote:
         raise ValueError("Unexpected instrument")
     if symbol == "NQ=F" and meta.get("instrumentType", "FUTURE") != "FUTURE":
         raise ValueError("Expected NQ futures")
+    if symbol == "KRW=X" and (meta.get("instrumentType") != "CURRENCY" or meta.get("currency") != "KRW"):
+        raise ValueError("Expected USD/KRW market quote")
     price = _finite_positive(meta["regularMarketPrice"])
     if symbol == "^TNX" and price > 30:
         raise ValueError("Unrecognized yield units")
@@ -131,6 +137,30 @@ def parse_quote(payload: dict, symbol: str, now: datetime) -> MacroQuote:
     return MacroQuote(symbol, price, as_of, now, tuple(points[-60:]), change, delay)
 
 
+def crypto_relevance(title: str) -> str | None:
+    """Require an explicit coin connection and a market event, not generic macro news."""
+    text = title.casefold()
+    coin = r"bitcoin|ethereum|cryptocurrenc\w*|\bcrypto\b|\bbtc\b|\beth\b|비트코인|이더리움|암호화폐|가상(?:자산|화폐)|코인"
+    if not re.search(coin, text):
+        return None
+    if re.search(
+        rf"(?:{coin}).{{0,12}}(?:무관|영향 없)|(?:unrelated to|no impact on).{{0,12}}(?:{coin})", text
+    ):
+        return None
+    if not re.search(
+        r"price|rall|surge|jump|drop|fall|crash|rise|rising|market|liquidat|inflow|outflow|\betf\b|\bsec\b|regulat|hack|exchange|adopt|supply|demand|reserve|rates?|\bfed\b|\bcpi\b|\bpce\b|inflation|payroll|\bgdp\b|oil|war|ceasefire|가격|시세|상승|하락|급등|급락|청산|수급|유입|유출|규제|해킹|거래소|매수|매도|금리|연준|물가|고용|유가|원유|전쟁|휴전|공습|미사일",
+        text,
+    ):
+        return None
+    if re.search(r"oil|crude|유가|원유", text):
+        return "유가·물가 부담과 코인 시장을 연결한 소식"
+    if re.search(r"\bfed\b|rates?|inflation|\bcpi\b|\bpce\b|연준|금리|물가|고용", text):
+        return "금리·경제지표와 코인 시장을 연결한 소식"
+    if re.search(r"war|ceasefire|전쟁|휴전|공습|미사일", text):
+        return "지정학 위험과 코인 시장을 연결한 소식"
+    return "코인 가격·수급·규제와 연결된 소식"
+
+
 def classify_headline(title: str):
     """Conservative title-only rules, not article verification or trained sentiment."""
     text = title.casefold()
@@ -144,7 +174,9 @@ def classify_headline(title: str):
         topic = "geopolitics"
     elif re.search(r"payroll|jobs report|unemployment|\bgdp\b|고용|실업|경제지표", text):
         topic = "economy"
-    elif re.search(r"bitcoin|\bbtc\b|비트코인|\betf\b", text):
+    elif re.search(
+        r"bitcoin|ethereum|\bbtc\b|\beth\b|\bcrypto\b|비트코인|이더리움|암호화폐|가상자산|\betf\b", text
+    ):
         topic = "crypto"
     else:
         return None
@@ -234,6 +266,8 @@ def parse_news(raw: bytes, now: datetime) -> tuple[NewsItem, ...]:
             # Syndicated source names must not change the headline classification.
             if title.endswith(" - " + source):
                 title = title[: -len(source) - 3]
+            if not crypto_relevance(title):
+                continue
             url = node.findtext("link") or ""
             parsed = urlsplit(url)
             if (
@@ -286,13 +320,13 @@ def _download(url: str) -> bytes:
 
 def fetch_feed(key: str, now: datetime):
     if key in SYMBOLS:
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(SYMBOLS[key], safe='')}?interval=5m&range=5d"
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(SYMBOLS[key], safe='')}?interval=1m&range=1d"
         return parse_quote(json.loads(_download(url)), SYMBOLS[key], now)
     language = "ko" if key == "news_ko" else "en-US"
     query = (
-        '(유가 OR 원유 OR 전쟁 OR 휴전 OR 연준 OR 금리 OR CPI OR PCE OR 고용 OR GDP OR "비트코인 ETF") when:2d'
+        "(비트코인 OR 이더리움 OR 암호화폐 OR 가상자산) (ETF OR 규제 OR 수급 OR 가격 OR 금리 OR CPI OR 유가 OR 전쟁) when:1d"
         if key == "news_ko"
-        else '(oil OR war OR ceasefire OR CPI OR PCE OR "Federal Reserve" OR payrolls OR GDP OR "bitcoin ETF") when:2d'
+        else "(bitcoin OR ethereum OR cryptocurrency OR crypto) (ETF OR regulation OR inflows OR price OR Fed OR CPI OR oil OR war) when:1d"
     )
     params = urlencode(
         {
@@ -335,7 +369,7 @@ class MarketContextService:
                 value = future.result()
                 self._states[key] = FeedState(key, value, now)
                 self._failures[key] = 0
-                delay = 300 if key.startswith("news") else 60
+                delay = NEWS_REFRESH_SECONDS if key.startswith("news") else QUOTE_REFRESH_SECONDS
             except Exception as exc:
                 self._failures[key] += 1
                 delay = min(1800, 60 * 2 ** min(self._failures[key] - 1, 5))
