@@ -276,7 +276,7 @@ def test_blocked_provider_does_not_block_fast_quotes_or_spawn_duplicate_requests
         release.set()
         snapshot = await_idle(service)
         assert snapshot.feed("tnx").value.price == 4.25
-        assert sorted(calls) == ["fx", "news_en", "news_ko", "nq", "oil", "tnx", "tyx"]
+        assert sorted(calls) == ["fear", "fx", "news_en", "news_ko", "nq", "oil", "tnx", "tyx"]
     finally:
         release.set()
         service.close()

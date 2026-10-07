@@ -87,6 +87,26 @@ def offline_context_data():
     def get(url, **kwargs):
         host = urlsplit(url).hostname
         now = datetime.now(timezone.utc)
+        if host == "api.alternative.me":
+            today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            body = {
+                "name": "Fear and Greed Index",
+                "metadata": {"error": None},
+                "data": [
+                    {
+                        "value": str(32 + i % 8),
+                        "value_classification": "Fear",
+                        "timestamp": str(int((today - timedelta(days=i)).timestamp())),
+                        **(
+                            {"time_until_update": str(int((today + timedelta(days=1) - now).total_seconds()))}
+                            if i == 0
+                            else {}
+                        ),
+                    }
+                    for i in range(30)
+                ],
+            }
+            return Response(json.dumps(body).encode())
         if host == "nfs.faireconomy.media":
             events = [
                 {

@@ -131,7 +131,9 @@ def dashboard() -> None:
                 quote_currency=quote_currency,
             )
             from btc_analyzer.ui.session_patterns import render_session_patterns
+            from btc_analyzer.ui.market_insights import render_market_insights
 
+            render_market_insights(bundle.get("1h"), cutoff)
             render_session_patterns(bundle.get("1h"), cutoff)
             with st.expander("종합 판단의 전체 근거"):
                 for reason in combined.reasons:

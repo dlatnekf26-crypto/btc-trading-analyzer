@@ -15,6 +15,7 @@ from xml.etree import ElementTree
 import requests
 
 from btc_analyzer.data.economic_calendar import EconomicEvent
+from btc_analyzer.data.sentiment import FEAR_API, FEAR_REFRESH_SECONDS, FearGreed, parse_fear_greed
 
 UTC = timezone.utc
 MAX_BYTES = 512_000
@@ -59,7 +60,7 @@ class NewsItem:
 @dataclass(frozen=True)
 class FeedState:
     key: str
-    value: MacroQuote | tuple[NewsItem, ...] | tuple[EconomicEvent, ...] | None = None
+    value: MacroQuote | FearGreed | tuple[NewsItem, ...] | tuple[EconomicEvent, ...] | None = None
     updated_at: datetime | None = None
     error: str = ""
     loading: bool = False
@@ -330,6 +331,8 @@ def _download(url: str) -> bytes:
 
 
 def fetch_feed(key: str, now: datetime):
+    if key == "fear":
+        return parse_fear_greed(json.loads(_download(FEAR_API)), now)
     if key in SYMBOLS:
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(SYMBOLS[key], safe='')}?interval=1m&range=1d"
         return parse_quote(json.loads(_download(url)), SYMBOLS[key], now)
@@ -366,7 +369,8 @@ class MarketContextService:
         self._lock = RLock()
         self._executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="market-context")
         self._states = {
-            key: FeedState(key) for key in (keys if keys is not None else (*SYMBOLS, "news_ko", "news_en"))
+            key: FeedState(key)
+            for key in (keys if keys is not None else (*SYMBOLS, "news_ko", "news_en", "fear"))
         }
         self._refresh_intervals = refresh_intervals or {}
         self._next = dict.fromkeys(self._states, datetime.min.replace(tzinfo=UTC))
@@ -392,6 +396,10 @@ class MarketContextService:
                 self._states[key] = FeedState(key, value, now)
                 self._failures[key] = 0
                 delay = NEWS_REFRESH_SECONDS if key.startswith("news") else QUOTE_REFRESH_SECONDS
+                if key == "fear":
+                    delay = FEAR_REFRESH_SECONDS
+                    if isinstance(value, FearGreed) and value.next_update is not None:
+                        delay = min(delay, max(60, (value.next_update - now).total_seconds()))
                 delay = self._refresh_intervals.get(key, delay)
             except Exception as exc:
                 self._failures[key] += 1
