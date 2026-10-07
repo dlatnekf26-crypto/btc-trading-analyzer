@@ -34,3 +34,25 @@ def direction_headline(outlook):
     if len(leaders) > 1:
         return "·".join(leaders) + " 공동 우세"
     return leaders[0] + (" 비중 우세 · 박빙" if outlook.margin < 0.1 else " 비중 우세")
+
+
+def direction_reason_card(explanation):
+    labels = {
+        "neutral": "확인 근거",
+        "support": "같은 방향",
+        "conflict": "엇갈리는 근거",
+        "caution": "주의 근거",
+    }
+    rows = []
+    for reason in explanation.reasons:
+        tone = reason.tone if reason.tone in labels else "neutral"
+        rows.append(
+            f'<div class="btc-direction-reason-row {tone}"><span>{escape(reason.label)}<small>{labels[tone]}</small></span><p>{escape(reason.text)}</p></div>'
+        )
+    return (
+        '<article class="btc-direction-reasons" aria-label="우세 방향 이유"><strong>'
+        + escape(explanation.title)
+        + "</strong>"
+        + "".join(rows)
+        + "<small>우세 선은 유사 사례 비중으로 선정해요. 현재 지표는 그 전망을 지지하거나 반대하는 참고 근거예요. 비중은 미래 확률이 아니에요.</small></article>"
+    )

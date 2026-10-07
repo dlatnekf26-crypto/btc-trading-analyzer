@@ -14,6 +14,7 @@ class DirectionScenario:
     cases: int
     center: tuple[float, ...]
     assumed: bool = False
+    similarity: float | None = None
 
 
 @dataclass(frozen=True)
@@ -58,7 +59,7 @@ def direction_outlook(result, projection=None):
     ) or not np.isclose(shown[0], report.anchor_price):
         return None
     shift = np.log(shown / base)
-    paths, weights = [], []
+    paths, weights, scores = [], [], []
     for match, weight in zip(report.matches, prediction.weights):
         path = np.asarray(match.path[report.window - 1 :], dtype=float)
         if (
@@ -75,9 +76,10 @@ def direction_outlook(result, projection=None):
             continue
         paths.append(np.log(path / 100) * np.clip(report.volatility / match.volatility, 0.5, 2) + shift)
         weights.append(weight)
+        scores.append(match.similarity)
     if len(paths) < 3:
         return None
-    paths, weights = np.asarray(paths), np.asarray(weights)
+    paths, weights, scores = np.asarray(paths), np.asarray(weights), np.asarray(scores)
     weights /= weights.sum()
     effective = float(1 / (weights @ weights))
     if effective < 2.5:
@@ -104,8 +106,17 @@ def direction_outlook(result, projection=None):
         cases, share = int(mask.sum()), float(weights[mask].sum())
         path = np.average(paths[mask], axis=0, weights=weights[mask]) if cases else assumption.copy()
         path[0] = 0
+        similarity = (
+            float(np.average(scores[mask], weights=weights[mask]))
+            if cases
+            and np.isfinite(scores[mask]).all()
+            and np.all((scores[mask] >= 0) & (scores[mask] <= 100))
+            else None
+        )
         scenarios.append(
-            DirectionScenario(key, label, share, cases, tuple(report.anchor_price * np.exp(path)), not cases)
+            DirectionScenario(
+                key, label, share, cases, tuple(report.anchor_price * np.exp(path)), not cases, similarity
+            )
         )
     ranked = sorted((scenario.share for scenario in scenarios), reverse=True)
     leaders = tuple(scenario.key for scenario in scenarios if abs(scenario.share - ranked[0]) < 1e-9)

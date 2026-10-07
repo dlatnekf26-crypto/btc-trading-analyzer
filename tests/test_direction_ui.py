@@ -34,6 +34,11 @@ def test_default_compares_three_directions_and_model_switch_keeps_original_forec
     cards = next(item.value for item in app.markdown if 'aria-label="상승 하락 보합 비교"' in item.value)
     assert cards.count("data-direction=") == 3
     assert any("미래 확률이 아니에요" in item.value for item in app.caption)
+    explanation = next(item.value for item in app.markdown if 'aria-label="우세 방향 이유"' in item.value)
+    assert all(
+        label in explanation for label in ("선정 근거", "닮은 정도", "현재 추세", "RSI 확인", "뉴스 가정")
+    )
+    assert any("선정 이유:" in item.value for item in app.markdown)
     assert not any(item.label == "함께 볼 과거 경로 · 유사도 순" for item in app.get("button_group"))
     control(app, "전망 그래프 보기").set_value("model")
     rerun(app)
@@ -47,6 +52,15 @@ def test_default_compares_three_directions_and_model_switch_keeps_original_forec
     control(app, "전망 그래프 보기").set_value("comparison")
     rerun(app)
     assert chart(app)["data"] == before["data"]
+    assert (
+        next(item.value for item in app.markdown if 'aria-label="우세 방향 이유"' in item.value)
+        == explanation
+    )
+    next(item for item in app.get("toggle") if item.label == "뉴스 영향 함께 반영").set_value(False)
+    rerun(app)
+    assert "뉴스 꺼짐" in next(
+        item.value for item in app.markdown if 'aria-label="우세 방향 이유"' in item.value
+    )
     assert not app.get("download_button")
 
 
@@ -59,6 +73,7 @@ def test_release_assumption_does_not_change_direction_ranking_or_branch_prices()
         rerun(app)
     base = chart(app)
     cards = next(item.value for item in app.markdown if 'aria-label="상승 하락 보합 비교"' in item.value)
+    explanation = next(item.value for item in app.markdown if 'aria-label="우세 방향 이유"' in item.value)
     control(app, "발표 결과를 가정해 보기").set_value("adverse")
     rerun(app)
     assert not app.exception and not app.error
@@ -67,6 +82,10 @@ def test_release_assumption_does_not_change_direction_ranking_or_branch_prices()
     assert adverse["data"][-1]["name"] == "발표 조건부 경로"
     assert (
         next(item.value for item in app.markdown if 'aria-label="상승 하락 보합 비교"' in item.value) == cards
+    )
+    assert (
+        next(item.value for item in app.markdown if 'aria-label="우세 방향 이유"' in item.value)
+        == explanation
     )
     control(app, "발표 결과를 가정해 보기").set_value("neutral")
     rerun(app)

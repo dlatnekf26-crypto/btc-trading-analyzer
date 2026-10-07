@@ -11,11 +11,12 @@ import streamlit as st
 from btc_analyzer.analysis.forecast import ForecastReport, MIN_CALIBRATION, forecast_dates
 from btc_analyzer.analysis.news_projection import project_news
 from btc_analyzer.analysis.direction_outlook import direction_outlook
+from btc_analyzer.analysis.direction_explanation import explain_direction
 from btc_analyzer.candles import candle_close
 from btc_analyzer.ui.charts import style_chart, READ_CHART_CONFIG
 from btc_analyzer.ui.market_context import current_context
 from btc_analyzer.data.market_context import UTC
-from btc_analyzer.ui.direction_view import COLORS, direction_cards, direction_headline
+from btc_analyzer.ui.direction_view import COLORS, direction_cards, direction_headline, direction_reason_card
 
 
 def analogue_path(report, index=0):
@@ -324,6 +325,7 @@ def render_prediction(
     use_news = st.toggle("뉴스 영향 함께 반영", value=True, key="forecast_use_news")
     active_news = news if use_news and news.effects else None
     outlook = direction_outlook(result, active_news)
+    explanation = explain_direction(result, outlook, context_values, active_news, use_news)
     summary_slot = st.empty()
     if outlook is not None:
         st.markdown(direction_cards(outlook, report.anchor_price, quote), unsafe_allow_html=True)
@@ -425,6 +427,7 @@ def render_prediction(
         (
             f'<div class="btc-forecast-cards btc-direction-summary" aria-label="예측 요약"><article>'
             f"<p>{escape(period)} 뒤 · {direction}</p><strong>{price_label}</strong><span>{note}</span>"
+            f"<span>선정 이유: {escape(explanation.selection) if explanation else '근거 확인 중'}</span>"
             f"<span>{range_label} {shown.lower[-1]:,.0f} ~ {shown.upper[-1]:,.0f} {escape(quote)} · {status}</span>"
             f"<span>방향별 경로는 미검증 · 비중은 확률이 아니에요</span></article></div>"
         )
@@ -494,6 +497,8 @@ def render_prediction(
             theme=None,
             config=READ_CHART_CONFIG,
         )
+        if comparison is not None and explanation is not None:
+            st.markdown(direction_reason_card(explanation), unsafe_allow_html=True)
         st.caption(
             "초록은 상승, 회색은 보합, 빨강은 하락 경로예요. 가장 우세한 비중을 굵게 표시하며 사례 없는 방향은 점선 가정이에요."
             if comparison

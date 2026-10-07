@@ -39,6 +39,13 @@ def verify(browser, width, url, event_log):
         and page.locator(".js-plotly-plot:visible").count() == 1
     )
     assert "가중 비중" in page.locator(".btc-direction-cards").inner_text()
+    reason = page.locator(".btc-direction-reasons")
+    reason.wait_for()
+    assert reason.count() == 1
+    assert all(
+        label in reason.inner_text()
+        for label in ("선정 근거", "닮은 정도", "현재 추세", "RSI 확인", "뉴스 가정")
+    )
     for horizon, label in (("1w", "1주"), ("1mo", "1개월"), ("3mo", "3개월"), ("6mo", "6개월")):
         page.get_by_role("radio", name=label, exact=True).tap()
         origin = pd.Timestamp.now(tz="UTC").normalize()
@@ -53,6 +60,11 @@ def verify(browser, width, url, event_log):
             arg=length,
         )
         data = traces(plot)
+        highest_share = max(trace["meta"]["share"] for trace in data[3:])
+        page.wait_for_function(
+            "value=>document.querySelector('.btc-direction-reasons')?.innerText.includes(value)",
+            arg=f"{highest_share:.1%}",
+        )
         for trace in data[3:]:
             assert len(trace["y"]) == length and trace["x"][-1].startswith(target.strftime("%Y-%m-%d"))
             assert trace["y"][0] == data[3]["y"][0]
@@ -66,12 +78,18 @@ def verify(browser, width, url, event_log):
     )
     page.locator(".btc-direction-cards").screenshot(path=f"/tmp/btc-direction-cards-{width}.png")
     plot.screenshot(path=f"/tmp/btc-direction-chart-{width}.png")
+    page.evaluate(
+        "document.querySelector('.btc-direction-reasons').scrollIntoView({block:'center',behavior:'instant'})"
+    )
+    reason.screenshot(path=f"/tmp/btc-direction-reasons-{width}.png")
+    original_reason = reason.inner_text()
     base = traces(plot)
     page.get_by_text("예상 변동 범위 함께 보기", exact=True).tap()
     page.wait_for_function(
         "()=>[...document.querySelectorAll('.js-plotly-plot')].some(p=>p.offsetParent!==null && p.data?.[0]?.visible===false)"
     )
     assert traces(plot) == base
+    assert reason.inner_text() == original_reason
     page.get_by_text("예상 변동 범위 함께 보기", exact=True).tap()
     page.get_by_role("radio", name="모델·과거 경로", exact=True).tap()
     page.wait_for_function(
@@ -89,8 +107,15 @@ def verify(browser, width, url, event_log):
         "()=>[...document.querySelectorAll('.js-plotly-plot')].some(p=>p.offsetParent!==null && p.data?.filter(t=>t.meta?.direction).length===3)"
     )
     assert traces(plot) == base
+    page.wait_for_function(
+        "expected=>document.querySelector('.btc-direction-reasons')?.innerText===expected",
+        arg=original_reason,
+    )
     page.get_by_text("뉴스 영향 함께 반영", exact=True).tap()
     page.wait_for_function("()=>!document.querySelector('.btc-news-scenario')")
+    page.wait_for_function(
+        "()=>document.querySelector('.btc-direction-reasons')?.innerText.includes('뉴스 꺼짐')"
+    )
     branch_prices = json.dumps([trace["y"] for trace in base[3:]], separators=(",", ":"))
     page.wait_for_function(
         "old=>[...document.querySelectorAll('.js-plotly-plot')].some(p=>p.offsetParent!==null && p.data?.filter(t=>t.meta?.direction).length===3 && JSON.stringify(p.data.filter(t=>t.meta?.direction).map(t=>t.y))!==old)",
@@ -104,6 +129,10 @@ def verify(browser, width, url, event_log):
         arg=branch_prices,
     )
     assert traces(plot) == base
+    page.wait_for_function(
+        "expected=>document.querySelector('.btc-direction-reasons')?.innerText===expected",
+        arg=original_reason,
+    )
     if baseline is not None:
         assert event_log.read_text() == baseline, "Direction controls re-entered parent analysis"
     assert crypto.evaluate("window.__quoteSockets.length") == sockets
@@ -117,6 +146,7 @@ def verify(browser, width, url, event_log):
         "model_and_news_preserved": "passed",
         "touch_scroll": "passed",
         "parent_analysis_checked": baseline is not None,
+        "selection_and_context_reasons": "passed",
     }
 
 

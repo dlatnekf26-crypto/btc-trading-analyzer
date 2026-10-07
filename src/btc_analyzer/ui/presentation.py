@@ -135,6 +135,12 @@ button:focus-visible { outline: 3px solid #3182f666; outline-offset: 3px; }
 .btc-direction-card small{display:block;font-size:11px;color:#66758b;margin-top:4px;overflow-wrap:anywhere}
 .btc-direction-weight{font-size:21px;font-weight:700;color:var(--direction);margin-top:14px}.btc-direction-weight span{font-size:10px;font-weight:400;color:#66758b;margin-left:6px}
 .btc-direction-track{height:4px;background:#edf1f7;border-radius:4px;margin:5px 0 8px;overflow:hidden}.btc-direction-track i{display:block;height:100%;background:var(--direction)}
+.btc-direction-reasons{background:#fff;border:1px solid #e7ecf3;border-radius:18px;padding:16px 18px;margin:10px 0 14px;overflow-wrap:anywhere}
+.btc-direction-reasons>strong{font-size:15px;color:#191f28;display:block;margin-bottom:9px}.btc-direction-reasons>small{font-size:11px;line-height:1.6;color:#75839a;display:block;margin-top:10px}
+.btc-direction-reason-row{display:grid;grid-template-columns:92px minmax(0,1fr);gap:12px;padding:8px 0;border-top:1px solid #f0f3f8}
+.btc-direction-reason-row>span{font-size:12px;font-weight:600;color:#53647b}.btc-direction-reason-row small{display:block;font-size:10px;font-weight:400;margin-top:4px;color:#75839a}
+.btc-direction-reason-row p{margin:0;font-size:12px;line-height:1.7;color:#53647b}.btc-direction-reason-row.support small{color:#087f5b}.btc-direction-reason-row.conflict small,.btc-direction-reason-row.caution small{color:#b46b13}
+@media(max-width:600px){.btc-direction-reasons{padding:13px 14px;border-radius:15px}.btc-direction-reason-row{grid-template-columns:72px minmax(0,1fr);gap:8px}}
 @media(max-width:600px){.btc-direction-cards{gap:6px}.btc-direction-card{padding:11px 8px;border-radius:13px}.btc-direction-card p{font-size:13px}.btc-direction-card strong{font-size:18px}.btc-direction-weight{font-size:18px}.btc-direction-weight span{display:block;margin-left:0}}
 .btc-replay-summary { border: 1px solid #f5dfb9; border-radius: 14px; background: #fff9ef; padding: 13px 16px; margin: 0 0 12px; }
 .btc-replay-summary strong { display: block; color: #8f570c; font-size: 15px; }
