@@ -34,7 +34,7 @@ def test_trend_is_not_sideways_and_small_hour_samples_are_withheld():
     result = session_patterns(data, CUTOFF)
     assert result["range"] is None
     assert not result["hours"]
-    assert "표본을 모으는 중" in pattern_cards(result)
+    assert "뚜렷한 반복 없음" in pattern_cards(result)
 
 
 def test_closed_grid_ohlc_gaps_duplicates_and_future_data():
@@ -67,7 +67,7 @@ def test_hour_open_in_kst_uses_intrabar_returns_not_gap_returns():
     assert by_hour[9]["down"] == 30
     assert by_hour[0]["flat"] == 30  # Midnight is not a fall from the preceding 23h candle.
     html = pattern_cards(result)
-    assert "23~00시 KST" in html and "09~10시 KST" in html
+    assert "23~00시 KST" not in html and "09~10시 KST" not in html
 
 
 def test_cache_changes_for_older_bar_revision_and_future_is_causal():
@@ -75,9 +75,18 @@ def test_cache_changes_for_older_bar_revision_and_future_is_causal():
     data = candles()
     first = cached_patterns(data, CUTOFF)
     changed = data.copy()
-    changed.iloc[0, changed.columns.get_loc("close")] = 100300
+    changed.iloc[0, changed.columns.get_loc("high")] = 1
     second = cached_patterns(changed, CUTOFF)
     assert first != second
     future = candles(1)
     future.index = pd.DatetimeIndex([CUTOFF + pd.Timedelta(hours=1)])
-    assert session_patterns(pd.concat([data, future]), CUTOFF) == first
+    assert session_patterns(pd.concat([data, future]), CUTOFF, include_hours=False) == first
+
+
+def test_web_skips_removed_hour_statistics_and_keeps_the_same_sideways_range():
+    original = session_patterns(candles(), CUTOFF)
+    web = cached_patterns(candles(), CUTOFF)
+    assert not web["hours"] and web["range"] == original["range"]
+    html = pattern_cards(original)
+    assert html.count('class="btc-pattern-card"') == 1
+    assert "빈도가 가장" not in html and "움직임이 가장" not in html

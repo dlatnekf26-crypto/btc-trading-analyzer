@@ -9,24 +9,12 @@ from btc_analyzer import __checkout_signature__
 from btc_analyzer.analysis.correction import correction_outlook, project_event, technical_evidence
 from btc_analyzer.candles import candle_boundary
 from btc_analyzer.data.economic_calendar import (
-    CALENDAR_REFRESH,
-    fetch_calendar,
     upcoming_events,
     release_condition,
 )
-from btc_analyzer.data.market_context import MarketContextService
 from btc_analyzer.indicators.core import indicators
 from btc_analyzer.ui.cache_keys import MARKET_HASH_FUNCS
-
-
-@st.cache_resource(show_spinner=False, max_entries=1, on_release=lambda service: service.close())
-def calendar_service(source_version):
-    return MarketContextService(
-        fetcher=fetch_calendar,
-        keys=("calendar",),
-        refresh_intervals={"calendar": CALENDAR_REFRESH},
-        workers=1,
-    )
+from btc_analyzer.ui.economic_releases import calendar_service
 
 
 @st.cache_data(ttl=3600, max_entries=24, show_spinner=False, hash_funcs=MARKET_HASH_FUNCS)

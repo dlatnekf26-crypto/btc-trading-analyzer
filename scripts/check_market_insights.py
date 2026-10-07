@@ -22,13 +22,22 @@ def verify(browser, width, url, event_log):
     fear.wait_for(timeout=45000)
     heatmap = page.locator(".btc-heatmap-card")
     heatmap.wait_for()
+    prompt = heatmap.locator(".btc-heatmap .btc-heatmap-prompt")
+    assert prompt.is_visible(), "Initial touch instructions missing from heatmap"
     page.wait_for_function("()=>document.querySelector('.js-plotly-plot')?.data?.length > 0")
-    assert "일별 갱신" in fear.inner_text() and "Alternative.me" in fear.inner_text()
-    assert page.locator(".btc-heatmap-cell").count() == 42
+    assert "자동 확인 · 일별 지수" in fear.inner_text() and "Alternative.me" in fear.inner_text()
+    assert page.locator(".btc-heatmap-cell").count() >= 120
     assert page.locator(".js-plotly-plot:visible").count() == page.locator("iframe").count() == 1, (
         page.locator(".js-plotly-plot:visible").count(),
         page.locator("iframe").count(),
     )
+    releases = page.locator('.btc-calendar-card[data-status="ready"]')
+    releases.wait_for()
+    assert "0.3%" in releases.inner_text() and "150K" in releases.inner_text()
+    assert "시장 예상" in releases.inner_text() and "이전 발표" in releases.inner_text()
+    assert page.locator(".btc-pattern-card").count() == 1
+    assert "자주 움직인 시간" not in page.locator('[data-testid="stMain"]').inner_text()
+    assert "1분마다 최신 값 확인" in fear.inner_text()
     plot = page.locator(".js-plotly-plot:visible").first
     original = plot.evaluate("e=>JSON.stringify(e.data)")
     crypto = next(frame for frame in page.frames if frame.locator("#binance").count())
@@ -46,19 +55,21 @@ def verify(browser, width, url, event_log):
         assert not label.locator(".btc-heatmap-detail").is_visible()
     activate = "tap" if width < 1000 else "click"
     getattr(label, activate)()
+    assert not prompt.is_visible(), "Instructions should yield to the selected cell detail"
     assert page.locator(".btc-heatmap-cell input:checked").count() == 1
     assert label.locator(".btc-heatmap-detail").is_visible()
-    assert "완결 구간" in label.locator(".btc-heatmap-detail").inner_text()
+    assert "역사적 평균" in label.locator(".btc-heatmap-detail").inner_text()
     assert plot.evaluate("e=>JSON.stringify(e.data)") == original
     # Native cell selection and daily-index updates do not re-enter Python analysis.
-    getattr(page.get_by_role("radio", name="최근 14일", exact=True), activate)()
-    page.wait_for_function("()=>document.querySelector('.btc-heatmap-card')?.innerText.includes('최근 14일')")
-    getattr(page.get_by_role("radio", name="최근 30일", exact=True), activate)()
-    page.wait_for_function("()=>document.querySelector('.btc-heatmap-card')?.innerText.includes('최근 30일')")
+    getattr(page.get_by_role("radio", name="최근 5년", exact=True), activate)()
+    page.wait_for_function("()=>document.querySelectorAll('.btc-heatmap-cell').length===72")
+    getattr(page.get_by_role("radio", name="전체 이력", exact=True), activate)()
+    page.wait_for_function("()=>document.querySelectorAll('.btc-heatmap-cell').length>=120")
     label = page.locator(".btc-heatmap-cell label").nth(8)
     getattr(label, activate)()
     heatmap.screenshot(path=f"/tmp/btc-insights-heatmap-{width}.png")
     fear.screenshot(path=f"/tmp/btc-insights-fear-{width}.png")
+    releases.screenshot(path=f"/tmp/btc-monthly-releases-{width}.png")
     assert page.evaluate("document.documentElement.scrollWidth<=innerWidth")
     label.scroll_into_view_if_needed()
     rect = label.bounding_box()
@@ -90,7 +101,9 @@ def verify(browser, width, url, event_log):
         "width": width,
         "native_touch_hover": "passed",
         "two_periods": "passed",
-        "daily_sentiment": "passed",
+        "latest_daily_sentiment": "passed",
+        "economic_consensus": "passed",
+        "only_sideways_card": "passed",
         "page_scroll_chart": "passed",
         "extra_iframes": 0,
         "parent_analysis_checked": baseline is not None,

@@ -34,28 +34,29 @@ def closed_hours(frame, cutoff):
     ]
 
 
-def session_patterns(frame, cutoff):
+def session_patterns(frame, cutoff, *, include_hours=True):
     data = closed_hours(frame, cutoff)
     result = {"hours": [], "range": None, "bars": len(data), "start": None, "end": None}
     if data.empty:
         return result
     result.update(start=data.index[0], end=data.index[-1] + HOUR)
-    returns = data.close / data.open - 1
-    kst_hours = data.index.tz_convert("Asia/Seoul").hour
-    for hour in range(24):
-        sample = returns.loc[kst_hours == hour]
-        if len(sample) < MIN_HOUR_SAMPLES:
-            continue
-        result["hours"].append(
-            {
-                "hour": hour,
-                "samples": len(sample),
-                "up": int((sample > NEUTRAL_RETURN).sum()),
-                "down": int((sample < -NEUTRAL_RETURN).sum()),
-                "flat": int((sample.abs() <= NEUTRAL_RETURN).sum()),
-                "median_move": float(sample.abs().median()),
-            }
-        )
+    if include_hours:
+        returns = data.close / data.open - 1
+        kst_hours = data.index.tz_convert("Asia/Seoul").hour
+        for hour in range(24):
+            sample = returns.loc[kst_hours == hour]
+            if len(sample) < MIN_HOUR_SAMPLES:
+                continue
+            result["hours"].append(
+                {
+                    "hour": hour,
+                    "samples": len(sample),
+                    "up": int((sample > NEUTRAL_RETURN).sum()),
+                    "down": int((sample < -NEUTRAL_RETURN).sum()),
+                    "flat": int((sample.abs() <= NEUTRAL_RETURN).sum()),
+                    "median_move": float(sample.abs().median()),
+                }
+            )
     cutoff = pd.Timestamp(cutoff).tz_convert("UTC").floor("h")
     recent = data.loc[data.index >= cutoff - pd.Timedelta(hours=72)]
     # Old quotes must not be described as the current market.

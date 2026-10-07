@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import re
 
 UTC = timezone.utc
-FEAR_REFRESH_SECONDS = 3600
+FEAR_REFRESH_SECONDS = 60
 FEAR_SOURCE = "https://alternative.me/crypto/fear-and-greed-index/"
 FEAR_API = "https://api.alternative.me/fng/?limit=30&format=json"
 LEVELS = {

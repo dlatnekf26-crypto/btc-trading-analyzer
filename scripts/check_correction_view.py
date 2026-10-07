@@ -3,6 +3,7 @@
 import argparse
 import json
 from pathlib import Path
+import time
 
 from playwright.sync_api import sync_playwright
 
@@ -11,7 +12,13 @@ from check_touch_charts import inspect
 
 
 def traces(plot):
-    return plot.evaluate("p=>p.data.map(t=>({name:t.name,x:t.x,y:t.y}))")
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        value = plot.evaluate("p=>p.data?.length ? p.data.map(t=>({name:t.name,x:t.x,y:t.y})) : null")
+        if value is not None:
+            return value
+        plot.page.wait_for_timeout(50)
+    raise AssertionError("Updated forecast chart did not finish drawing")
 
 
 def verify(browser, width, url, event_log):
@@ -22,6 +29,9 @@ def verify(browser, width, url, event_log):
     install_quote_transport(page)
     MarketFixture(page)
     page.goto(url)
+    # Complete the initial market render before requesting a different tab.
+    page.locator(".btc-pattern-card").wait_for(timeout=45000)
+    page.wait_for_function("()=>document.querySelector('.js-plotly-plot')?.data?.length > 0")
     page.get_by_role("tab", name="미래 예측", exact=True).tap(timeout=45000)
     page.locator(".btc-release-card").wait_for(timeout=25000)
     page.get_by_role("radio", name="예상 부합", exact=True).wait_for()

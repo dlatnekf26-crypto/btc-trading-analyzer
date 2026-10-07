@@ -128,9 +128,9 @@ def embedded(browser, width, url, event_log):
     install_quote_transport(page)
     FlatHistory(page)
     page.goto(url)
-    page.get_by_text("요즘 흐름과 자주 움직인 시간", exact=True).wait_for(timeout=45000)
+    page.get_by_text("최근 횡보 흐름", exact=True).wait_for(timeout=45000)
     page.locator("#btc-news-bridge a").first.wait_for(state="attached", timeout=15000)
-    assert page.locator(".btc-pattern-card").count() == 4
+    assert page.locator(".btc-pattern-card").count() == 1
     assert "KST" in page.locator(".btc-pattern-grid").inner_text()
     crypto = next(frame for frame in page.frames if frame.locator("#binance").count())
     crypto.locator('#binance[data-history="ready"]').wait_for()

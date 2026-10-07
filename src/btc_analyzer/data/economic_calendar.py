@@ -39,6 +39,8 @@ def event_kind(title):
         (r"fomc.*press conference", "연준 FOMC 기자회견", "rates"),
         (r"fomc.*minutes", "연준 FOMC 의사록", "rates"),
         (r"fomc", "연준 FOMC", "rates"),
+        (r"adp.*employment", "미국 ADP 민간고용", "jobs"),
+        (r"jolts.*job openings", "미국 JOLTS 구인", "jobs"),
         (r"non.?farm.*(?:employment|payroll)", "미국 비농업 고용", "jobs"),
         (r"unemployment rate", "미국 실업률", "jobs"),
         (r"average hourly earnings", "미국 시간당 임금", "jobs"),
@@ -46,6 +48,7 @@ def event_kind(title):
         (r"\bgdp\b", "미국 GDP", "growth"),
         (r"ism.*pmi", "미국 ISM 경기지표", "growth"),
         (r"retail sales", "미국 소매판매", "growth"),
+        (r"consumer (?:confidence|sentiment)", "미국 소비자심리", "growth"),
     ):
         if re.search(pattern, title):
             if "core" in title and topic == "inflation":
