@@ -42,6 +42,7 @@ def verify(browser, width, url, event_log):
     page.screenshot(path=f"/tmp/btc-news-markets-{width}.png")
     assert page.evaluate("document.documentElement.scrollWidth<=innerWidth")
     page.get_by_role("tab", name="미래 예측", exact=True).click()
+    page.get_by_role("radio", name="모델·과거 경로", exact=True).click()
     plot = page.get_by_role("tabpanel", name="미래 예측", exact=True).locator(".js-plotly-plot")
     plot.wait_for()
     page.wait_for_function(

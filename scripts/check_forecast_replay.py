@@ -24,6 +24,7 @@ def verify(browser, width, url, event_log):
     page.get_by_text("기간별 가격 전망", exact=True).wait_for()
     page.get_by_text("3개월", exact=True).click()
     page.get_by_text(re.compile("예측 도착일 ")).wait_for()
+    page.get_by_role("radio", name="모델·과거 경로", exact=True).click()
     panel = page.get_by_role("tabpanel", name="미래 예측", exact=True)
     plot = panel.locator(".js-plotly-plot")
     plot.wait_for()

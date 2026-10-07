@@ -10,10 +10,12 @@ import streamlit as st
 
 from btc_analyzer.analysis.forecast import ForecastReport, MIN_CALIBRATION, forecast_dates
 from btc_analyzer.analysis.news_projection import project_news
+from btc_analyzer.analysis.direction_outlook import direction_outlook
 from btc_analyzer.candles import candle_close
 from btc_analyzer.ui.charts import style_chart, READ_CHART_CONFIG
 from btc_analyzer.ui.market_context import current_context
 from btc_analyzer.data.market_context import UTC
+from btc_analyzer.ui.direction_view import COLORS, direction_cards, direction_headline
 
 
 def analogue_path(report, index=0):
@@ -32,6 +34,7 @@ def prediction_chart(
     correction=None,
     event=None,
     event_projection=None,
+    outlook=None,
 ):
     report, prediction = result.history, result.prediction
     if prediction is None:
@@ -151,6 +154,37 @@ def prediction_chart(
                 hovertemplate=f"%{{y:,.2f}} {escape(quote)}<extra>뉴스 가정 · 미검증</extra>",
             )
         )
+    if outlook is not None:
+        # Send only the displayed paths. The model view uses a separate cached
+        # spec, preserving its original values without hidden duplicate traces.
+        fig.data = tuple(
+            trace for trace in fig.data if trace.name in ("범위 상단", "예상 변동 범위", "확정 가격")
+        )
+        fig.data[1].showlegend = False
+        if news_projection is not None and news_projection.effects:
+            fig.data[0].y = np.round(news_projection.upper, 2).tolist()
+            fig.data[1].y = np.round(news_projection.lower, 2).tolist()
+        for scenario in outlook.scenarios:
+            leading = scenario.key in outlook.leaders
+            label = scenario.label + (
+                " 가정 · 사례 없음" if scenario.assumed else " · 우세" if leading else ""
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=future,
+                    y=np.round(scenario.center, 2).tolist(),
+                    mode="lines",
+                    name=label,
+                    line={
+                        "color": COLORS[scenario.key],
+                        "width": 3.5 if leading else 1.7,
+                        "dash": "dot" if scenario.assumed else "solid",
+                    },
+                    opacity=1 if leading else 0.7,
+                    meta={"direction": scenario.key, "assumed": scenario.assumed, "share": scenario.share},
+                    hovertemplate=f"%{{y:,.2f}} {escape(quote)}<extra>{label} · 가중 비중 {scenario.share:.0%}</extra>",
+                )
+            )
     fig.add_shape(
         type="line",
         x0=future[0],
@@ -169,14 +203,23 @@ def prediction_chart(
         xanchor="left",
         font={"size": 11, "color": "#66758b"},
     )
+    primary = (
+        next((scenario for scenario in outlook.scenarios if scenario.key in outlook.leaders), None)
+        if outlook and len(outlook.leaders) == 1
+        else None
+    )
     fig.add_annotation(
         x=future[-1],
-        y=prediction.center[-1],
-        text=f"예상 {prediction.center[-1]:,.0f}",
+        y=primary.center[-1] if primary else prediction.center[-1],
+        text=f"우세 {primary.label} · {primary.center[-1]:,.0f}"
+        if primary
+        else "방향 우열 없음"
+        if outlook
+        else f"예상 {prediction.center[-1]:,.0f}",
         showarrow=False,
         xanchor="right",
         yshift=18,
-        font={"size": 12, "color": "#3182f6"},
+        font={"size": 12, "color": COLORS[primary.key] if primary else "#3182f6"},
         bgcolor="rgba(255,255,255,0.85)",
     )
     style_chart(fig, height=440)
@@ -184,10 +227,10 @@ def prediction_chart(
         uirevision=f"forecast-{report.timeframe}-{report.window}-{report.forward}",
         margin={"t": 60, "l": 12, "r": 12},
         transition={"duration": 150},
-        legend={"y": 1.02, "yanchor": "bottom"},
+        legend={"y": 1.02, "yanchor": "bottom", "traceorder": "normal"},
     )
     fig.update_xaxes(
-        title=f"실제 가격 → 예상 경로 · {timezone}",
+        title=f"확정 가격 → {'세 방향 비교' if outlook else '예상 경로'} · {timezone}",
         tickformat="%m.%d<br>%H:%M" if report.timeframe in ("1h", "4h") else "%y.%m.%d",
         nticks=5,
     )
@@ -246,6 +289,7 @@ def prediction_spec(
     correction=None,
     event=None,
     event_projection=None,
+    outlook=None,
 ):
     return prediction_chart(
         result,
@@ -257,6 +301,7 @@ def prediction_spec(
         correction,
         event,
         event_projection,
+        outlook,
     ).to_dict()
 
 
@@ -278,6 +323,55 @@ def render_prediction(
     news = project_news(result, current_context(), now)
     use_news = st.toggle("뉴스 영향 함께 반영", value=True, key="forecast_use_news")
     active_news = news if use_news and news.effects else None
+    outlook = direction_outlook(result, active_news)
+    summary_slot = st.empty()
+    if outlook is not None:
+        st.markdown(direction_cards(outlook, report.anchor_price, quote), unsafe_allow_html=True)
+        st.caption(
+            f"보합 기준: 도착일의 기준 종가 대비 ±{outlook.threshold:.1%} · {outlook.cases}개 유사 사례를 현재 변동성에 맞춰 비교해요. 가중 비중은 미래 확률이 아니에요."
+        )
+        if outlook.margin < 0.1:
+            st.caption("방향별 비중 차이가 작아요. 가장 큰 비중을 강조하지만 한 방향으로 단정하지 않아요.")
+        st.caption(
+            "사례가 없는 방향은 점선 가정으로 비교하며 우세 방향 선정에서 제외해요. 방향별 경로의 예측 정확도는 아직 검증되지 않았어요."
+        )
+    mode = (
+        st.segmented_control(
+            "전망 그래프 보기",
+            ["comparison", "model"],
+            format_func=lambda value: "세 방향 비교" if value == "comparison" else "모델·과거 경로",
+            default="comparison",
+            key="forecast_direction_view",
+        )
+        or "comparison"
+    )
+    comparison = outlook if mode == "comparison" else None
+    show_range = st.toggle("예상 변동 범위 함께 보기", value=True, key="forecast_show_range")
+    if st.session_state.get("forecast_analogue", 0) not in range(len(report.matches)):
+        st.session_state["forecast_analogue"] = 0
+    selected = st.session_state.get("forecast_analogue", 0)
+    if mode == "model":
+        selected = (
+            st.segmented_control(
+                "함께 볼 과거 경로 · 유사도 순",
+                list(range(len(report.matches))),
+                format_func=lambda i: f"{i + 1}위",
+                default=0,
+                key="forecast_analogue",
+            )
+            or 0
+        )
+        match = report.matches[selected]
+        replay_price = analogue_path(report, selected)[-1]
+        st.markdown(
+            f'<div class="btc-replay-summary"><strong>당시에는 {match.forward_return:+.1%} 움직였어요</strong>'
+            f"<span>{match.start.tz_convert(timezone):%Y.%m.%d} ~ {match.end.tz_convert(timezone):%Y.%m.%d} · 유사도 {match.similarity:.0f}점</span>"
+            f"<span>같은 움직임이면 {replay_price:,.2f} {escape(quote)} · 주황색은 선택한 과거 사례의 재현이에요.</span></div>",
+            unsafe_allow_html=True,
+        )
+    target = prediction.dates[-1].tz_convert(timezone)
+    st.caption(f"예측 도착일 {target:%Y.%m.%d} · 기준 종가 {report.anchor_price:,.2f} {quote}에서 출발해요.")
+    chart_slot = st.container()
     from btc_analyzer.ui.correction_view import render_correction
 
     correction, event, release_projection = render_correction(
@@ -306,15 +400,44 @@ def render_prediction(
         )
     move = shown.center[-1] / report.anchor_price - 1
     direction = "상승 쪽" if move >= 0.005 else "하락 쪽" if move <= -0.005 else "횡보 쪽"
+    price_label = f"{shown.center[-1]:,.2f}"
+    range_label = (
+        "발표 조건부 범위"
+        if release_projection
+        else "뉴스 가정 포함 범위"
+        if active_news
+        else "예상 변동 범위"
+    )
+    note = f"{escape(quote)} · 기준 종가 대비 {move:+.1%}"
+    if comparison is not None:
+        direction, scope = direction_headline(comparison), "방향별 재현"
+        shown = active_news or prediction
+        range_label = "뉴스 가정 포함 범위" if active_news else "기술 모델 변동 범위"
+        leaders = [scenario for scenario in comparison.scenarios if scenario.key in comparison.leaders]
+        price_label = f"{leaders[0].center[-1]:,.2f}" if len(leaders) == 1 else "한 방향으로 좁히기 어려워요"
+        note = (
+            f"{escape(quote)} · 기준 종가 대비 {leaders[0].center[-1] / report.anchor_price - 1:+.1%}"
+            if len(leaders) == 1
+            else "세 카드의 도착 가격을 함께 비교해 주세요."
+        )
     status = f"{len(result.validation)}회 과거 검증" if result.mae is not None else "검증 자료 부족"
-    st.markdown(
-        f'<div class="btc-forecast-cards" aria-label="예측 요약">'
-        f"<article><p>{escape(period)} 뒤 {scope} · {direction}</p><strong>{shown.center[-1]:,.2f}</strong>"
-        f"<span>{escape(quote)} · 기준 종가 대비 {move:+.1%}</span></article>"
-        f"<article><p>{'발표 조건부 범위' if release_projection else '뉴스 가정 포함 범위' if active_news else '예상 변동 범위'}</p><strong>{shown.lower[-1]:,.0f} ~ {shown.upper[-1]:,.0f}</strong>"
-        f"<span>{escape(quote)} · 보장된 가격 범위가 아니에요</span></article>"
-        f"<article><p>기술 모델의 과거 검증</p><strong>{status}</strong>"
-        f"<span>{len(report.matches)}개 유사 사례 · 조정 시점·뉴스·발표 가정은 미검증</span></article></div>",
+    summary_slot.markdown(
+        (
+            f'<div class="btc-forecast-cards btc-direction-summary" aria-label="예측 요약"><article>'
+            f"<p>{escape(period)} 뒤 · {direction}</p><strong>{price_label}</strong><span>{note}</span>"
+            f"<span>{range_label} {shown.lower[-1]:,.0f} ~ {shown.upper[-1]:,.0f} {escape(quote)} · {status}</span>"
+            f"<span>방향별 경로는 미검증 · 비중은 확률이 아니에요</span></article></div>"
+        )
+        if comparison
+        else (
+            f'<div class="btc-forecast-cards" aria-label="예측 요약">'
+            f"<article><p>{escape(period)} 뒤 {scope} · {direction}</p><strong>{price_label}</strong>"
+            f"<span>{note}</span></article>"
+            f"<article><p>{range_label}</p><strong>{shown.lower[-1]:,.0f} ~ {shown.upper[-1]:,.0f}</strong>"
+            f"<span>{escape(quote)} · 보장된 가격 범위가 아니에요</span></article>"
+            f"<article><p>기술 모델의 과거 검증</p><strong>{status}</strong>"
+            f"<span>{len(report.matches)}개 유사 사례 · 방향별 경로·뉴스·발표 가정은 미검증</span></article></div>"
+        ),
         unsafe_allow_html=True,
     )
     if active_news:
@@ -352,51 +475,39 @@ def render_prediction(
         st.caption(
             f"과거 검증에서 가격 유지 가정보다 평균 오차가 {improvement:.0%} 작았습니다. 미래 성능을 보장하지 않습니다."
         )
-    target = prediction.dates[-1].tz_convert(timezone)
-    st.caption(f"예측 도착일 {target:%Y.%m.%d} · 기준 종가 {report.anchor_price:,.2f} {quote}에서 출발해요.")
-    show_range = st.toggle("예상 변동 범위 함께 보기", value=True, key="forecast_show_range")
-    if st.session_state.get("forecast_analogue", 0) not in range(len(report.matches)):
-        st.session_state["forecast_analogue"] = 0
-    selected = (
-        st.segmented_control(
-            "함께 볼 과거 경로 · 유사도 순",
-            list(range(len(report.matches))),
-            format_func=lambda i: f"{i + 1}위",
-            default=0,
-            key="forecast_analogue",
+    with chart_slot:
+        st.plotly_chart(
+            prediction_spec(
+                result,
+                timezone,
+                quote,
+                show_range,
+                selected if mode == "model" else None,
+                active_news,
+                correction,
+                event,
+                release_projection,
+                comparison,
+            ),
+            width="stretch",
+            key="future_price_chart",
+            theme=None,
+            config=READ_CHART_CONFIG,
         )
-        or 0
-    )
-    match = report.matches[selected]
-    replay_price = analogue_path(report, selected)[-1]
-    st.markdown(
-        f'<div class="btc-replay-summary"><strong>당시에는 {match.forward_return:+.1%} 움직였어요</strong>'
-        f"<span>{match.start.tz_convert(timezone):%Y.%m.%d} ~ {match.end.tz_convert(timezone):%Y.%m.%d} · 유사도 {match.similarity:.0f}점</span>"
-        f"<span>같은 움직임이면 {replay_price:,.2f} {escape(quote)} · 주황색은 선택한 과거 사례의 재현이에요.</span></div>",
-        unsafe_allow_html=True,
-    )
-    st.plotly_chart(
-        prediction_spec(
-            result, timezone, quote, show_range, selected, active_news, correction, event, release_projection
-        ),
-        width="stretch",
-        key="future_price_chart",
-        theme=None,
-        config=READ_CHART_CONFIG,
-    )
-    st.caption(
-        "회색은 확정 가격, 파란 점선은 여러 사례를 종합한 모델 예상, 주황색은 한 과거 사례의 실제 움직임을 현재 가격에 맞춘 경로예요. 옅은 영역은 예상 변동 범위입니다."
-    )
-    if active_news:
         st.caption(
-            "보라색은 최근 뉴스가 영향을 준다는 가정의 가격 경로예요. 보라색 범위는 추가 불확실성이며 특정 확률이나 뉴스 정확도를 뜻하지 않습니다."
+            "초록은 상승, 회색은 보합, 빨강은 하락 경로예요. 가장 우세한 비중을 굵게 표시하며 사례 없는 방향은 점선 가정이에요."
+            if comparison
+            else "회색은 확정 가격, 파란 점선은 모델 예상, 주황색은 선택한 과거 사례의 실제 움직임을 현재 가격에 맞춘 경로예요."
         )
-    st.caption(
-        "옅은 주황 세로 구간은 과거 조정 시점의 중간 50%, 갈색 점선은 선택한 발표 시각이에요. 분홍 점선이 있으면 선택한 발표 결과 가정의 조건부 경로예요. 조정 날짜나 발표 결과를 확정하는 뜻은 아닙니다."
-    )
-    st.caption(
-        "상승·하락 사례가 섞이면 평균 예상은 평평해질 수 있어요. 주황색 경로는 움직임을 줄이지 않은 과거 재현이며, 같은 미래가 온다는 뜻은 아닙니다."
-    )
+        if active_news:
+            st.caption(
+                "현재 뉴스의 제한된 가격 가정을 방향별 경로에도 반영했어요."
+                if comparison
+                else "보라색은 최근 뉴스의 조건부 가격 시나리오예요."
+            )
+        st.caption(
+            "옅은 영역은 변동 범위, 주황 세로 구간은 과거 조정 시점, 갈색 선은 발표 시각이에요. 분홍 점선은 발표 결과의 별도 가정이며 방향 비중을 바꾸지 않아요."
+        )
     st.caption(
         f"기준 종가 {report.anchor_price:,.2f} {quote} · {report.query_end.tz_convert(timezone):%Y.%m.%d %H:%M} · {timezone}"
     )

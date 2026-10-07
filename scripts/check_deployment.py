@@ -51,7 +51,7 @@ def main() -> None:
         assert not app.exception and not app.error
         assert any('aria-label="예측 요약"' in item.value for item in app.markdown)
         assert not app.get("dataframe") and not app.get("download_button")
-        assert any("모델 예상" in item.value for item in app.caption)
+        assert any("예측 도착일" in item.value for item in app.caption)
         next(item for item in app.get("button_group") if item.label == "분석 보기").set_value("과거 비교")
         app.session_state["dashboard_tab"] = "미래 예측"
         app.run(timeout=45)
@@ -65,6 +65,11 @@ def main() -> None:
         assert not app.exception and not app.error
         target = pd.Timestamp.now(tz="UTC").normalize() + pd.DateOffset(months=3)
         assert any(f"예측 도착일 {target:%Y.%m.%d}" in item.value for item in app.caption)
+        assert any('aria-label="상승 하락 보합 비교"' in item.value for item in app.markdown)
+        next(item for item in app.get("button_group") if item.label == "전망 그래프 보기").set_value("model")
+        app.session_state["dashboard_tab"] = "미래 예측"
+        app.run(timeout=45)
+        assert not app.exception and not app.error
         assert any(item.label == "함께 볼 과거 경로 · 유사도 순" for item in app.get("button_group"))
         assert any("주황색" in item.value for item in app.caption)
         app.session_state["dashboard_tab"] = "시장 개요"

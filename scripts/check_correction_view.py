@@ -29,6 +29,10 @@ def verify(browser, width, url, event_log):
     assert "0.2%" in page.locator(".btc-release-card").inner_text()
     assert page.locator(".btc-correction-cards article").count() == 3
     assert page.get_by_text("현재 지표", exact=False).count()
+    page.get_by_role("radio", name="모델·과거 경로", exact=True).tap()
+    page.wait_for_function(
+        "()=>[...document.querySelectorAll('.js-plotly-plot')].some(p=>p.offsetParent!==null && p.data?.some(t=>t.name==='뉴스 반영 시나리오'))"
+    )
     plot = page.locator(".js-plotly-plot:visible").first
     plot.wait_for()
     base = traces(plot)

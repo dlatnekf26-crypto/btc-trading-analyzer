@@ -124,6 +124,18 @@ button:focus-visible { outline: 3px solid #3182f666; outline-offset: 3px; }
 :is(.btc-forecast-cards,.btc-correction-cards) p { margin: 0 0 8px; color: #66758b; font-size: 12px; }
 :is(.btc-forecast-cards,.btc-correction-cards) strong { display: block; font-size: clamp(19px, 2vw, 26px); letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
 :is(.btc-forecast-cards,.btc-correction-cards) span { display: block; margin-top: 8px; color: #66758b; font-size: 11px; }
+.btc-direction-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}
+.btc-forecast-cards.btc-direction-summary{grid-template-columns:1fr;margin-bottom:10px}.btc-direction-summary article{padding:14px 18px}.btc-direction-summary span{margin-top:4px}
+.btc-direction-card{min-width:0;padding:16px;border:1px solid #e7ecf3;border-radius:18px;background:#fff;--direction:#64748b}
+.btc-direction-card.up{--direction:#079b72}.btc-direction-card.down{--direction:#dc5267}
+.btc-direction-card.leading{border-color:var(--direction);box-shadow:0 3px 14px #17233a08;background:linear-gradient(145deg,#fff,#f5f9fc)}
+.btc-direction-card p{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:5px;margin:0 0 9px;color:var(--direction)}
+.btc-direction-card p span{font-size:10px;background:#f0f4f8;padding:3px 5px;border-radius:6px}
+.btc-direction-card strong{display:block;font-size:clamp(18px,2.2vw,28px);letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.btc-direction-card small{display:block;font-size:11px;color:#66758b;margin-top:4px;overflow-wrap:anywhere}
+.btc-direction-weight{font-size:21px;font-weight:700;color:var(--direction);margin-top:14px}.btc-direction-weight span{font-size:10px;font-weight:400;color:#66758b;margin-left:6px}
+.btc-direction-track{height:4px;background:#edf1f7;border-radius:4px;margin:5px 0 8px;overflow:hidden}.btc-direction-track i{display:block;height:100%;background:var(--direction)}
+@media(max-width:600px){.btc-direction-cards{gap:6px}.btc-direction-card{padding:11px 8px;border-radius:13px}.btc-direction-card p{font-size:13px}.btc-direction-card strong{font-size:18px}.btc-direction-weight{font-size:18px}.btc-direction-weight span{display:block;margin-left:0}}
 .btc-replay-summary { border: 1px solid #f5dfb9; border-radius: 14px; background: #fff9ef; padding: 13px 16px; margin: 0 0 12px; }
 .btc-replay-summary strong { display: block; color: #8f570c; font-size: 15px; }
 .btc-replay-summary span { display: block; color: #746653; margin-top: 5px; font-size: 12px; }

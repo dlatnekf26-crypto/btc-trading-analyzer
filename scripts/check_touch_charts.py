@@ -148,6 +148,7 @@ def verify(browser, width, url, event_log):
     # Target the actual button so Playwright waits for enabled state after the
     # tab rerun; tapping a text child can be dropped while its button is disabled.
     page.get_by_role("radio", name="예측 경로", exact=True).tap()
+    page.get_by_role("radio", name="모델·과거 경로", exact=True).tap()
     page.get_by_text("함께 볼 과거 경로 · 유사도 순", exact=True).wait_for()
     page.get_by_role("radio", name="2위", exact=True).tap()
     page.get_by_text("당시에는", exact=False).first.wait_for()
