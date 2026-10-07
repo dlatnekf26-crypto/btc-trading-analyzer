@@ -12,6 +12,7 @@ from btc_analyzer.analysis.forecast import ForecastReport, MIN_CALIBRATION, fore
 from btc_analyzer.analysis.news_projection import project_news
 from btc_analyzer.analysis.direction_outlook import direction_outlook
 from btc_analyzer.analysis.direction_explanation import explain_direction
+from btc_analyzer.analysis.price_explanation import explain_price
 from btc_analyzer.candles import candle_close
 from btc_analyzer.ui.charts import style_chart, READ_CHART_CONFIG
 from btc_analyzer.ui.market_context import current_context
@@ -387,6 +388,9 @@ def render_prediction(
         quote,
     )
     shown = release_projection or active_news or prediction
+    price_explanation = explain_price(
+        result, shown, period, quote, comparison, explanation if comparison is not None else None
+    )
     scope = (
         "발표 조건부 예상"
         if release_projection
@@ -497,8 +501,13 @@ def render_prediction(
             theme=None,
             config=READ_CHART_CONFIG,
         )
-        if comparison is not None and explanation is not None:
-            st.markdown(direction_reason_card(explanation), unsafe_allow_html=True)
+        if price_explanation is not None:
+            st.markdown(
+                direction_reason_card(
+                    price_explanation, price=result.technical is not None, comparison=comparison is not None
+                ),
+                unsafe_allow_html=True,
+            )
         st.caption(
             "초록은 상승, 회색은 보합, 빨강은 하락 경로예요. 가장 우세한 비중을 굵게 표시하며 사례 없는 방향은 점선 가정이에요."
             if comparison

@@ -39,10 +39,16 @@ def test_default_compares_three_directions_and_model_switch_keeps_original_forec
         label in explanation for label in ("선정 근거", "닮은 정도", "현재 추세", "RSI 확인", "뉴스 가정")
     )
     assert any("선정 이유:" in item.value for item in app.markdown)
+    assert 'data-price-reasons="true"' in explanation
+    assert all(label in explanation for label in ("가격 계산", "지표 반영", "변동성", "거래량", "일목"))
     assert not any(item.label == "함께 볼 과거 경로 · 유사도 순" for item in app.get("button_group"))
     control(app, "전망 그래프 보기").set_value("model")
     rerun(app)
     model = chart(app)
+    assert any(
+        'aria-label="예상 가격 산출 근거"' in item.value and 'data-price-reasons="true"' in item.value
+        for item in app.markdown
+    )
     assert model["data"][3]["name"] == "예상 중심 경로" and model["data"][4]["name"] == "과거 사례 재현"
     control(app, "함께 볼 과거 경로 · 유사도 순").set_value(1)
     rerun(app)

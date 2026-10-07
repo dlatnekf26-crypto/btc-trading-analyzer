@@ -44,8 +44,20 @@ def verify(browser, width, url, event_log):
     assert reason.count() == 1
     assert all(
         label in reason.inner_text()
-        for label in ("선정 근거", "닮은 정도", "현재 추세", "RSI 확인", "뉴스 가정")
+        for label in (
+            "가격 계산",
+            "지표 반영",
+            "선정 근거",
+            "닮은 정도",
+            "현재 추세",
+            "RSI 확인",
+            "변동성",
+            "거래량",
+            "일목",
+            "뉴스 가정",
+        )
     )
+    assert reason.get_attribute("data-price-reasons") == "true"
     for horizon, label in (("1w", "1주"), ("1mo", "1개월"), ("3mo", "3개월"), ("6mo", "6개월")):
         page.get_by_role("radio", name=label, exact=True).tap()
         origin = pd.Timestamp.now(tz="UTC").normalize()
@@ -60,6 +72,12 @@ def verify(browser, width, url, event_log):
             arg=length,
         )
         data = traces(plot)
+        leaders = [trace for trace in data[3:] if "우세" in trace["name"]]
+        if len(leaders) == 1:
+            page.wait_for_function(
+                "value=>document.querySelector('.btc-direction-reasons')?.innerText.includes(value)",
+                arg=f"{leaders[0]['y'][-1]:,.2f}",
+            )
         highest_share = max(trace["meta"]["share"] for trace in data[3:])
         page.wait_for_function(
             "value=>document.querySelector('.btc-direction-reasons')?.innerText.includes(value)",

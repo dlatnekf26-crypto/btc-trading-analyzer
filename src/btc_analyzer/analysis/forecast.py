@@ -6,11 +6,12 @@ import numpy as np
 import pandas as pd
 
 from btc_analyzer.analysis.historical_similarity import SimilarityReport, prepare_history
+from btc_analyzer.analysis.technical_matching import IndicatorFamily
 from btc_analyzer.candles import candle_close
 from btc_analyzer.config import TIMEFRAMES
 from btc_analyzer.data.base_provider import utc
 
-MODEL_VERSION = "analogue-v2-context"
+MODEL_VERSION = "analogue-v3-technical-gate"
 MIN_MATCHES = 3
 MIN_CALIBRATION = 12
 MAX_VALIDATION = 24
@@ -80,6 +81,21 @@ class ValidationCase:
 
 
 @dataclass(frozen=True)
+class TechnicalEvaluation:
+    selected: bool
+    reason: str
+    pairs: int
+    pattern_mae: float | None
+    technical_mae: float | None
+    baseline_history: SimilarityReport
+    baseline_prediction: PriceForecast
+    candidate_price: float | None
+    groups: tuple[IndicatorFamily, ...]
+    current_values: tuple[tuple[str, float | None], ...]
+    past_values: tuple[tuple[tuple[str, float | None], ...], ...]
+
+
+@dataclass(frozen=True)
 class ForecastReport:
     history: SimilarityReport
     prediction: PriceForecast | None
@@ -94,6 +110,7 @@ class ForecastReport:
     pattern_mae: float | None = None
     context_mae: float | None = None
     context_values: tuple[float | None, ...] = ()
+    technical: TechnicalEvaluation | None = None
 
 
 def context_evidence(paired_errors):
@@ -149,12 +166,15 @@ def forecast_path(report: SimilarityReport, errors=(), *, include_dates=True) ->
 
 
 def predict_history(
-    raw, timeframe, as_of, window=30, forward=30, *, min_similarity=60, use_context=False
+    raw, timeframe, as_of, window=30, forward=30, *, min_similarity=60, use_context=False, use_technical=False
 ) -> ForecastReport:
-    # Context ranking is an explicit research candidate: observed walk-forward
-    # errors did not improve across all horizons. Production keeps pattern weights.
+    # Indicator candidates are selected only from already completed paired errors.
+    # The original three-descriptor research mode remains reproducible separately.
+    if use_context and use_technical:
+        raise ValueError("추가 지표 후보는 한 방식씩 검증해야 합니다.")
     prepared = prepare_history(raw, timeframe, as_of, window, forward, min_similarity=min_similarity)
     current = prepared.compare(forward, min_similarity=min_similarity)
+    baseline_history = current
     first = forecast_path(current, include_dates=False)
     if first is None:
         return ForecastReport(
@@ -182,13 +202,19 @@ def predict_history(
         if pattern is None:
             continue
         contextual = (
-            prepared.compare(forward, query_end=origin, min_similarity=min_similarity, use_context=True)
-            if use_context
+            prepared.compare(
+                forward,
+                query_end=origin,
+                min_similarity=min_similarity,
+                use_context=use_context,
+                use_technical=use_technical,
+            )
+            if use_context or use_technical
             else None
         )
         context = (
             forecast_path(contextual, errors, include_dates=False)
-            if contextual is not None and contextual.context_used
+            if contextual is not None and (contextual.context_used or contextual.technical_used)
             else None
         )
         # Decide before observing this outcome. Both candidates use identical
@@ -206,7 +232,7 @@ def predict_history(
                 float(prediction.lower[-1] / historical.anchor_price - 1),
                 float(prediction.upper[-1] / historical.anchor_price - 1),
                 prediction.calibrated_cases,
-                "context" if selected_context else "pattern",
+                ("technical" if use_technical else "context") if selected_context else "pattern",
             )
         )
         # Add this outcome only AFTER forecasting this origin. At the next
@@ -220,10 +246,15 @@ def predict_history(
                 )
             )
     enabled, pattern_mae, context_mae = context_evidence(paired_errors)
-    if use_context and enabled:
-        contextual = prepared.compare(forward, min_similarity=min_similarity, use_context=True)
-        if contextual.context_used and forecast_path(contextual, include_dates=False) is not None:
-            current = contextual
+    candidate = contextual = None
+    if use_context or use_technical:
+        contextual = prepared.compare(
+            forward, min_similarity=min_similarity, use_context=use_context, use_technical=use_technical
+        )
+        if contextual.context_used or contextual.technical_used:
+            candidate = forecast_path(contextual, errors, include_dates=False)
+            if enabled and candidate is not None:
+                current = contextual
     prediction = forecast_path(current, errors)
     mae = float(np.mean([abs(c.predicted_return - c.actual_return) for c in cases])) if cases else None
     baseline = float(np.mean([abs(c.actual_return) for c in cases])) if cases else None
@@ -248,6 +279,34 @@ def predict_history(
         else None
     )
     values = tuple(float(v) if np.isfinite(v) else None for v in prepared.context[-1]) if use_context else ()
+    technical = None
+    if use_technical:
+        selected = current.technical_used
+        reason = (
+            "selected"
+            if selected
+            else "missing"
+            if not contextual.technical_used
+            else "few_matches"
+            if candidate is None
+            else "few_pairs"
+            if len(paired_errors) < MIN_CALIBRATION
+            else "not_better"
+        )
+        last = len(frame) - 1
+        technical = TechnicalEvaluation(
+            selected,
+            reason,
+            len(paired_errors),
+            pattern_mae,
+            context_mae,
+            baseline_history,
+            forecast_path(baseline_history, errors),
+            candidate.center[-1] if candidate is not None else None,
+            prepared.technical.describe(current, prediction.weights, last, window),
+            prepared.technical.snapshot(last),
+            tuple(prepared.technical.snapshot(frame.index.get_loc(match.end)) for match in current.matches),
+        )
     return ForecastReport(
         current,
         prediction,
@@ -257,9 +316,10 @@ def predict_history(
         baseline,
         accuracy,
         coverage,
-        "context" if current.context_used else "pattern",
+        "technical" if current.technical_used else "context" if current.context_used else "pattern",
         len(paired_errors),
         pattern_mae,
         context_mae,
         values,
+        technical,
     )

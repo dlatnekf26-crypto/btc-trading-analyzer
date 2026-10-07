@@ -61,7 +61,7 @@ def history_comparison(
 
 @st.cache_data(ttl=3600, max_entries=12, show_spinner=False, hash_funcs=MARKET_HASH_FUNCS)
 def forecast_analysis(frame, timeframe, end, window, forward, minimum):
-    return predict_history(frame, timeframe, end, window, forward, min_similarity=minimum)
+    return predict_history(frame, timeframe, end, window, forward, min_similarity=minimum, use_technical=True)
 
 
 @st.cache_data(ttl=3600, max_entries=5, show_spinner=False)
@@ -151,7 +151,7 @@ def render_history_view(
             forward = horizon_days(candle_boundary(utc(cutoff), "1d"), horizon)
         minimum = st.select_slider("최소 유사도 · 점", (50, 60, 70, 80), value=60)
         st.caption(
-            "가격 경로·변동성·상대 거래량을 비교합니다. 이후 결과로 사례를 고르지 않으며 서로 겹치는 기간을 제외합니다. 유사도는 상승 확률이 아니에요."
+            "가격 경로·변동성·상대 거래량을 비교합니다. 예측은 추세·모멘텀·변동성·거래량·일목도 검토하고 과거 오차가 줄어든 지표 조합을 반영해요. 이후 결과로 사례를 고르지 않으며 유사도는 상승 확률이 아니에요."
         )
         manual_refresh = st.button("비교 자료 새로고침")
     period = HORIZON_LABELS.get(horizon, duration_label(tf, forward))
@@ -221,9 +221,13 @@ def render_history_view(
     if mode == "예측 경로":
         from btc_analyzer.ui.correction_view import correction_context
 
-        current, past = correction_context(
-            frame, tf, report.query_end, tuple(match.end for match in report.matches)
-        )
+        if result.technical is not None:
+            current = dict(result.technical.current_values)
+            past = tuple(dict(values) for values in result.technical.past_values)
+        else:
+            current, past = correction_context(
+                frame, tf, report.query_end, tuple(match.end for match in report.matches)
+            )
         render_prediction(result, timezone, quote, period, current, past)
     else:
         render_comparison(report, timezone, duration_label(tf, forward))

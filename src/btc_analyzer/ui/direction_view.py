@@ -36,7 +36,7 @@ def direction_headline(outlook):
     return leaders[0] + (" 비중 우세 · 박빙" if outlook.margin < 0.1 else " 비중 우세")
 
 
-def direction_reason_card(explanation):
+def direction_reason_card(explanation, *, price=False, comparison=True):
     labels = {
         "neutral": "확인 근거",
         "support": "같은 방향",
@@ -49,10 +49,17 @@ def direction_reason_card(explanation):
         rows.append(
             f'<div class="btc-direction-reason-row {tone}"><span>{escape(reason.label)}<small>{labels[tone]}</small></span><p>{escape(reason.text)}</p></div>'
         )
+    label = "우세 방향 이유" if comparison else "예상 가격 산출 근거"
+    marker = ' data-price-reasons="true"' if price else ""
+    footer = (
+        "지표를 고려한 사례 선택은 과거 오차가 줄어든 기간에 반영해요. 반영 여부는 위에서 확인하세요. 유사도와 사례 비중은 미래 확률이 아니에요."
+        if price
+        else "우세 선은 유사 사례 비중으로 선정해요. 현재 지표는 그 전망을 지지하거나 반대하는 참고 근거예요. 비중은 미래 확률이 아니에요."
+    )
     return (
-        '<article class="btc-direction-reasons" aria-label="우세 방향 이유"><strong>'
+        f'<article class="btc-direction-reasons" aria-label="{label}"{marker}><strong>'
         + escape(explanation.title)
         + "</strong>"
         + "".join(rows)
-        + "<small>우세 선은 유사 사례 비중으로 선정해요. 현재 지표는 그 전망을 지지하거나 반대하는 참고 근거예요. 비중은 미래 확률이 아니에요.</small></article>"
+        + f"<small>{footer}</small></article>"
     )

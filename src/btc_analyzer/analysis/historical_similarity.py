@@ -43,6 +43,7 @@ class HistoricalMatch:
     highest_return: float
     volatility: float
     context_similarity: float | None = None
+    technical_similarity: float | None = None
 
 
 @dataclass(frozen=True)
@@ -62,6 +63,7 @@ class SimilarityReport:
     anchor_price: float
     volatility: float
     context_used: bool = False
+    technical_used: bool = False
 
 
 def prepare_history(
@@ -122,6 +124,7 @@ class PreparedHistory:
         self.close = frame.close.to_numpy()
         self.high, self.low = frame.high.to_numpy(), frame.low.to_numpy()
         self._context = None
+        self._technical = None
         self._score_cache = None
         breaks = np.r_[0, (frame.index[1:] != candle_close(frame.index[:-1], timeframe)).astype(int)]
         self.gaps = np.cumsum(breaks)
@@ -139,7 +142,24 @@ class PreparedHistory:
             self._context = context_indicators(self.frame, self.gaps)
         return self._context
 
-    def compare(self, forward, *, query_end=None, max_matches=5, min_similarity=60, use_context=False):
+    @property
+    def technical(self):
+        if self._technical is None:
+            from btc_analyzer.analysis.technical_matching import TechnicalMatching
+
+            self._technical = TechnicalMatching(self.frame, self.timeframe, self.context)
+        return self._technical
+
+    def compare(
+        self,
+        forward,
+        *,
+        query_end=None,
+        max_matches=5,
+        min_similarity=60,
+        use_context=False,
+        use_technical=False,
+    ):
         frame, timeframe, window = self.frame, self.timeframe, self.window
         close, gaps = self.close, self.gaps
         last = len(frame) - 1 if query_end is None else query_end
@@ -191,6 +211,15 @@ class PreparedHistory:
             )
             # Missing context is not evidence of agreement with the current market.
             scores = np.where(valid_context, 0.8 * scores + 0.2 * context_scores, -np.inf)
+        technical_scores = None
+        technical_used = False
+        if use_technical:
+            technical_scores, _ = self.technical.scores(last, window)
+            technical_used = bool(np.isfinite(technical_scores[-1]))
+            if technical_used:
+                scores = np.where(
+                    np.isfinite(technical_scores), 0.8 * scores + 0.2 * technical_scores, -np.inf
+                )
         # Future outcomes are not read until after the similarity ranking.
         starts = np.arange(max(0, query_start - window - forward + 1))
         ends = starts + window - 1
@@ -223,6 +252,7 @@ class PreparedHistory:
                     highest_return=float(max(0, self.high[end + 1 : observed_end + 1].max() / anchor - 1)),
                     volatility=float(volatility[start]),
                     context_similarity=float(context_scores[start]) if context_used else None,
+                    technical_similarity=float(technical_scores[start]) if technical_used else None,
                 )
             )
             if len(selected) == max_matches:
@@ -243,6 +273,7 @@ class PreparedHistory:
             float(close[last]),
             float(volatility[query_start]),
             context_used,
+            technical_used,
         )
 
 
