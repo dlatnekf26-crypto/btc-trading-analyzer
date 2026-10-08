@@ -15,12 +15,20 @@ from playwright.sync_api import sync_playwright
 def widget_html():
     path = Path(__file__).resolve().parents[1] / "src/btc_analyzer/ui/live_prices.py"
     module = ast.parse(path.read_text())
-    return next(
+    template = next(
         ast.literal_eval(node.value)
         for node in module.body
         if isinstance(node, ast.Assign)
         and any(isinstance(target, ast.Name) and target.id == "LIVE_PRICES_HTML" for target in node.targets)
     )
+    bridge_module = ast.parse(path.with_name("live_analysis.py").read_text())
+    bridge = next(
+        ast.literal_eval(node.value)
+        for node in bridge_module.body
+        if isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == "LIVE_ANALYSIS_JS" for target in node.targets)
+    )
+    return template.replace("/* LIVE_ANALYSIS_BRIDGE */", bridge)
 
 
 def install_quote_transport(page):

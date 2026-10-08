@@ -60,7 +60,7 @@ with st.container(key="market_controls"):
 # Render before any server-side candle request. Quote ticks never rerun Python.
 render_live_prices()
 render_market_context()
-st.caption(f"분석 기준 {exchange} {symbol} · 확정 봉으로 계산 · 실시간 현재가와 구분해요.")
+st.caption(f"{exchange} {symbol} · 진행 중 봉/잠정 지표는 실시간 · 종합 신호와 과거 검증은 확정 봉 기준")
 
 
 @st.cache_data(ttl=60, max_entries=12, show_spinner=False)
@@ -92,6 +92,9 @@ def dashboard() -> None:
         st.info("상단 실시간 시세 연결은 독립적으로 유지됩니다. 분석은 데이터를 받은 뒤 표시합니다.")
         return
 
+    from btc_analyzer.ui.live_analysis import render_live_analysis
+
+    render_live_analysis(enriched, cfg.indicators)
     if st.session_state.get("dashboard_tab") not in (
         None,
         "시장 개요",

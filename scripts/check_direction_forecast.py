@@ -15,7 +15,9 @@ from check_touch_charts import inspect
 
 
 def traces(plot):
-    return plot.evaluate("p=>p.data.map(t=>({name:t.name,x:t.x,y:t.y,meta:t.meta,line:t.line}))")
+    return plot.evaluate(
+        "p=>p.data.filter(t=>!t.name.startsWith('실시간')).map(t=>({name:t.name,x:t.x,y:t.y,meta:t.meta,line:t.line}))"
+    )
 
 
 def verify(browser, width, url, event_log):
@@ -72,21 +74,21 @@ def verify(browser, width, url, event_log):
             arg=length,
         )
         data = traces(plot)
-        leaders = [trace for trace in data[3:] if "우세" in trace["name"]]
+        leaders = [trace for trace in data[3:6] if "우세" in trace["name"]]
         if len(leaders) == 1:
             page.wait_for_function(
                 "value=>document.querySelector('.btc-direction-reasons')?.innerText.includes(value)",
                 arg=f"{leaders[0]['y'][-1]:,.2f}",
             )
-        highest_share = max(trace["meta"]["share"] for trace in data[3:])
+        highest_share = max(trace["meta"]["share"] for trace in data[3:6])
         page.wait_for_function(
             "value=>document.querySelector('.btc-direction-reasons')?.innerText.includes(value)",
             arg=f"{highest_share:.1%}",
         )
-        for trace in data[3:]:
+        for trace in data[3:6]:
             assert len(trace["y"]) == length and trace["x"][-1].startswith(target.strftime("%Y-%m-%d"))
             assert trace["y"][0] == data[3]["y"][0]
-        assert all(trace["line"]["width"] == 3.5 for trace in data[3:] if "우세" in trace["name"])
+        assert all(trace["line"]["width"] == 3.5 for trace in data[3:6] if "우세" in trace["name"])
         assert page.evaluate("document.documentElement.scrollWidth<=innerWidth")
     cdp = context.new_cdp_session(page)
     baseline = event_log.read_text() if event_log else None
@@ -134,7 +136,7 @@ def verify(browser, width, url, event_log):
     page.wait_for_function(
         "()=>document.querySelector('.btc-direction-reasons')?.innerText.includes('뉴스 꺼짐')"
     )
-    branch_prices = json.dumps([trace["y"] for trace in base[3:]], separators=(",", ":"))
+    branch_prices = json.dumps([trace["y"] for trace in base[3:6]], separators=(",", ":"))
     page.wait_for_function(
         "old=>[...document.querySelectorAll('.js-plotly-plot')].some(p=>p.offsetParent!==null && p.data?.filter(t=>t.meta?.direction).length===3 && JSON.stringify(p.data.filter(t=>t.meta?.direction).map(t=>t.y))!==old)",
         arg=branch_prices,

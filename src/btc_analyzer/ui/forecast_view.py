@@ -276,6 +276,65 @@ def prediction_chart(
                 hovertemplate=f"%{{y:,.2f}} {quote}<extra>발표 결과 가정 · 미검증</extra>",
             )
         )
+    # Keep the validated model, direction shares and historical replay intact.
+    # This additional browser path expresses the same return assumptions from
+    # the latest price; it is not a recalibrated or independently tested model.
+    live_center = (
+        event_projection.center
+        if event_projection
+        else primary.center
+        if primary
+        else (news_projection or prediction).center
+    )
+    live_range = event_projection or news_projection or prediction
+    live_start = len(fig.data)
+    for name, fill in (("실시간 범위 상단", False), ("실시간 조건부 범위", True)):
+        fig.add_trace(
+            go.Scatter(
+                x=future,
+                y=[None] * len(future),
+                mode="lines",
+                name=name,
+                line={"width": 0},
+                fill="tonexty" if fill else None,
+                fillcolor="rgba(16,168,119,0.09)",
+                showlegend=False,
+                visible=show_range,
+                hoverinfo="skip",
+            )
+        )
+    fig.add_trace(
+        go.Scatter(
+            x=future,
+            y=[None] * len(future),
+            mode="lines",
+            name="실시간 출발 · 조건부",
+            line={"color": "#09845c", "width": 3, "dash": "dash"},
+            hovertemplate=f"%{{y:,.2f}} {escape(quote)}<extra>현재가 기준 · 기존 수익률 경로 가정</extra>",
+        )
+    )
+    fig.update_layout(
+        meta={
+            "btcLive": {
+                "kind": "forecast",
+                "timezone": timezone,
+                "anchor": report.anchor_price,
+                "baseAt": int(prediction.dates[0].timestamp() * 1000),
+                "center": np.asarray(live_center).tolist(),
+                "upper": np.asarray(live_range.upper).tolist(),
+                "lower": np.asarray(live_range.lower).tolist(),
+                "offsets": [
+                    int((date - prediction.dates[0]).total_seconds() * 1000) for date in prediction.dates
+                ],
+                "liveIndices": [live_start, live_start + 1, live_start + 2],
+                "label": "발표 조건부 경로"
+                if event_projection
+                else f"{primary.label} 사례 경로"
+                if primary
+                else "중심 경로 가정",
+            }
+        }
+    )
     fig.update_yaxes(title=quote, tickformat=",.0f")
     return fig
 
@@ -483,6 +542,15 @@ def render_prediction(
             f"과거 검증에서 가격 유지 가정보다 평균 오차가 {improvement:.0%} 작았습니다. 미래 성능을 보장하지 않습니다."
         )
     with chart_slot:
+        st.markdown(
+            '<section id="btc-live-forecast" class="btc-live-forecast" aria-label="실시간 조건부 예측">'
+            "<p>현재가에서 출발하는 예상 · 실시간</p><strong>시세 연결 중…</strong>"
+            '<span class="btc-live-status">시세 수신 대기</span>'
+            '<p class="btc-live-forecast-range"></p><p class="btc-live-forecast-reason"></p>'
+            "<p>초록 점선은 현재가 기준 조건부 경로예요. 기존 예상/과거 재현은 기준 종가를 유지하며, "
+            "과거 성적은 확정 모델만 평가한 결과예요.</p></section>",
+            unsafe_allow_html=True,
+        )
         st.plotly_chart(
             prediction_spec(
                 result,

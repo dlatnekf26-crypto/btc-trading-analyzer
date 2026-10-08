@@ -29,8 +29,8 @@ def test_default_compares_three_directions_and_model_switch_keeps_original_forec
     assert not app.exception and not app.error
     assert len(app.get("plotly_chart")) == 1
     before = chart(app)
-    assert len(before["data"]) == 6
-    assert [trace["meta"]["direction"] for trace in before["data"][3:]] == ["up", "flat", "down"]
+    assert len(before["data"]) == 9
+    assert [trace["meta"]["direction"] for trace in before["data"][3:6]] == ["up", "flat", "down"]
     cards = next(item.value for item in app.markdown if 'aria-label="상승 하락 보합 비교"' in item.value)
     assert cards.count("data-direction=") == 3
     assert any("미래 확률이 아니에요" in item.value for item in app.caption)
@@ -84,8 +84,11 @@ def test_release_assumption_does_not_change_direction_ranking_or_branch_prices()
     rerun(app)
     assert not app.exception and not app.error
     adverse = chart(app)
-    assert adverse["data"][:-1] == base["data"]
-    assert adverse["data"][-1]["name"] == "발표 조건부 경로"
+    assert adverse["data"][:6] == base["data"][:6]
+    assert adverse["data"][6]["name"] == "발표 조건부 경로"
+    assert adverse["data"][-3:] == base["data"][-3:]
+    assert adverse["layout"]["meta"]["btcLive"]["label"] == "발표 조건부 경로"
+    assert adverse["layout"]["meta"]["btcLive"]["center"] != base["layout"]["meta"]["btcLive"]["center"]
     assert (
         next(item.value for item in app.markdown if 'aria-label="상승 하락 보합 비교"' in item.value) == cards
     )

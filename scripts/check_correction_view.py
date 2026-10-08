@@ -14,7 +14,9 @@ from check_touch_charts import inspect
 def traces(plot):
     deadline = time.monotonic() + 15
     while time.monotonic() < deadline:
-        value = plot.evaluate("p=>p.data?.length ? p.data.map(t=>({name:t.name,x:t.x,y:t.y})) : null")
+        value = plot.evaluate(
+            "p=>p.data?.length ? p.data.filter(t=>!t.name.startsWith('실시간')).map(t=>({name:t.name,x:t.x,y:t.y})) : null"
+        )
         if value is not None:
             return value
         plot.page.wait_for_timeout(50)
@@ -27,7 +29,7 @@ def verify(browser, width, url, event_log):
     )
     page = context.new_page()
     install_quote_transport(page)
-    MarketFixture(page)
+    fixture = MarketFixture(page)
     page.goto(url)
     # Complete the initial market render before requesting a different tab.
     page.locator(".btc-pattern-card").wait_for(timeout=45000)
@@ -49,6 +51,11 @@ def verify(browser, width, url, event_log):
     original_shapes = plot.evaluate("p=>p.layout.shapes")
     assert any(shape.get("line", {}).get("color") == "#936624" for shape in original_shapes)
     crypto = next(frame for frame in page.frames if frame.locator("#binance").count())
+    crypto.locator("#binance.fresh").wait_for()
+    fixture.rest = False  # Price ticks have their own live/hold regression driver.
+    page.wait_for_function(
+        "()=>[...document.querySelectorAll('.js-plotly-plot')].some(p=>p.offsetParent!==null && p.dataset.liveEvent)"
+    )
     sockets = crypto.evaluate("window.__quoteSockets.length")
     baseline = event_log.read_text() if event_log else None
     page.get_by_role("radio", name="코인에 부담", exact=True).tap()
@@ -60,12 +67,18 @@ def verify(browser, width, url, event_log):
     original_center = next(trace for trace in base if trace["name"] == "뉴스 반영 시나리오")
     assert adverse[-1]["y"][0] == original_center["y"][0]
     assert min(a - b for a, b in zip(adverse[-1]["y"], original_center["y"])) < 0
+    # This driver verifies the unchanged closed-model geometry. The separate
+    # live driver tests real ticks/hold/hover; their legitimate axis changes
+    # must not be mistaken here for a user's forbidden zoom gesture.
+    plot.evaluate(
+        "async p=>{const indices=p.layout.meta?.btcLive?.liveIndices;if(indices)await Plotly.restyle(p,{visible:false},indices);}"
+    )
     cdp = context.new_cdp_session(page)
     inspect(page, cdp, plot, event_log, "release what-if")
     page.screenshot(path=f"/tmp/btc-correction-chart-{width}.png")
     page.get_by_role("radio", name="코인에 우호", exact=True).tap()
     page.wait_for_function(
-        "old=>{const p=[...document.querySelectorAll('.js-plotly-plot')].find(p=>p.offsetParent!==null);return p?.data?.at(-1)?.name==='발표 조건부 경로' && JSON.stringify(p.data.at(-1).y)!==old}",
+        "old=>{const p=[...document.querySelectorAll('.js-plotly-plot')].find(p=>p.offsetParent!==null),t=p?.data?.find(t=>t.name==='발표 조건부 경로');return t && JSON.stringify(t.y)!==old}",
         arg=json.dumps(adverse[-1]["y"], separators=(",", ":")),
     )
     favorable = traces(plot)

@@ -36,8 +36,8 @@ def test_calendar_controls_change_only_conditional_path_and_reset_on_event_chang
     )
     rerun(app)
     adverse = plot(app)
-    assert adverse["data"][:-1] == original["data"]
-    assert adverse["data"][-1]["name"] == "발표 조건부 경로"
+    assert adverse["data"][:-4] + adverse["data"][-3:] == original["data"]
+    assert adverse["data"][-4]["name"] == "발표 조건부 경로"
     next(item for item in app.get("button_group") if item.label == "발표 결과를 가정해 보기").set_value(
         "neutral"
     )

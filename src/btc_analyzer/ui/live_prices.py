@@ -3,6 +3,8 @@
 import streamlit as st
 import streamlit.components.v1 as components
 
+from btc_analyzer.ui.live_analysis import LIVE_ANALYSIS_CSS, LIVE_ANALYSIS_JS
+
 LIVE_PRICES_HTML = r"""<!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
@@ -34,6 +36,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
 <script>
 (() => {
   'use strict';
+  /* LIVE_ANALYSIS_BRIDGE */
   // Delegate touch inspection to the existing parent charts. No extra iframe,
   // data requests or Streamlit events; passive listeners preserve page scrolling.
   const disposeChartTouch=(()=>{
@@ -41,6 +44,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     try {root=window.parent; doc=root.document;} catch (_) {return ()=>{};}
     let active=null, lastChart=null, pending=null, frame=null, painted=0;
     function clear() {
+      liveAnalysis.hold?.(active?.chart ?? lastChart,false);
       if (frame!==null) root.cancelAnimationFrame(frame);
       frame=null; pending=null; active=null;
       if (lastChart?.isConnected) root.Plotly?.Fx?.unhover(lastChart);
@@ -74,6 +78,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
       if (event.touches.length!==1) return;
       const touch=event.touches[0];
       active={chart,rect,axis,yaxis,subplot,x:touch.clientX,y:touch.clientY};
+      liveAnalysis.hold?.(chart,true);
       show(active);
     }
     function move(event) {
@@ -88,6 +93,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     function end(event) {
       if (!active) return;
       event.stopPropagation();
+      liveAnalysis.hold?.(active.chart,false);
       if (pending) show(pending);
       if (frame!==null) root.cancelAnimationFrame(frame);
       frame=null; pending=null; active=null;
@@ -108,7 +114,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
   const MAX_POINTS = 61, STALE_MS = 15000, DRAW_MS = 50;
   const configs = [
     {id:'binance', market:'binance', symbol:'BTCUSDT', decimals:2, changeLabel:'24시간', restGap:1000,
-     socket:'wss://data-stream.binance.vision/stream?streams=btcusdt@aggTrade/ethusdt@aggTrade/btcusdt@ticker/ethusdt@ticker',
+     socket:'wss://data-stream.binance.vision/stream?streams=btcusdt@aggTrade/ethusdt@aggTrade/btcusdt@ticker/ethusdt@ticker/btcusdt@kline_1h/btcusdt@kline_4h/btcusdt@kline_1d/btcusdt@kline_1w/btcusdt@kline_1M',
      history:'https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=60'},
     {id:'ethereum', market:'binance', symbol:'ETHUSDT', decimals:2, changeLabel:'24시간', restGap:1000,
      history:'https://data-api.binance.vision/api/v3/klines?symbol=ETHUSDT&interval=1m&limit=60'},
@@ -177,6 +183,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
       paintAux();
       paintMacro();
       paintMoves();
+      liveAnalysis.paint({price:states[0].price,event:states[0].lastEvent,fresh:fresh(states[0])});
     }, DRAW_MS);
   }
   function addPoint(s, time, price) {
@@ -350,6 +357,9 @@ LIVE_PRICES_HTML = r"""<!doctype html>
       if (disposed || s.socketRef!==ws || document.hidden) return;
       try {
         const packet=JSON.parse(typeof event.data==='string' ? event.data : new TextDecoder().decode(event.data));
+        if (packet.data?.e==='kline' || packet.e==='kline') {
+          liveAnalysis.accept(packet.data ?? packet); schedulePaint(); return;
+        }
         for (const market of group) accept(market,packet.data ?? packet,'ws');
       }
       catch (_) { /* Ignore malformed messages; never convert them to a price. */ }
@@ -361,6 +371,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
         market.socketRef=null;
         if (market.transport==='ws') market.lastRx=0;
       }
+      if (s.market==='binance') liveAnalysis.stop();
       reconnect(s); poll(s); schedulePaint();
     };
   }
@@ -697,6 +708,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
       else { history(s); connect(s); poll(s); }
     }
     if (document.hidden) {
+      liveAnalysis.stop();
       const host=parentDoc?.getElementById('btc-move-alerts'); if(host) {host.hidden=true;host.dataset.signature='';host.replaceChildren();}
       stopMacro();
       rates.forEach(s=>s.controllers.forEach(c=>c.abort()));
@@ -708,6 +720,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
   observer.observe(document.body);
   window.addEventListener('pagehide',()=>{
     disposeChartTouch();
+    liveAnalysis.dispose();
     disposed=true; stopMacro(); macroObserver?.disconnect(); clearInterval(heartbeat); clearTimeout(paintTimer); observer.disconnect(); states.forEach(stop); rates.forEach(s=>s.controllers.forEach(c=>c.abort()));
     binanceRequest.controllers.forEach(c=>c.abort());
     const host=parentDoc?.getElementById('btc-move-alerts'); if(host) {host.hidden=true;host.dataset.signature='';host.replaceChildren();}
@@ -717,10 +730,13 @@ LIVE_PRICES_HTML = r"""<!doctype html>
 })();
 </script></body></html>"""
 
+LIVE_PRICES_HTML = LIVE_PRICES_HTML.replace("/* LIVE_ANALYSIS_BRIDGE */", LIVE_ANALYSIS_JS)
+
 
 def render_live_prices() -> None:
     """Keep a stable iframe outside analysis fragments so tab clicks keep sockets."""
     components.html(LIVE_PRICES_HTML, height=362, scrolling=False)
+    st.markdown(LIVE_ANALYSIS_CSS, unsafe_allow_html=True)
     st.markdown(
         """<style>
 #btc-move-alerts[hidden]{display:none}#btc-move-alerts{display:grid;gap:10px;margin:0 0 12px}

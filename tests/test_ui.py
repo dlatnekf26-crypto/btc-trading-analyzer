@@ -135,7 +135,8 @@ def test_ichimoku_view_and_overlay_controls_preserve_signal(monkeypatch, tmp_pat
     assert not app.exception and not app.error
     summary = next(item.value for item in app.markdown if 'aria-label="분석 요약"' in item.value)
     assert not any("일목균형표, 이렇게 읽어요" in item.value for item in app.subheader)
-    assert any("미래 가격 예측이 아닙니다" in item.value for item in app.caption)
+    assert any("일목 구름은 확정 봉의 이동 표시" in item.value for item in app.caption)
+    assert any("현재 봉의 구름 위치" in item.value for item in app.caption)
     next(item for item in app.get("button_group") if item.label == "차트 보기").set_value("상세").run()
     assert not app.exception and not app.error
     assert any(item.label == "표시할 봉 수" for item in app.select_slider)

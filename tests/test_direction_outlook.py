@@ -150,10 +150,10 @@ def test_comparison_graph_sends_three_branches_highlights_leader_and_preserves_o
     outlook = direction_outlook(result)
     original = prediction_chart(result, "Asia/Seoul", "USDT")
     comparison = prediction_chart(result, "Asia/Seoul", "USDT", outlook=outlook)
-    assert len(comparison.data) == 6
-    assert [trace.meta["direction"] for trace in comparison.data[3:]] == ["up", "flat", "down"]
+    assert len(comparison.data) == 9
+    assert [trace.meta["direction"] for trace in comparison.data[3:6]] == ["up", "flat", "down"]
     assert comparison.data[3].line.width > comparison.data[4].line.width
-    for scenario, trace in zip(outlook.scenarios, comparison.data[3:]):
+    for scenario, trace in zip(outlook.scenarios, comparison.data[3:6]):
         assert trace.y == tuple(np.round(scenario.center, 2))
         assert trace.x == original.data[3].x and trace.y[0] == 1000
     assert comparison.data[0].y == original.data[0].y and comparison.data[1].y == original.data[1].y

@@ -41,11 +41,30 @@ def market_chart_spec(
         bars=bars,
     )
     fig.update_layout(
-        uirevision=f"market-{features.attrs.get('timeframe')}-{bars}", transition={"duration": 150}
+        uirevision=f"market-{features.attrs.get('timeframe')}-{bars}",
+        transition={"duration": 0},
+        meta={
+            "btcLive": {
+                "kind": "market",
+                "timeframe": timeframe,
+                "timezone": timezone,
+                "bars": bars,
+                "label": FRAME_LABELS[timeframe],
+                "closedEnd": int(candle_close(features.index[-1], timeframe).timestamp() * 1000),
+            }
+        },
     )
     fig.update_xaxes(
         tickformat="%m.%d<br>%H:%M" if timeframe in ("1h", "4h") else "%y.%m.%d", nticks=5, row=2, col=1
     )
+    overlays = {}
+    bands_seen = iter(("bb_upper", "bb_middle", "bb_lower"))
+    for index, trace in enumerate(fig.data):
+        if trace.name.startswith("EMA "):
+            overlays[str(index)] = trace.name.lower().replace(" ", "_")
+        elif trace.name == "볼린저 밴드":
+            overlays[str(index)] = next(bands_seen)
+    fig.layout.meta["btcLive"]["overlays"] = overlays
     return fig.to_dict()
 
 
@@ -104,10 +123,13 @@ def render_market_chart(*, bundle, enriched, cfg, display_timezone, average_line
             config=READ_CHART_CONFIG,
         )
         st.caption(
-            f"{FRAME_LABELS[chart_tf]} · {len(chart_features):,}개 확정 봉 · 실시간 현재가는 상단에서 확인하세요."
+            f"{FRAME_LABELS[chart_tf]} · 확정 {len(chart_features):,}개 + 실시간 진행 중 봉 · "
+            "Binance 봉은 약 2초마다 수신 · 지연 시 마지막 값을 유지해요."
         )
         if "일목균형표" in overlays:
-            st.caption("일목 구름은 과거 가격을 이동 표시한 지표이며 미래 가격 예측이 아닙니다.")
+            st.caption(
+                "일목 구름은 확정 봉의 이동 표시예요. 현재 봉의 구름 위치는 위 잠정 분석에서 확인해요."
+            )
         st.caption(
             "차트에 손가락을 대거나 마우스를 올리면 가격을 확인해요. 위아래로 밀면 페이지가 스크롤됩니다."
         )

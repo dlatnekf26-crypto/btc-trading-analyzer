@@ -114,3 +114,12 @@ docker run --rm -p 8501:8501 btc-trading-analyzer:web
 두 진입점 모두 개인 DB와 분리된 시장 캐시를 사용합니다. 로컬 실행은 `python -m streamlit run app.py`입니다. `BTC_DEFAULT_SOURCE`·`BTC_DEFAULT_EXCHANGE`는 웹 앱에서 더 이상 사용하지 않습니다. `BTC_DB_PATH`는 기존 CLI용이며 웹 화면의 시장 캐시 위치를 바꾸지 않습니다.
 
 예정 경제 발표/시장 예상치에는 서버의 `nfs.faireconomy.media` HTTPS 접근이 추가로 필요합니다. 거래/API 키는 필요하지 않습니다. 이번 주 공개 캘린더를 30분마다 공유 조회하며 화면은 기다리지 않고 가격 분석을 계속 표시합니다. 오류/오래된 자료에는 실제 시각·예상치를 만들어 넣지 않고 발표 시나리오를 보류합니다. 2026-10-06 Codex 환경의 실제 요청은 프록시 거부였고 도메인을 기존 허용 목록에 더한 설정 초안을 저장했습니다. 초안 저장은 현재 실행 환경에 적용/게시하거나 Streamlit 재배포·자료 수신을 검증한 결과가 아닙니다. 설정 검토/저장·게시 후 실제 캘린더 수신을 확인해야 합니다. Streamlit 서버의 네트워크는 Codex와 별개입니다.
+
+
+## 진행 중 봉·실시간 잠정 분석/예측
+
+기존 Binance 결합 연결에 `btcusdt@kline_1h/4h/1d/1w/1M`를 구독합니다(각 interval 앞에 `btcusdt@kline_` 접두사를 사용). 새 도메인·키·운영 패키지·iframe/소켓·지표 REST 폴링이 없습니다. 약 2초 봉 수신의 OHLCV와 EMA/밴드를 활성 본 차트에 표시하고, UTC 월/월요일 주 경계를 정확하게 검사합니다. 원시 OHLCV·EMA/Wilder 상태는 확정 봉 초기값에서 이어 가며 봉 누락/지연이면 잠정 분석을 보류합니다. 서버 확정 봉 동기화 주기는 60초입니다.
+
+예측의 초록 점선과 범위는 현재 가격×기존 수익률 경로의 조건부 표시입니다. 기존 우세 방향 비중·지표 후보의 검증/채택·기준 종가/과거 재현·과거 성적·뉴스/경제 발표 가정을 보존합니다. 현재 봉의 지표는 잠정 카드로 함께 설명하며 미검증 가중치를 추가하지 않습니다. 최대 0.5초 주기와 Plotly 단일 진행 중 업데이트로 틱을 합치고 Python에 시세 이벤트를 보내지 않습니다. Streamlit fragment가 차트를 바꿔도 새 자료에서 최신 상태를 복원합니다.
+
+정상 TLS로 실제 Binance 공개 WebSocket의 다섯 kline을 수신하고 파서가 모두 수락함을 확인했습니다(2026-10-08 17:30 KST). 실제 메시지는 `/tmp/btc-realtime-actual-klines.json`에 기록했습니다. 공개 Streamlit 재빌드/방문 수신·물리 Safari 확인과는 구분합니다. 개발용 검사는 `python scripts/check_realtime_analysis.py --app-url <검사 서버> --event-log <계측 로그>`를 사용합니다.

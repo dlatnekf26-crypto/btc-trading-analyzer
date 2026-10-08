@@ -57,10 +57,10 @@ def test_news_direction_changes_only_scenario_and_all_paths_share_anchor(result,
     assert result.prediction is before and result.validation == () and result.mae is None
     original = prediction_chart(result, "Asia/Seoul", "USDT")
     changed = prediction_chart(result, "Asia/Seoul", "USDT", news_projection=actual)
-    assert len(changed.data) == 8
+    assert len(changed.data) == 11
     for a, b in zip(original.data, changed.data[:5]):
         assert a.to_plotly_json() == b.to_plotly_json()
-    assert changed.data[-1].name == "뉴스 반영 시나리오"
+    assert changed.data[7].name == "뉴스 반영 시나리오"
 
 
 def test_before_origin_future_old_and_stale_feed_cannot_adjust_forecast(result):

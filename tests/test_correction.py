@@ -118,7 +118,7 @@ def test_chart_adds_release_and_timing_without_altering_historical_or_base_trace
         event_projection=projection,
     )
     assert [trace.to_plotly_json() for trace in original.data] == [
-        trace.to_plotly_json() for trace in changed.data[:-1]
+        trace.to_plotly_json() for trace in (*changed.data[:-4], *changed.data[-3:])
     ]
-    assert changed.data[-1].name == "발표 조건부 경로"
+    assert changed.data[-4].name == "발표 조건부 경로"
     assert len(changed.layout.shapes) == len(original.layout.shapes) + 2

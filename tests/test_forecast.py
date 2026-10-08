@@ -204,4 +204,4 @@ def test_analogue_replay_preserves_observed_moves_and_keeps_forecast_band_unchan
         assert chart.data[4].customdata[-1] == match.observed_until.tz_convert("Asia/Seoul").strftime(
             "%Y-%m-%d %H:%M"
         )
-    assert len(prediction_chart(result, "Asia/Seoul", "USDT", analogue_index=None).data) == 4
+    assert len(prediction_chart(result, "Asia/Seoul", "USDT", analogue_index=None).data) == 7
