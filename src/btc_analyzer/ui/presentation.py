@@ -105,6 +105,16 @@ p, li { line-height: 1.7; }
 .btc-signal-label { color: #216bdd; font-size: 11px; font-weight: 750; }
 .btc-signal-sell { background: #fff1f3; border-color: #f4dbe1; }
 .btc-signal-sell .btc-signal-label { color: #bd3150; }
+.btc-buy-watch { margin-top: 16px; padding: 16px 18px; border-radius: 16px; background: #fff; border: 1px solid #d9e8ff; }
+.btc-buy-watch>span { font-size: 12px; color: #216bdd; font-weight: 650; }
+.btc-buy-watch-price { display: block; margin: 7px 0; font-size: clamp(21px,3vw,27px); letter-spacing: -.03em; color: #191f28; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.btc-signal .btc-buy-watch p { font-size: 12px; margin: 7px 0; }
+.btc-buy-watch .btc-buy-watch-distance { color: #216bdd; font-weight: 600; }
+.btc-buy-watch small { display: block; font-size: 11px; color: #66758b; line-height: 1.6; }
+.btc-buy-watch[data-status="inside"] { border-color: #5eaaf3; background: #f8fbff; }
+.btc-buy-watch[data-status="invalid"] { background: #fff6f4; border-color: #f0d3cc; }
+.btc-buy-watch[data-status="invalid"] .btc-buy-watch-price { color: #b7473f; }
+@media(max-width:600px) { .btc-buy-watch { padding: 13px 12px; } }
 .btc-ichimoku { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 14px 0; }
 .btc-ichimoku article { border: 1px solid #e7ecf3; border-radius: 16px; background: #fff; padding: 15px 17px; }
 .btc-ichimoku strong { display: block; font-size: 18px; margin: 5px 0; }
@@ -407,7 +417,32 @@ def decision_panel(signal: CompositeSignal) -> str:
             else "주봉·월봉 방향의 지지가 아직 부족해요. 낮아진 가격만으로 새 매수 신호를 내지 않아요."
         )
     kind = {"매수": "buy", "매도": "sell", "관망": "hold"}[signal.action]
-    return f'<section class="btc-signal btc-signal-{kind}" aria-label="종합 신호 근거"><span class="btc-signal-label">{signal.action} · 종합 신호 · {escape(signal.mode)}</span><h2>{headings[signal.action]}</h2><p>{escape(reason)}</p></section>'
+    return f'<section class="btc-signal btc-signal-{kind}" aria-label="종합 신호 근거"><span class="btc-signal-label">{signal.action} · 종합 신호 · {escape(signal.mode)}</span><h2>{headings[signal.action]}</h2><p>{escape(reason)}</p>{buy_watch_card(signal)}</section>'
+
+
+def buy_watch_card(signal: CompositeSignal) -> str:
+    watch = signal.buy_watch
+    if signal.action != "관망" or watch is None:
+        return ""
+    title = "<span>어느 가격이면 검토할까요?</span>"
+    if watch.low is None:
+        return f'<div class="btc-buy-watch" aria-label="매수 검토 가격 보류">{title}<p>{escape(watch.reason)}</p></div>'
+    import pandas as pd
+
+    as_of = pd.Timestamp(watch.as_of).tz_convert("Asia/Seoul").strftime("%m.%d %H:%M")
+    return (
+        '<div class="btc-buy-watch" id="btc-buy-watch" aria-label="조건부 매수 검토 가격대" '
+        f'data-low="{watch.low}" data-high="{watch.high}" data-stop="{watch.invalidation}" '
+        f'data-risk-floor="{watch.risk_floor}" '
+        f'data-base-at="{pd.Timestamp(watch.as_of).timestamp() * 1000:.0f}" '
+        f'data-expires="{pd.Timestamp(watch.valid_until).timestamp() * 1000:.0f}" data-status="waiting">'
+        f'{title}<b class="btc-buy-watch-price">{watch.low:,.2f} ~ {watch.high:,.2f} USDT</b>'
+        '<p class="btc-buy-watch-distance">실시간 시세를 받으면 가격대까지의 거리를 표시해요.</p>'
+        f"<p>{escape(watch.reason)}</p>"
+        "<p>이 가격대라면 분할매수를 검토할 만해요. 도달해도 하락 진정·주봉·월봉 지지 확인이 먼저예요.</p>"
+        f"<small>회복 비교 기준 {watch.target:,.2f} · 지지 재평가 {watch.invalidation:,.2f} USDT · 이탈 시 보류</small>"
+        f"<small>{as_of} KST 확정 봉 기준 · 예상 도착 가격이나 자동 매수 신호가 아니에요.</small></div>"
+    )
 
 
 def ichimoku_cards(values: dict, displacement: int = 26) -> str:

@@ -177,7 +177,7 @@ function makeLiveAnalysis(root) {
   let doc;
   try {doc=root.document;} catch(_) {return {accept(){},paint(){},stop(){},dispose(){}};}
   let host=null,payload=null,cfg=null,books={},dirty=true,lastPaint=0,disposed=false,timer=null,latestQuote=null;
-  const plots=new WeakMap(),held=new WeakSet(),formatters=new Map();
+  const plots=new WeakMap(),held=new WeakSet(),invalidWatch=new WeakSet(),formatters=new Map();
   function array(value) {
     if(value?.bdata) {
       const types={f8:Float64Array,f4:Float32Array,i4:Int32Array,i2:Int16Array,i1:Int8Array,u4:Uint32Array,u2:Uint16Array,u1:Uint8Array};
@@ -309,6 +309,34 @@ function makeLiveAnalysis(root) {
       plot.dataset.liveEvent=String(quote.event);plot.dataset.livePrice=String(quote.price);
     });
   }
+  function watchDistance(quote,now) {
+    const card=doc.getElementById('btc-buy-watch');
+    if(!card) return;
+    const low=Number(card.dataset.low),high=Number(card.dataset.high),stop=Number(card.dataset.stop);
+    const riskFloor=Number(card.dataset.riskFloor ?? card.dataset.stop);
+    const base=Number(card.dataset.baseAt),expires=Number(card.dataset.expires);
+    if(![low,high,stop,riskFloor,base,expires].every(LiveCandles.finite) || !(0<stop && stop<low && low<high && base<expires)) return;
+    let state='waiting',label='시세 수신 대기/지연 · 가격대 도달 확인을 보류해요.';
+    const fresh=quote?.fresh && LiveCandles.finite(quote.price) && quote.price>0 && LiveCandles.finite(quote.event) &&
+      quote.event>=base && quote.event<=now+3000 && now-quote.event<=15000;
+    if(now>=expires) {state='expired';label='확정 봉 갱신 대기 · 가격대를 다시 계산하고 있어요.';}
+    else if(fresh) {
+      if(quote.price<Math.max(stop,riskFloor)) invalidWatch.add(card);
+      if(invalidWatch.has(card)) {state='invalid';label='급락 또는 지지 기준 이탈 · 새 확정 자료로 다시 확인해요.';}
+      else if(quote.price>high) {state='above';label=`현재가에서 ${((1-high/quote.price)*100).toFixed(2)}% 내려오면 검토 가격대예요.`;}
+      else if(quote.price>=low) {state='inside';label='현재가가 검토 가격대에 있어요 · 하락 진정을 확인해요.';}
+      else {state='below';label='현재가가 가격대 아래예요 · 더 저렴하다고 매수하지 않고 지지를 다시 확인해요.';}
+    }
+    // A rebound alone cannot reactivate a price band whose support broke.
+    if(invalidWatch.has(card)) state='invalid';
+    card.dataset.status=state;
+    const price=card.querySelector('.btc-buy-watch-price');
+    if(price) {
+      if(!price.dataset.original) price.dataset.original=price.textContent;
+      text(price,state==='invalid' ? '가격대 재평가 필요' : state==='expired' ? '새 확정 가격대 계산 중' : price.dataset.original);
+    }
+    text(card.querySelector('.btc-buy-watch-distance'),label);
+  }
   function paint(quote) {
     latestQuote=quote;
     if(disposed || doc.hidden || !root.Plotly) return;
@@ -318,7 +346,7 @@ function makeLiveAnalysis(root) {
       return;
     }
     if(timer!==null) {clearTimeout(timer);timer=null;}
-    load();const now=Date.now();lastPaint=now;
+    load();const now=Date.now();lastPaint=now;watchDistance(quote,now);
     if(host) {
       const active=LiveCandles.frames.filter(tf=>current(books[tf],now));
       text(host.querySelector('.btc-live-status'),active.length ? `실시간 ${active.length}/5 · ${clock.format(new Date(Math.max(...active.map(tf=>books[tf].candle.event))))} KST` : '봉 수신 대기/지연');

@@ -18,6 +18,7 @@ from btc_analyzer.data.base_provider import utc
 from btc_analyzer.strategy.scoring import Score, score_label
 from btc_analyzer.strategy.entry_engine import TradePlan, entry_plan
 from btc_analyzer.strategy.position_view import PositionView, price_context, pullback_plan, net_ladder_rr
+from btc_analyzer.strategy.buy_watch import BuyWatch, watch_price
 
 FRAME_WEIGHTS = {"1h": 0.05, "4h": 0.10, "1d": 0.40, "1w": 0.30, "1M": 0.15}
 FRAME_LABELS = {"1h": "1시간", "4h": "4시간", "1d": "일봉", "1w": "주봉", "1M": "월봉"}
@@ -56,6 +57,7 @@ class CompositeSignal:
     plan: TradePlan | None
     mode: str
     position: PositionView
+    buy_watch: BuyWatch | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -356,4 +358,5 @@ def composite_signal(
         plan,
         mode,
         view,
+        watch_price(features.get("1d"), frames, view, cfg) if action == "관망" else None,
     )
