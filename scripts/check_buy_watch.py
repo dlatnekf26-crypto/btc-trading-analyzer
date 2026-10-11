@@ -30,8 +30,8 @@ def verify(browser, width, url, event_log):
     low, high, stop = float(data["low"]), float(data["high"]), float(data["stop"])
     assert 90000 < stop < low < high < 100000
     assert "관망 · 종합 신호" in page.locator(".btc-signal-label").inner_text()
-    assert "도달해도 하락 진정" in card.inner_text()
-    assert "자동 매수 신호가 아니에요" in card.inner_text()
+    assert "진입 전 하락 진정" in card.inner_text()
+    assert "자동 매수 신호가 아닙니다" in card.inner_text()
     original = card.locator(".btc-buy-watch-price").inner_text()
     band = (data["low"], data["high"])
     sockets = crypto.evaluate("window.__quoteSockets.length")
@@ -62,7 +62,7 @@ def verify(browser, width, url, event_log):
     assert "관망 · 종합 신호" in page.locator(".btc-signal-label").inner_text()
     emit((low + stop) / 2)
     state("below")
-    assert "더 저렴하다고 매수하지" in card.locator(".btc-buy-watch-distance").inner_text()
+    assert "지지 유지 여부를 재확인" in card.locator(".btc-buy-watch-distance").inner_text()
     assert card.locator(".btc-buy-watch-price").inner_text() == original
     assert card.evaluate("e=>[e.dataset.low,e.dataset.high]") == list(band)
     card.scroll_into_view_if_needed()

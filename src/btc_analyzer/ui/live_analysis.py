@@ -316,16 +316,16 @@ function makeLiveAnalysis(root) {
     const riskFloor=Number(card.dataset.riskFloor ?? card.dataset.stop);
     const base=Number(card.dataset.baseAt),expires=Number(card.dataset.expires);
     if(![low,high,stop,riskFloor,base,expires].every(LiveCandles.finite) || !(0<stop && stop<low && low<high && base<expires)) return;
-    let state='waiting',label='시세 수신 대기/지연 · 가격대 도달 확인을 보류해요.';
+    let state='waiting',label='시세 수신 대기/지연 · 가격대 도달 여부 확인 보류';
     const fresh=quote?.fresh && LiveCandles.finite(quote.price) && quote.price>0 && LiveCandles.finite(quote.event) &&
       quote.event>=base && quote.event<=now+3000 && now-quote.event<=15000;
-    if(now>=expires) {state='expired';label='확정 봉 갱신 대기 · 가격대를 다시 계산하고 있어요.';}
+    if(now>=expires) {state='expired';label='확정 봉 갱신 대기 · 매수 검토 가격대 재계산 중';}
     else if(fresh) {
       if(quote.price<Math.max(stop,riskFloor)) invalidWatch.add(card);
-      if(invalidWatch.has(card)) {state='invalid';label='급락 또는 지지 기준 이탈 · 새 확정 자료로 다시 확인해요.';}
-      else if(quote.price>high) {state='above';label=`현재가에서 ${((1-high/quote.price)*100).toFixed(2)}% 내려오면 검토 가격대예요.`;}
-      else if(quote.price>=low) {state='inside';label='현재가가 검토 가격대에 있어요 · 하락 진정을 확인해요.';}
-      else {state='below';label='현재가가 가격대 아래예요 · 더 저렴하다고 매수하지 않고 지지를 다시 확인해요.';}
+      if(invalidWatch.has(card)) {state='invalid';label='급락 또는 지지 이탈 · 신규 매수 보류 및 가격대 재평가';}
+      else if(quote.price>high) {state='above';label=`현재가 기준 ${((1-high/quote.price)*100).toFixed(2)}% 아래에 매수 검토 가격대가 있습니다.`;}
+      else if(quote.price>=low) {state='inside';label='현재가가 매수 검토 가격대에 도달했습니다. 하락 진정 확인 전까지 신규 매수 대기.';}
+      else {state='below';label='현재가가 검토 가격대보다 낮습니다. 지지 유지 여부를 재확인해야 합니다.';}
     }
     // A rebound alone cannot reactivate a price band whose support broke.
     if(invalidWatch.has(card)) state='invalid';

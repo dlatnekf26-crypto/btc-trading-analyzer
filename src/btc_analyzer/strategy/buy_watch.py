@@ -32,21 +32,23 @@ def watch_price(daily: pd.DataFrame | None, frames: dict, view: PositionView, cf
     distant cheap price or extrapolated target to make the RR pass.
     """
     if any(not frame.ready or frame.stale for frame in frames.values()):
-        return BuyWatch(reason="다섯 시간대의 최신 확정 자료가 준비되면 가격대를 계산해요.")
+        return BuyWatch(reason="다섯 시간대의 최신 확정 자료가 준비될 때까지 가격 계산을 보류합니다.")
     if view.falling_fast or view.broken_support:
-        return BuyWatch(reason="급락 또는 지지 이탈 중이에요. 하락이 진정된 뒤 가격대를 다시 계산해요.")
+        return BuyWatch(
+            reason="급락 또는 지지 이탈로 신규 매수를 보류합니다. 하락 진정 후 가격대를 재평가합니다."
+        )
     if any(frames[tf].volatility == "Extreme Volatility" for tf in ("4h", "1d", "1w")):
-        return BuyWatch(reason="변동 위험이 커서 매수 검토 가격을 보류해요.")
+        return BuyWatch(reason="변동성이 높아 매수 검토 가격 제시를 보류합니다.")
     if frames["1w"].score < 48 or frames["1M"].score < 45 or view.macro_score < 50:
-        return BuyWatch(reason="주봉·월봉 지지가 부족해요. 장기 흐름이 회복되면 가격대를 계산해요.")
+        return BuyWatch(reason="주봉·월봉의 상승 지지가 부족합니다. 장기 방향 회복 후 가격대를 계산합니다.")
     if any((frames[tf].indicators.get("volume_ratio") or 0) < 0.6 for tf in ("4h", "1d")):
-        return BuyWatch(reason="일봉·4시간 거래량이 부족해요. 거래량이 회복되면 가격대를 다시 확인해요.")
+        return BuyWatch(reason="일봉·4시간봉 거래량이 부족합니다. 거래량 회복 후 가격대를 재확인합니다.")
     if daily is None or daily.empty or view.price is None or view.reference is None:
-        return BuyWatch(reason="일봉 가격 근거가 충분하지 않아 가격대를 기다려요.")
+        return BuyWatch(reason="일봉 가격 자료가 부족하여 매수 검토 가격을 계산할 수 없습니다.")
     row = daily.iloc[-1]
     price, reference, atr = view.price, view.reference, float(row.atr)
     if not all(math.isfinite(n) and n > 0 for n in (price, reference, atr)):
-        return BuyWatch(reason="유효한 일봉 가격·변동폭 자료가 필요해요.")
+        return BuyWatch(reason="유효한 일봉 가격과 변동폭 자료가 필요합니다.")
     recent = daily.tail(min(90, int(row.bars_since_gap)))
 
     def finite(n):
@@ -104,9 +106,11 @@ def watch_price(daily: pd.DataFrame | None, frames: dict, view: PositionView, cf
             target=target,
             net_rr=rr,
             basis=label,
-            reason=f"{label} 주변의 일봉 변동폭과 중기 회복 기준을 비교했어요. 수수료·슬리피지 후 손익비 {rr:.2f}배를 충족해요.",
+            reason=f"{label} 주변을 일봉 변동폭과 회복 기준에 따라 계산했습니다. 수수료·슬리피지 반영 후 손익비는 {rr:.2f}배입니다.",
             reference_price=price,
             as_of=as_of.isoformat(),
             valid_until=(as_of + pd.Timedelta(hours=1)).isoformat(),
         )
-    return BuyWatch(reason="가까운 지지·회복 목표로 비용 후 손익비를 충족하는 가격대가 아직 없어요.")
+    return BuyWatch(
+        reason="가까운 지지·회복 기준으로 비용 후 손익비를 충족하는 가격대가 없어 진입가격 제시를 보류합니다."
+    )

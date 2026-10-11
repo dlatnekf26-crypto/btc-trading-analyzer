@@ -376,35 +376,32 @@ def composite_cards(signal: CompositeSignal) -> str:
 def decision_panel(signal: CompositeSignal) -> str:
     """A plain-language conclusion before technical detail, grounded in gates."""
     headings = {
-        "매수": "매수 조건이 모였어요",
-        "매도": "하락 흐름을 경계할 때예요",
-        "관망": "지금은 기다릴 때예요",
+        "매수": "매수 조건 충족",
+        "매도": "보유분 축소 검토",
+        "관망": "신규 매수 대기",
     }
     if signal.mode == "눌림목 분할매수":
-        headings["매수"] = "조정된 가격에서 나눠 살 조건이에요"
-        reason = "가격 할인과 하락 압력 둔화를 확인했어요. 단기 상승 전에도 검토할 수 있어요. 주봉·월봉 방향과 일봉 변동성을 함께 확인한 신호예요."
+        headings["매수"] = "눌림목 분할매수 검토"
+        reason = "가격 할인과 하락 압력 둔화를 확인했습니다. 주봉·월봉 방향, 일봉 변동성, 비용 후 손익비를 충족하여 단기 상승 전에도 분할매수를 검토할 수 있습니다."
     elif signal.action == "매수":
-        reason = "일봉·주봉·월봉이 상승 방향을 지지해요. 단기 상승 여부와 함께 일봉 변동성과 비용 후 손익비를 확인한 신호예요."
+        reason = "일봉·주봉·월봉이 상승 방향을 지지합니다. 일봉 변동성과 수수료·슬리피지를 반영한 손익비가 매수 기준을 충족했습니다."
     elif signal.mode == "과열 분할매도":
-        headings["매도"] = "과열 구간에서 나눠 팔 때예요"
-        reason = "일봉 RSI와 중기 기준 대비 가격 이격이 커요. 현물 보유 중이라면 분할 이익 실현을 검토하는 신호예요."
+        headings["매도"] = "과열 구간 · 분할 이익 실현 검토"
+        reason = "일봉 RSI와 중기 기준 대비 가격 이격이 과열 기준에 도달했습니다. 현물 보유자는 분할 이익 실현을 검토할 수 있습니다."
     elif signal.action == "매도":
-        reason = "일봉·주봉의 하락 방향이 일치해요. 현물을 보유 중이라면 보유분 축소를 검토하는 신호예요."
+        reason = "일봉·주봉의 하락 방향이 일치합니다. 현물 보유자는 보유분 축소를 검토할 수 있습니다."
     elif signal.ready_frames < 5:
-        reason = f"5개 중 {signal.ready_frames}개 시간대만 준비됐어요. 부족한 데이터를 확인할 때까지 판단을 보류해요."
+        reason = f"5개 중 {signal.ready_frames}개 시간대만 준비되었습니다. 최신 확정 자료가 모두 준비될 때까지 판단을 보류합니다."
     elif any("극단적 변동성" in item for item in signal.reasons):
-        reason = "가격 변동이 너무 커요. 방향보다 변동 위험을 먼저 확인할 때예요."
+        reason = "급락 또는 높은 변동성으로 신규 매수를 보류합니다. 가격 안정 확인이 필요합니다."
     elif signal.position.broken_support:
-        reason = "확정 지지 구간이 깨졌어요. 낮은 가격만 보고 진입하기보다 하락이 진정되는지 먼저 확인해요."
+        reason = "확정 일봉 지지를 이탈했습니다. 신규 매수 전 하락 진정과 지지 회복을 확인해야 합니다."
     elif any("0.6배" in item for item in signal.reasons):
-        reason = "일봉·4시간 거래량이 충분하지 않아요. 신규 매수는 잠시 보류해요."
+        reason = "일봉·4시간봉 거래량이 부족하여 신규 매수를 보류합니다."
     elif any("RR 조건이 부족" in item for item in signal.reasons):
-        reason = "가격이나 방향은 관심 구간이지만 비용 후 손익비가 부족해요. 일봉 진입 조건을 기다려요."
+        reason = "수수료·슬리피지를 반영한 손익비가 기준에 미달합니다. 진입가격과 일봉 지지를 다시 확인해야 합니다."
     elif signal.position.value_score >= 65:
-        headings["관망"] = "가격은 관심 구간, 진정은 더 확인해요"
-        reason = (
-            "중기 기준보다 낮은 가격이에요. 장기 방향과 하락 압력 둔화가 함께 확인될 때 분할매수를 검토해요."
-        )
+        reason = "중기 기준보다 낮은 가격이지만 매수 조건이 모두 충족되지는 않았습니다. 장기 지지와 하락 진정을 확인한 후 분할매수를 검토합니다."
     else:
         supported = (
             signal.frames["1w"].score >= 48
@@ -412,36 +409,36 @@ def decision_panel(signal: CompositeSignal) -> str:
             and signal.position.macro_score >= 50
         )
         reason = (
-            "장기 흐름은 버티고 있어요. 가격 매력과 하락 진정 조건이 함께 맞을 때 분할매수를 검토해요."
+            "주봉·월봉 지지는 유지되고 있습니다. 가격 할인과 하락 진정 조건을 함께 확인한 후 분할매수를 검토합니다."
             if supported
-            else "주봉·월봉 방향의 지지가 아직 부족해요. 낮아진 가격만으로 새 매수 신호를 내지 않아요."
+            else "주봉·월봉의 상승 지지가 부족합니다. 장기 방향 회복을 확인할 때까지 신규 매수를 보류합니다."
         )
     kind = {"매수": "buy", "매도": "sell", "관망": "hold"}[signal.action]
-    return f'<section class="btc-signal btc-signal-{kind}" aria-label="종합 신호 근거"><span class="btc-signal-label">{signal.action} · 종합 신호 · {escape(signal.mode)}</span><h2>{headings[signal.action]}</h2><p>{escape(reason)}</p>{buy_watch_card(signal)}</section>'
+    return f'<section class="btc-signal btc-signal-{kind} notranslate" lang="ko" translate="no" aria-label="종합 신호 근거"><span class="btc-signal-label">{signal.action} · 종합 신호 · {escape(signal.mode)}</span><h2>{headings[signal.action]}</h2><p>{escape(reason)}</p>{buy_watch_card(signal)}</section>'
 
 
 def buy_watch_card(signal: CompositeSignal) -> str:
     watch = signal.buy_watch
     if signal.action != "관망" or watch is None:
         return ""
-    title = "<span>어느 가격이면 검토할까요?</span>"
+    title = "<span>매수 검토 가격대</span>"
     if watch.low is None:
-        return f'<div class="btc-buy-watch" aria-label="매수 검토 가격 보류">{title}<p>{escape(watch.reason)}</p></div>'
+        return f'<div class="btc-buy-watch notranslate" lang="ko" translate="no" aria-label="매수 검토 가격 보류">{title}<p>{escape(watch.reason)}</p></div>'
     import pandas as pd
 
     as_of = pd.Timestamp(watch.as_of).tz_convert("Asia/Seoul").strftime("%m.%d %H:%M")
     return (
-        '<div class="btc-buy-watch" id="btc-buy-watch" aria-label="조건부 매수 검토 가격대" '
+        '<div class="btc-buy-watch notranslate" lang="ko" translate="no" id="btc-buy-watch" aria-label="조건부 매수 검토 가격대" '
         f'data-low="{watch.low}" data-high="{watch.high}" data-stop="{watch.invalidation}" '
         f'data-risk-floor="{watch.risk_floor}" '
         f'data-base-at="{pd.Timestamp(watch.as_of).timestamp() * 1000:.0f}" '
         f'data-expires="{pd.Timestamp(watch.valid_until).timestamp() * 1000:.0f}" data-status="waiting">'
         f'{title}<b class="btc-buy-watch-price">{watch.low:,.2f} ~ {watch.high:,.2f} USDT</b>'
-        '<p class="btc-buy-watch-distance">실시간 시세를 받으면 가격대까지의 거리를 표시해요.</p>'
+        '<p class="btc-buy-watch-distance">실시간 시세 확인 대기 · 현재가와 검토 가격대의 차이를 표시합니다.</p>'
         f"<p>{escape(watch.reason)}</p>"
-        "<p>이 가격대라면 분할매수를 검토할 만해요. 도달해도 하락 진정·주봉·월봉 지지 확인이 먼저예요.</p>"
+        "<p>이 가격대에서 분할매수를 검토할 수 있습니다. 진입 전 하락 진정과 주봉·월봉 지지를 확인해야 합니다.</p>"
         f"<small>회복 비교 기준 {watch.target:,.2f} · 지지 재평가 {watch.invalidation:,.2f} USDT · 이탈 시 보류</small>"
-        f"<small>{as_of} KST 확정 봉 기준 · 예상 도착 가격이나 자동 매수 신호가 아니에요.</small></div>"
+        f"<small>{as_of} KST 확정 봉 기준 · 조건부 검토 가격이며 예상 도착 가격이나 자동 매수 신호가 아닙니다.</small></div>"
     )
 
 

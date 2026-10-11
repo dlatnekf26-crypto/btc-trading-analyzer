@@ -137,7 +137,7 @@ def test_card_shows_conditional_price_reasons_without_changing_signal(context):
     html = decision_panel(signal)
     assert 'aria-label="조건부 매수 검토 가격대"' in html
     assert "89.00 ~ 91.00 USDT" in html and "수수료·슬리피지" in html
-    assert "도달해도 하락 진정" in html and "자동 매수 신호가 아니에요" in html
+    assert "진입 전 하락 진정" in html and "자동 매수 신호가 아닙니다" in html
     assert "10.04 21:00 KST" in html
     assert signal.action == "관망" and not signal.eligible and signal.plan is None
     assert "조건부 매수 검토 가격대" not in decision_panel(replace(signal, action="매수"))

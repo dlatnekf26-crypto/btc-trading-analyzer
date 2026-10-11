@@ -53,7 +53,7 @@ engine.dispose();console.log(JSON.stringify(results));
     ]
     assert "9.00%" in states[0]["label"]
     assert "하락 진정" in states[1]["label"]
-    assert "더 저렴하다고 매수하지" in states[2]["label"]
+    assert "지지 유지 여부를 재확인" in states[2]["label"]
     assert states[6]["price"] == states[7]["price"] == "가격대 재평가 필요"
     assert states[-1]["price"] == "새 확정 가격대 계산 중"
     assert all((s["low"], s["high"]) == ("89", "91") for s in states)
