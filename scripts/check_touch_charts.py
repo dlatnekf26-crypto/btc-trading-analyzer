@@ -91,6 +91,15 @@ def verify(browser, width, url, event_log):
     MarketFixture(page)
     page.goto(url)
     page.get_by_role("tab", name="시장 개요", exact=True).wait_for(timeout=45000)
+    page.frame_locator("iframe").first.locator("#binance").wait_for()
+    crypto = next(f for f in page.frames if f.locator("#binance").count())
+    # This suite compares static axis ranges, so pause the injected quote feed.
+    # A fresh REST timestamp legitimately advances the live forecast endpoint;
+    # that is not a touch zoom. check_realtime_analysis exercises live updates,
+    # finger holds and release with all five candle streams still running.
+    crypto.evaluate(
+        "Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'))"
+    )
     cdp = context.new_cdp_session(page)
     if width == 1440:
         plot = page.locator(".js-plotly-plot:visible").first
@@ -106,12 +115,20 @@ def verify(browser, width, url, event_log):
     inspect(page, cdp, page.locator(".js-plotly-plot:visible").first, event_log, "detailed market")
     page.get_by_role("tab", name="미래 예측", exact=True).tap()
     page.get_by_text("기간별 가격 전망", exact=True).wait_for()
+    page.wait_for_function(
+        "()=>[...document.querySelectorAll('.js-plotly-plot')].some(p=>p.getClientRects().length && p.layout?.meta?.btcLive?.kind==='forecast')"
+    )
     plot = page.locator(".js-plotly-plot:visible").first
     plot.wait_for()
     inspect(page, cdp, plot, event_log, "forecast")
     page.screenshot(path=f"/tmp/btc-touch-forecast-{width}.png")
     page.get_by_role("radio", name="과거 비교", exact=True).tap()
     page.get_by_text("비슷했던 시기", exact=True).wait_for()
+    # Streamlit renders the section heading before Plotly replaces the previous
+    # forecast. Inspect the actual comparison, never that still-visible chart.
+    page.wait_for_function(
+        "()=>[...document.querySelectorAll('.js-plotly-plot')].some(p=>p.getClientRects().length && p._fullData?.some(t=>t.name==='지금 흐름'))"
+    )
     plot = page.locator(".js-plotly-plot:visible").first
     for subplot in range(plot.locator(".nsewdrag").count()):
         inspect(page, cdp, plot, event_log, f"comparison {subplot + 1}", subplot)
@@ -159,7 +176,7 @@ def verify(browser, width, url, event_log):
     assert not any(term in label for label in labels for term in removed)
     assert page.evaluate("document.documentElement.scrollWidth<=innerWidth")
     assert not page.locator('[data-testid="stException"]').count()
-    cleanup(page, page.main_frame)
+    cleanup(page, crypto)
     context.close()
     return {
         "width": width,

@@ -25,7 +25,7 @@ from btc_analyzer.strategy.composite import FRAME_LABELS, FRAME_WEIGHTS
 from btc_analyzer.ui.analysis_cache import market_snapshot
 from btc_analyzer.ui.presentation import BRAND, CSS, LABELS, korean, composite_cards, decision_panel
 from btc_analyzer.ui.live_prices import render_live_prices
-from btc_analyzer.ui.market_context import render_market_context
+from btc_analyzer.ui.market_context import render_macro_quotes, render_coin_news
 
 load_dotenv(override=False)
 logging.basicConfig(level=os.getenv("BTC_LOG_LEVEL", "INFO"))
@@ -59,7 +59,7 @@ with st.container(key="market_controls"):
         st.button("데이터 새로고침", on_click=request_market_refresh, width="stretch")
 # Render before any server-side candle request. Quote ticks never rerun Python.
 render_live_prices()
-render_market_context()
+render_macro_quotes()
 st.caption(f"{exchange} {symbol} · 진행 중 봉/잠정 지표는 실시간 · 종합 신호와 과거 검증은 확정 봉 기준")
 
 
@@ -110,7 +110,6 @@ def dashboard() -> None:
         else st.container()
     ):
         st.markdown(decision_panel(combined), unsafe_allow_html=True)
-        st.markdown(composite_cards(combined), unsafe_allow_html=True)
         st.caption(
             f"수주~수개월 관점 · 마지막 확정 {pd.Timestamp(combined.timestamp).tz_convert(display_timezone):%m.%d %H:%M} KST"
         )
@@ -141,7 +140,6 @@ def dashboard() -> None:
             with st.expander("종합 판단의 전체 근거"):
                 for reason in combined.reasons:
                     st.write(f"• {reason}")
-            st.button("예측과 과거 차트 함께 보기", on_click=open_history_comparison)
     if tabs[1].open:
         with tabs[1]:
             from btc_analyzer.ui.indicators_view import render_indicators
@@ -150,6 +148,7 @@ def dashboard() -> None:
     if tabs[2].open:
         with tabs[2]:
             st.subheader("다섯 시간대 통합 분석")
+            st.markdown(composite_cards(combined), unsafe_allow_html=True)
             rows = [
                 {
                     "시간대": FRAME_LABELS[tf],
@@ -234,3 +233,6 @@ def dashboard() -> None:
 
 
 dashboard()
+# News remains an independent fragment and keeps the live alert bridge current
+# on every tab, without pushing the price/forecast chart below a long news feed.
+render_coin_news()

@@ -154,8 +154,13 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     s.nextRestAt=Date.now()+s.restGap;
     return true;
   }
+  function write(target,key,value) {
+    if (target[key] !== value) target[key]=value;
+  }
+  function textAt(root,selector,value) { write(root.querySelector(selector),'textContent',value); }
   function fresh(s) {
-    return s.lastRx && Date.now()-s.lastRx < STALE_MS && Date.now()-s.lastEvent < STALE_MS;
+    const now=Date.now();
+    return s.lastRx && now-s.lastRx < STALE_MS && now-s.lastEvent < STALE_MS && s.lastEvent<=now+3000;
   }
   function schedulePaint() {
     if (!paintTimer && !disposed && !document.hidden) paintTimer = setTimeout(() => {
@@ -163,19 +168,19 @@ LIVE_PRICES_HTML = r"""<!doctype html>
       for (const s of states) {
         if (!s.el) continue;
         const live = fresh(s);
-        s.el.className = 'market crypto ' + (live ? 'fresh' : 'stale');
-        s.el.dataset.transport = s.transport;
-        s.el.querySelector('.status span').textContent = s.price === null
+        write(s.el,'className','market crypto ' + (live ? 'fresh' : 'stale'));
+        write(s.el.dataset,'transport',s.transport);
+        textAt(s.el,'.status span',s.price === null
           ? (s.retries ? '연결 지연 · 재시도 중' : '연결 중…')
-          : (s.transport === 'history' ? '최근 분봉' : live ? (s.transport === 'ws' ? '실시간' : (Math.max(5,s.restGap/1000)+'초 조회')) : '수신 지연 · 마지막 가격') + ' · ' + clock(s.lastEvent);
+          : (s.transport === 'history' ? '최근 분봉' : live ? (s.transport === 'ws' ? '실시간' : (Math.max(5,s.restGap/1000)+'초 조회')) : '수신 지연 · 마지막 가격') + ' · ' + clock(s.lastEvent));
         if (s.dirty) {
           if (s.price !== null) {
-    s.el.querySelector('.price span').textContent=s.price.toLocaleString('en-US', {
-      minimumFractionDigits:s.decimals, maximumFractionDigits:s.decimals});
-    const delta=s.el.querySelector('.change');
-    delta.textContent=s.change === null ? s.changeLabel+' 변동 정보 없음' :
-      `${s.changeLabel} ${s.change >= 0 ? '+' : ''}${s.change.toFixed(2)}%`;
-    delta.style.color=s.change === null ? '#66758b' : s.change >= 0 ? '#09845c' : '#d63851';
+            textAt(s.el,'.price span',s.price.toLocaleString('en-US', {
+              minimumFractionDigits:s.decimals, maximumFractionDigits:s.decimals}));
+            const delta=s.el.querySelector('.change');
+            write(delta,'textContent',s.change === null ? s.changeLabel+' 변동 정보 없음' :
+              `${s.changeLabel} ${s.change >= 0 ? '+' : ''}${s.change.toFixed(2)}%`);
+            write(delta.style,'color',s.change === null ? 'rgb(102, 117, 139)' : s.change >= 0 ? 'rgb(9, 132, 92)' : 'rgb(214, 56, 81)');
           }
           draw(s); persist(s); s.dirty=false;
         }
@@ -203,7 +208,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     const change = binance ? Number(item.P ?? item.priceChangePercent) : item.signed_change_rate*100;
     const time = binance ? item.E ?? item.closeTime : item.timestamp;
     if (!validNumber(price) || price <= 0 || !validNumber(time) || time <= 0 ||
-        time < s.lastEvent || time > Date.now()+60000) return;
+        time < s.lastEvent || time > Date.now()+3000) return;
     s.price=price;
     if (validNumber(change)) s.change=change;
     s.lastEvent=time; s.lastRx=Date.now(); s.transport=transport;
@@ -439,31 +444,32 @@ LIVE_PRICES_HTML = r"""<!doctype html>
   function pollRates() {for (const s of rates) pollRate(s);}
   function paintAux() {
     const fxReady=validRate(fx), pegReady=validRate(peg);
-    fxEl.className='market aux '+(fxReady ? (fx.market && Date.now()-fx.asOf<15000 ? 'fresh' : 'reference') : 'stale');
-    fxEl.dataset.market=String(fx.market);
-    if (fx.rate!==null) fxEl.querySelector('.price span').textContent=fx.rate.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-    fxEl.querySelector('.change').textContent='1 USD당 원화 · '+(fx.source || '고시 환율');
-    fxEl.querySelector('.status span').textContent=fx.rate===null ? '환율 연결 대기' :
-      (fxReady ? '' : '갱신 지연 · ')+dayFormat.format(new Date(fx.asOf))+(fx.daily ? ' 기준' : ' '+clock(fx.asOf)+(fx.market ? ' 시장 시세' : ' 고시'));
+    write(fxEl,'className','market aux '+(fxReady ? (fx.market && Date.now()-fx.asOf<15000 ? 'fresh' : 'reference') : 'stale'));
+    write(fxEl.dataset,'market',String(fx.market));
+    if (fx.rate!==null) textAt(fxEl,'.price span',fx.rate.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}));
+    textAt(fxEl,'.change','1 USD당 원화 · '+(fx.source || '고시 환율'));
+    textAt(fxEl,'.status span',fx.rate===null ? '환율 연결 대기' :
+      (fxReady ? '' : '갱신 지연 · ')+dayFormat.format(new Date(fx.asOf))+(fx.daily ? ' 기준' : ' '+clock(fx.asOf)+(fx.market ? ' 시장 시세' : ' 고시')));
     const btc=states[0], domestic=states[2];
     const quotesReady=fresh(btc) && fresh(domestic) && Math.abs(btc.lastEvent-domestic.lastEvent)<=15000;
     const ready=quotesReady && fxReady && pegReady;
-    premiumEl.className='market aux '+(ready ? 'reference' : 'stale');
-    premiumEl.dataset.ready=String(Boolean(ready));
+    write(premiumEl,'className','market aux '+(ready ? 'reference' : 'stale'));
+    write(premiumEl.dataset,'ready',String(Boolean(ready)));
+    const premiumPrice=premiumEl.querySelector('.price span');
     if (ready) {
       const value=(domestic.price/(btc.price*peg.rate*fx.rate)-1)*100;
       if (validNumber(value)) {
         lastPremium=value;
-        premiumEl.querySelector('.price span').textContent=(value>=0 ? '+' : '')+value.toFixed(2);
-        premiumEl.querySelector('.price span').style.color=value>=0 ? '#d97716' : '#216bdd';
-        premiumEl.querySelector('.change').textContent=(value>=0 ? '국내 가격이 더 높아요' : '해외 가격이 더 높아요')+' · BTC';
-        premiumEl.dataset.value=String(value);
+        write(premiumPrice,'textContent',(value>=0 ? '+' : '')+value.toFixed(2));
+        write(premiumPrice.style,'color',value>=0 ? 'rgb(217, 119, 22)' : 'rgb(33, 107, 221)');
+        textAt(premiumEl,'.change',(value>=0 ? '국내 가격이 더 높아요' : '해외 가격이 더 높아요')+' · BTC');
+        write(premiumEl.dataset,'value',String(value));
       }
-    } else premiumEl.querySelector('.price span').style.color='#8793a4';
-    premiumEl.querySelector('.status span').textContent=ready ?
+    } else write(premiumPrice.style,'color','rgb(135, 147, 164)');
+    textAt(premiumEl,'.status span',ready ?
       (fx.market ? '시장환율 기반 · ' : fx.daily ? '일별 환율 기반 · ' : '고시환율 기반 · ')+clock(Math.min(btc.lastEvent,domestic.lastEvent)) :
-      (lastPremium===null ? '' : '마지막 값 · ')+(!fxReady ? '환율 대기' : !pegReady ? 'USDT 환산 대기' : '시세 지연');
-    premiumEl.title='(Upbit BTC/KRW ÷ (Binance BTC/USDT × USDT/USD × USD/KRW) − 1) × 100. 수수료 제외.';
+      (lastPremium===null ? '' : '마지막 값 · ')+(!fxReady ? '환율 대기' : !pegReady ? 'USDT 환산 대기' : '시세 지연'));
+    write(premiumEl,'title','(Upbit BTC/KRW ÷ (Binance BTC/USDT × USDT/USD × USD/KRW) − 1) × 100. 수수료 제외.');
   }
 
   // Yahoo's public PricingData wire format (yfinance/pricing.proto). Decode

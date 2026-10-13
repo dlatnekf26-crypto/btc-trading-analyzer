@@ -42,10 +42,10 @@ def main() -> None:
         widget = app.get("iframe")[0].proto.srcdoc
         assert "tradingview" not in widget.lower()
         assert any('id="macro-nq"' in item.value and 'id="macro-tnx"' in item.value for item in app.markdown)
-        assert any('aria-label="다섯 시간대 방향"' in item.value for item in app.markdown)
+        assert not any('aria-label="다섯 시간대 방향"' in item.value for item in app.markdown)
         assert "_btc_private_storage" not in app.session_state
         assert not app.sidebar.selectbox and not app.number_input
-        decision = next(item.value for item in app.markdown if 'aria-label="분석 요약"' in item.value)
+        decision = next(item.value for item in app.markdown if 'aria-label="종합 신호 근거"' in item.value)
         app.session_state["dashboard_tab"] = "미래 예측"
         app.run(timeout=45)
         assert not app.exception and not app.error
@@ -57,7 +57,10 @@ def main() -> None:
         app.run(timeout=45)
         assert not app.exception and any("예측선이 아닙니다" in item.value for item in app.caption)
         assert len(app.get("plotly_chart")) == 1
-        assert next(item.value for item in app.markdown if 'aria-label="분석 요약"' in item.value) == decision
+        assert (
+            next(item.value for item in app.markdown if 'aria-label="종합 신호 근거"' in item.value)
+            == decision
+        )
         next(item for item in app.get("button_group") if item.label == "분석 보기").set_value("예측 경로")
         next(item for item in app.get("button_group") if item.label == "예측 기간").set_value("3mo")
         app.session_state["dashboard_tab"] = "미래 예측"

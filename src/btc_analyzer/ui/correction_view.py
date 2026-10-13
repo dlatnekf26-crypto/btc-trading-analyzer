@@ -153,14 +153,16 @@ def render_correction(result, context_values, past_values, news, base, now, time
     if event not in eligible:
         st.caption("발표 이후를 살펴볼 예측 구간이 없어 현재 가격 경로에 추가하지 않았어요.")
         return outlook, None, None
-    if st.session_state.get("_release_condition_event") != event.key:
+    if (
+        st.session_state.get("_release_condition_event") != event.key
+        or "release_condition" not in st.session_state
+    ):
         st.session_state["release_condition"] = "neutral"
         st.session_state["_release_condition_event"] = event.key
     condition = (
         st.segmented_control(
             "발표 결과를 가정해 보기",
             ["neutral", "adverse", "favorable"],
-            default="neutral",
             format_func={"neutral": "예상 부합", "adverse": "코인에 부담", "favorable": "코인에 우호"}.get,
             key="release_condition",
         )

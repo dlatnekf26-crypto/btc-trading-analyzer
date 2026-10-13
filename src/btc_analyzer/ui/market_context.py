@@ -11,11 +11,11 @@ from btc_analyzer import __checkout_signature__
 from btc_analyzer.data.market_context import MarketContextService, MacroQuote, TOPICS, UTC, crypto_relevance
 
 CONTEXT_CSS = """<style>
-.btc-macro-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:0 0 12px}
-.btc-macro-card,.btc-news-item{background:linear-gradient(135deg,#fff,#f9fbff);border:1px solid #e7ecf3;border-radius:20px;padding:16px;min-width:0}
+.btc-macro-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0 0 8px}
+.btc-macro-card,.btc-news-item{background:#fff;border:1px solid #e7ecf3;border-radius:18px;padding:14px;min-width:0}
 .btc-macro-name{font-size:14px;font-weight:700;margin:0 0 6px;color:#191f28}.btc-macro-value{font-size:26px;font-weight:750;letter-spacing:-.6px;font-variant-numeric:tabular-nums}
-.btc-macro-card p{font-size:11px;color:#66758b;margin:5px 0}.btc-macro-card a,.btc-news-item a{color:#25496e;text-decoration:none}.btc-macro-card svg{width:100%;height:42px;display:block;margin:8px 0}
-.btc-macro-graph{height:58px;display:flex;align-items:center}.btc-macro-card .btc-macro-status{min-height:34px;line-height:1.55}
+.btc-macro-card p{font-size:11px;color:#66758b;margin:4px 0}.btc-macro-card a,.btc-news-item a{color:#25496e;text-decoration:none}.btc-macro-card svg{width:100%;height:32px;display:block;margin:4px 0}
+.btc-macro-graph{height:40px;display:flex;align-items:center}.btc-macro-card .btc-macro-status{min-height:34px;line-height:1.55}
 .btc-macro-heading{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;margin-bottom:7px}.btc-macro-heading .btc-macro-name{margin:0}.btc-macro-badge{font-size:10px;color:#66758b;background:#eff2f7;border-radius:7px;padding:3px 6px;white-space:nowrap}
 .btc-macro-card[data-status="stream"] .btc-macro-badge{background:#e7f6f0;color:#087f5b}.btc-macro-card[data-status="delayed"] .btc-macro-badge{background:#fff5e3;color:#986309}
 .btc-news-item{margin:8px 0;padding:14px 16px}.btc-news-title{font-size:15px;font-weight:650;line-height:1.55;display:block;margin:7px 0;overflow-wrap:anywhere}.btc-news-meta,.btc-news-explain{font-size:12px;color:#66758b;line-height:1.55;margin:4px 0}
@@ -176,8 +176,3 @@ def render_coin_news():
                 else "기사 원문에서 내용을 확인해 주세요."
             )
         )
-
-
-def render_market_context():
-    render_macro_quotes()
-    render_coin_news()

@@ -339,7 +339,12 @@ def test_macro_collection_keeps_successful_frames_on_failure(tmp_path, monkeypat
         calls.append((tf, start))
         if tf == "1M":
             raise DataError("Monthly feed unavailable")
-        return sample.get(tf, sample["1h"])
+        frame = sample.get(tf, sample["1h"])
+        return normalize(
+            [[int(t.timestamp() * 1000), *row] for t, row in zip(frame.index, frame.to_numpy())],
+            tf,
+            now=end,
+        )
 
     monkeypatch.setattr(DataService, "fetch", fetch)
     bundle = DataService(tmp_path / "market.sqlite").bundle(

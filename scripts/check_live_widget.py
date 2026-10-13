@@ -284,6 +284,7 @@ def verify(browser, width, app_url=None, event_log=None):
         json.dumps({"s": "DOGEUSDT", "c": "1", "E": now + 1}),
         json.dumps({"s": "BTCUSDT", "c": "-1", "E": now + 1}),
         json.dumps({"s": "BTCUSDT", "c": "1", "E": now - 60000}),
+        json.dumps({"s": "BTCUSDT", "c": "999999", "E": now + 30000}),
     ):
         widget.evaluate("p=>window.__quoteSockets.find(s=>s.url.includes('btcusdt@')).emit(p,false)", packet)
     page.clock.run_for(300)

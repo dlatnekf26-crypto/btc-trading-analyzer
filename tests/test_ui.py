@@ -20,7 +20,7 @@ def test_dashboard_only_has_requested_views_and_never_opens_account_db(monkeypat
     app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
     assert not app.exception and not app.error
     assert [tab.label for tab in app.tabs] == ["시장 개요", "기술 지표", "다중 시간대", "미래 예측"]
-    assert any('aria-label="분석 요약"' in item.value for item in app.markdown)
+    assert any('aria-label="종합 신호 근거"' in item.value for item in app.markdown)
     assert not app.warning
     assert not any(x.label in ("거래소", "데이터 모드") for x in app.selectbox)
     assert len(app.get("iframe")) == 1
@@ -29,6 +29,9 @@ def test_dashboard_only_has_requested_views_and_never_opens_account_db(monkeypat
         app.session_state["dashboard_tab"] = tab
         app.run()
         assert not app.exception and not app.error
+        if tab == "다중 시간대":
+            assert any('aria-label="분석 요약"' in item.value for item in app.markdown)
+            assert any('aria-label="다섯 시간대 방향"' in item.value for item in app.markdown)
     assert not path.exists()
 
 
@@ -48,7 +51,7 @@ def test_live_invalid_binance_symbol_shows_error(monkeypatch, tmp_path):
 
 def test_indicator_controls_and_korean_values_preserve_composite_analysis():
     app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
-    original = next(x.value for x in app.markdown if 'aria-label="분석 요약"' in x.value)
+    original = next(x.value for x in app.markdown if 'aria-label="종합 신호 근거"' in x.value)
     app.session_state["dashboard_tab"] = "기술 지표"
     app.run()
     for kind in ("RSI", "MACD", "ATR", "BB", "VOLUME"):
@@ -59,7 +62,7 @@ def test_indicator_controls_and_korean_values_preserve_composite_analysis():
         app.run()
         assert not app.exception and not app.error
         assert len(app.get("plotly_chart")) == 1
-        assert next(x.value for x in app.markdown if 'aria-label="분석 요약"' in x.value) == original
+        assert next(x.value for x in app.markdown if 'aria-label="종합 신호 근거"' in x.value) == original
         assert any('aria-label="기술지표 현재 상태"' in x.value for x in app.markdown)
     for timeframe in ("1h", "4h", "1d", "1w", "1M"):
         next(x for x in app.get("button_group") if x.label == "지표 시간대").set_value(timeframe)
@@ -91,11 +94,11 @@ def test_five_horizon_chart_switch_keeps_composite_decision(monkeypatch, tmp_pat
     monkeypatch.setenv("BTC_DB_PATH", str(tmp_path / "five-horizon.sqlite"))
     app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
     assert not app.exception and not app.error
-    original = next(x.value for x in app.markdown if 'aria-label="분석 요약"' in x.value)
+    original = next(x.value for x in app.markdown if 'aria-label="종합 신호 근거"' in x.value)
     for timeframe, label in (("4h", "4시간"), ("1d", "일봉"), ("1w", "주봉"), ("1M", "월봉")):
         next(x for x in app.get("button_group") if x.label == "차트 시간대").set_value(timeframe).run()
         assert not app.exception and not app.error
-        assert next(x.value for x in app.markdown if 'aria-label="분석 요약"' in x.value) == original
+        assert next(x.value for x in app.markdown if 'aria-label="종합 신호 근거"' in x.value) == original
         assert any(item.value.startswith(label + " · ") for item in app.caption)
     app.session_state["dashboard_tab"] = "다중 시간대"
     app.run()
@@ -133,7 +136,7 @@ def test_ichimoku_view_and_overlay_controls_preserve_signal(monkeypatch, tmp_pat
     monkeypatch.setenv("BTC_DB_PATH", str(tmp_path / "ichimoku-ui.sqlite"))
     app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
     assert not app.exception and not app.error
-    summary = next(item.value for item in app.markdown if 'aria-label="분석 요약"' in item.value)
+    summary = next(item.value for item in app.markdown if 'aria-label="종합 신호 근거"' in item.value)
     assert not any("일목균형표, 이렇게 읽어요" in item.value for item in app.subheader)
     assert any("일목 구름은 확정 봉의 이동 표시" in item.value for item in app.caption)
     assert any("현재 봉의 구름 위치" in item.value for item in app.caption)
@@ -152,4 +155,4 @@ def test_ichimoku_view_and_overlay_controls_preserve_signal(monkeypatch, tmp_pat
     assert not app.exception and not app.error
     next(item for item in app.get("button_group") if item.label == "겹쳐 볼 지표").set_value([]).run()
     assert not app.exception and not app.error
-    assert next(item.value for item in app.markdown if 'aria-label="분석 요약"' in item.value) == summary
+    assert next(item.value for item in app.markdown if 'aria-label="종합 신호 근거"' in item.value) == summary

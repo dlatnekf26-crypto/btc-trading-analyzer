@@ -9,7 +9,14 @@ from btc_analyzer.data.service import DataService, demo_bundle
 
 
 @pytest.mark.parametrize(
-    "tf,freq,end", [("1d", "D", "2026-10-01"), ("1w", "W-MON", "2026-10-05"), ("1M", "MS", "2026-10-01")]
+    "tf,freq,end",
+    [
+        ("1h", "h", "2026-10-01"),
+        ("4h", "4h", "2026-10-01"),
+        ("1d", "D", "2026-10-01"),
+        ("1w", "W-MON", "2026-10-05"),
+        ("1M", "MS", "2026-10-01"),
+    ],
 )
 def test_new_boundary_requests_only_overlap_and_new_candle_and_refresh_downloads_all(tmp_path, tf, freq, end):
     end = pd.Timestamp(end, tz="UTC")
@@ -87,3 +94,61 @@ def test_expanded_demo_history_shares_the_exact_dashboard_path(base):
     expanded["1h"].iloc[-1, 3] = -1
     fresh = demo_bundle(base, 800, include_macro=True, history_limits={"1h": 3000}, only_timeframe="1h")
     assert fresh["1h"].close.iloc[-1] > 0
+
+
+@pytest.mark.parametrize("existing", [False, True])
+def test_middle_gap_is_retried_even_when_latest_candle_is_present(tmp_path, existing):
+    service = DataService(tmp_path / "market.sqlite")
+    end = pd.Timestamp("2026-10-01", tz="UTC")
+
+    class Provider:
+        missing = False
+        calls = 0
+
+        def fetch(self, symbol, tf, start, until):
+            self.calls += 1
+            index = pd.date_range(start, until, freq="h", inclusive="left")
+            if self.missing:
+                index = index.delete(-2)
+            return normalize(
+                [[int(t.timestamp() * 1000), 100, 102, 98, 100, 1] for t in index], tf, now=until
+            )
+
+    provider = Provider()
+    service._providers["Binance"] = provider
+    if existing:
+        service.history("Binance", "BTC/USDT", "1h", end - pd.Timedelta(hours=3), 260)
+    provider.missing = True
+    incomplete = service.history("Binance", "BTC/USDT", "1h", end, 260)
+    assert candle_close(incomplete.index[-1], "1h") == end
+    assert incomplete.attrs["quality"]["missing_candles"] == 1
+    calls = provider.calls
+    provider.missing = False
+    repaired = service.history("Binance", "BTC/USDT", "1h", end, 260)
+    assert provider.calls == calls + 1
+    assert len(repaired) == 260 and repaired.attrs["quality"]["missing_candles"] == 0
+
+
+def test_dashboard_new_hour_reuses_short_frame_history(tmp_path):
+    service = DataService(tmp_path / "market.sqlite")
+    end = pd.Timestamp("2026-10-01T08:00Z")
+    requests = []
+
+    class Provider:
+        def fetch(self, symbol, tf, start, until):
+            freq = {"1h": "h", "4h": "4h", "1d": "D", "1w": "W-MON", "1M": "MS"}[tf]
+            index = pd.date_range(start, until, freq=freq, inclusive="left")
+            requests.append((tf, len(index)))
+            return normalize(
+                [[int(t.timestamp() * 1000), 100, 102, 98, 100, 1] for t in index], tf, now=until
+            )
+
+    service._providers["Binance"] = Provider()
+    args = ("Binance", "BTC/USDT", "1d", end.normalize() - pd.Timedelta(days=30))
+    service.bundle(*args, end, include_macro=True)
+    assert ("1h", 260) in requests
+    requests.clear()
+    updated = service.bundle(*args, end + pd.Timedelta(hours=1), include_macro=True)
+    assert requests == [("1h", 2)]
+    assert len(updated["1h"]) == 260
+    assert updated["1h"].attrs["quality"]["missing_candles"] == 0

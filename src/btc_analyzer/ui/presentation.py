@@ -15,7 +15,7 @@ from btc_analyzer.strategy.composite import CompositeSignal, FRAME_LABELS, FRAME
 CSS = """
 <style>
 :root { --btc-muted: #66758b; --btc-line: #e7ecf3; --btc-blue: #3182f6; }
-.stApp { background: #f5f7fb; color: #191f28; }
+.stApp { background: #f6f8fc; color: #191f28; }
 html, body, [class*="css"], .stApp {
     font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Pretendard', 'Segoe UI', sans-serif;
 }
@@ -35,14 +35,16 @@ p, li { line-height: 1.7; }
     border-radius: 12px; min-height: 44px; font-weight: 600;
 }
 [data-testid="stButtonGroup"] button { min-height: 44px; }
-[data-baseweb="tab-list"] { gap: 6px; border-bottom: 1px solid #e7ecf3; padding-bottom: 8px; }
+[data-baseweb="tab-list"] { gap: 4px; border: 1px solid #e7ecf3; border-radius: 16px; padding: 5px; background: #fff; }
 [data-baseweb="tab"] { padding: 10px 14px; border-radius: 12px; font-weight: 600; }
 [data-baseweb="tab"][aria-selected="true"] { background: #eaf2ff; color: #216bdd; }
+[data-baseweb="tab-highlight"], [data-baseweb="tab-border"] { display: none; }
+[data-baseweb="tab"]:focus-visible, [data-testid="stButton"] button:focus-visible { outline: 2px solid #3182f6; outline-offset: 2px; }
 [data-testid="stPlotlyChart"] { border-radius: 20px; overflow: hidden; background: #fff; border: 1px solid #e7ecf3; }
 [data-testid="stPlotlyChart"] .js-plotly-plot,
 [data-testid="stPlotlyChart"] .main-svg,
 [data-testid="stPlotlyChart"] .draglayer rect { touch-action: pan-y !important; }
-.btc-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+.btc-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
 .btc-logo {
     display: grid; place-items: center; width: 42px; height: 42px; border-radius: 15px;
     background: #3182f6; color: #fff; font-size: 27px; font-weight: 800;
@@ -160,7 +162,7 @@ button:focus-visible { outline: 3px solid #3182f666; outline-offset: 3px; }
 .btc-match-cards span { color: #66758b; font-size: 11px; display: block; }
 .btc-match-cards strong { display: block; font-size: 24px; margin-top: 5px; font-variant-numeric: tabular-nums; }
 .btc-match-cards small { color: #66758b; font-size: 11px; font-weight: 400; }
-.btc-chart-summary { background: white; border: 1px solid #e7ecf3; border-radius: 18px; padding: 16px 20px; }
+.btc-chart-summary { background: white; border: 1px solid #e7ecf3; border-left: 4px solid #3182f6; border-radius: 16px; padding: 14px 18px; }
 .btc-chart-summary span { display: block; color: #66758b; font-size: 12px; }
 .btc-chart-summary strong { display: block; font-size: 28px; letter-spacing: -.035em; margin: 5px 0; }
 .btc-chart-summary small { font-size: 13px; color: #66758b; }

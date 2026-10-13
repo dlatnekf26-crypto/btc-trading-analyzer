@@ -89,7 +89,7 @@ def test_live_tab_collects_only_when_open_and_controls_and_refresh_reuse_work(
     monkeypatch.setattr(DataService, "fetch", fetched)
     app = AppTest.from_file(ROOT / "web_app.py", default_timeout=45).run()
     assert not app.exception and not app.error and not calls
-    decision = next(item.value for item in app.markdown if 'aria-label="분석 요약"' in item.value)
+    decision = next(item.value for item in app.markdown if 'aria-label="종합 신호 근거"' in item.value)
     choose_history(app)
     assert not app.exception and not app.error
     assert len(calls) == 1 and calls[0][1:4] == ("Binance", "BTC/USDT", "1d")
@@ -105,7 +105,9 @@ def test_live_tab_collects_only_when_open_and_controls_and_refresh_reuse_work(
     assert len(calls) == 2 and calls[-1][-1] is True
     choose_history(app)
     assert len(calls) == 2
-    assert next(item.value for item in app.markdown if 'aria-label="분석 요약"' in item.value) == decision
+    assert (
+        next(item.value for item in app.markdown if 'aria-label="종합 신호 근거"' in item.value) == decision
+    )
     next(item for item in app.get("button_group") if item.label == "예측 기간").set_value("custom")
     choose_history(app)
     next(item for item in app.get("button_group") if item.label == "비교 시간대").set_value("1w")
@@ -166,7 +168,7 @@ def test_live_comparison_uses_public_history_and_five_timeframes(monkeypatch, tm
     monkeypatch.setenv("BTC_DEFAULT_SOURCE", "demo")
     app = AppTest.from_file(ROOT / "app.py", default_timeout=45).run()
     next(item for item in app.get("button_group") if item.label == "차트 시간대").set_value("4h").run()
-    next(item for item in app.button if item.label == "예측과 과거 차트 함께 보기").click()
+    next(item for item in app.button if item.label == "미래 예측 보기 →").click()
     choose_history(app)
     assert app.session_state["similarity_timeframe"] == "4h"
     assert not app.exception and not app.error
@@ -205,7 +207,7 @@ def test_removed_forecast_footers_never_build_tables_or_downloads_and_keep_decis
     monkeypatch.setenv("BTC_DB_PATH", str(tmp_path / "demo.sqlite"))
     monkeypatch.setenv("BTC_DEFAULT_SOURCE", "demo")
     app = AppTest.from_file(ROOT / "app.py", default_timeout=45).run()
-    decision = next(item.value for item in app.markdown if 'aria-label="분석 요약"' in item.value)
+    decision = next(item.value for item in app.markdown if 'aria-label="종합 신호 근거"' in item.value)
     next(item for item in app.button if item.label == "미래 예측 보기 →").click()
     choose_history(app)
     assert not app.exception and not app.error
@@ -218,7 +220,9 @@ def test_removed_forecast_footers_never_build_tables_or_downloads_and_keep_decis
     assert not app.exception and not app.error
     assert not app.metric and not app.get("dataframe") and not app.get("download_button")
     assert not any("과거 예측 성적" in item.label or "세부 유사도" in item.label for item in app.expander)
-    assert next(item.value for item in app.markdown if 'aria-label="분석 요약"' in item.value) == decision
+    assert (
+        next(item.value for item in app.markdown if 'aria-label="종합 신호 근거"' in item.value) == decision
+    )
     next(item for item in app.get("button_group") if item.label == "분석 보기").set_value("과거 비교")
     choose_history(app)
     assert any("예측선이 아닙니다" in item.value for item in app.caption)

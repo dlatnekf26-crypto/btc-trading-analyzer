@@ -48,8 +48,13 @@ class DataService:
         with sqlite3.connect(self.path) as conn:
             item = conn.execute("SELECT created,payload FROM market_cache WHERE key=?", (key,)).fetchone()
         cache_ttl = max(self.ttl, min(TIMEFRAMES[timeframe], 86400))
-        if not refresh and item and time.time() - item[0] < cache_ttl:
-            data = json.loads(item[1])
+        data = json.loads(item[1]) if item else None
+        if (
+            not refresh
+            and item
+            and time.time() - item[0] < cache_ttl
+            and not data["quality"].get("missing_candles", 0)
+        ):
             result = normalize(data["rows"], timeframe)
             result.attrs["quality"] = data["quality"]
             result.attrs["cached"] = True
@@ -58,7 +63,7 @@ class DataService:
             self._providers[exchange] = BinanceProvider() if exchange == "Binance" else UpbitProvider()
         provider = self._providers[exchange]
         result = provider.fetch(symbol, timeframe, start, end)
-        if not result.empty and candle_close(result.index[-1], timeframe) == end:
+        if self._complete(result, timeframe, end):
             rows = [[int(t.timestamp() * 1000), *r] for t, r in zip(result.index, result.to_numpy().tolist())]
             with sqlite3.connect(self.path) as conn:
                 conn.execute(
@@ -66,6 +71,16 @@ class DataService:
                     (key, time.time(), json.dumps({"rows": rows, "quality": result.attrs["quality"]})),
                 )
         return result
+
+    @staticmethod
+    def _complete(frame, timeframe, end):
+        # A recent last candle alone does not prove the path is continuous.
+        # Never freeze a temporary provider gap into the reusable history.
+        return (
+            not frame.empty
+            and candle_close(frame.index[-1], timeframe) == end
+            and not frame.attrs.get("quality", {}).get("missing_candles", 0)
+        )
 
     def history(self, exchange, symbol, timeframe, end, bars, *, refresh=False):
         """Reuse closed history across boundaries; fetch just the revised/new tail.
@@ -85,8 +100,8 @@ class DataService:
         with sqlite3.connect(self.path) as conn:
             item = conn.execute("SELECT created,payload FROM market_cache WHERE key=?", (key,)).fetchone()
         previous = None
-        if item and not refresh:
-            payload = json.loads(item[1])
+        payload = json.loads(item[1]) if item and not refresh else None
+        if payload and not payload["quality"].get("missing_candles", 0):
             previous_end = utc(payload["end"])
             previous = normalize(payload["rows"], timeframe, now=previous_end)
             previous.attrs["quality"] = payload["quality"]
@@ -111,7 +126,7 @@ class DataService:
                 previous = None
         if previous is None or refresh:
             result = self.fetch(exchange, symbol, timeframe, start, end, refresh=refresh)
-        if not result.empty and candle_close(result.index[-1], timeframe) == end:
+        if self._complete(result, timeframe, end):
             rows = [[int(t.timestamp() * 1000), *r] for t, r in zip(result.index, result.to_numpy().tolist())]
             with sqlite3.connect(self.path) as conn:
                 conn.execute(
@@ -158,11 +173,8 @@ class DataService:
                 # Monthly heatmaps reuse the monthly frame. Sideways summaries
                 # need 72 hours; preserve 260 bars for technical warmup.
                 bars = max(warmup, 260)
-                since = history_start(candle_boundary(utc(end), tf), tf, bars)
-                if exchange == "Binance":
-                    since = max(since, utc("2017-08-01"))
                 try:
-                    result[tf] = self.fetch(exchange, symbol, tf, since, end, refresh=refresh)
+                    result[tf] = self.history(exchange, symbol, tf, end, bars, refresh=refresh)
                 except DataError as exc:
                     # An absent macro frame is explicit and disables composite
                     # recommendations; the successfully fetched chart stays usable.
