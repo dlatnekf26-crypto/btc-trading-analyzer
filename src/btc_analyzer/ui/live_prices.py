@@ -41,7 +41,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
 <script>
 (() => {
   'use strict';
-  const ACTIVE_SYMBOL = 'BTCUSDT';
+  let ACTIVE_SYMBOL = 'BTCUSDT';
   /* LIVE_ANALYSIS_BRIDGE */
   // Delegate touch inspection to the existing parent charts. No extra iframe,
   // data requests or Streamlit events; passive listeners preserve page scrolling.
@@ -119,6 +119,10 @@ LIVE_PRICES_HTML = r"""<!doctype html>
   })();
   const MAX_POINTS = 61, STALE_MS = 15000, DRAW_MS = 50;
   const MARKET_ASSETS = [['BTC','binance','비트코인',2],['ETH','ethereum','이더리움',2],['SOL','solana','솔라나',2],['XRP','ripple','리플',4]];
+  try {
+    const initial=window.parent.document.getElementById('btc-live-selection')?.dataset.symbol;
+    if(MARKET_ASSETS.some(([code])=>code+'USDT'===initial)) ACTIVE_SYMBOL=initial;
+  } catch(_) {}
   for (const [code,id,name] of MARKET_ASSETS) {
     let card=document.getElementById(id);
     if(!card) {card=document.getElementById('binance').cloneNode(true);card.id=id;document.getElementById('forex').before(card);}
@@ -132,14 +136,14 @@ LIVE_PRICES_HTML = r"""<!doctype html>
   configs.push({id:'upbit',market:'upbit',symbol:'KRW-BTC',decimals:0,changeLabel:'전일 대비',restGap:11000,
     socket:'wss://api.upbit.com/websocket/v1',ticker:'https://api.upbit.com/v1/ticker?markets=KRW-BTC',history:null});
   const streams=configs.filter(c=>c.market==='binance').flatMap(c=>[c.symbol.toLowerCase()+'@aggTrade',c.symbol.toLowerCase()+'@ticker']);
-  for (const tf of ['1h','4h','1d','1w','1M']) streams.push(ACTIVE_SYMBOL.toLowerCase()+'@kline_'+tf);
-  configs[0].socket='wss://data-stream.binance.vision/stream?streams='+streams.join('/');
+  const klineStreams=symbol=>['1h','4h','1d','1w','1M'].map(tf=>symbol.toLowerCase()+'@kline_'+tf);
+  let subscribedSymbol=null,subscriptionId=0,lastSubscriptionAt=0,selectionTimer=null;
   let disposed = false, paintTimer = null;
   const states = configs.map(config => ({...config, el:document.getElementById(config.id), points:[],
     socketRef:null, retryTimer:null, retries:0, connectedAt:0, lastRx:0, lastEvent:0,
     lastPoll:0, lastWs:0, historyAt:0, transport:'', price:null, change:null, pending:false,
     loadingHistory:false, historyReady:false, historyRetryAt:0, historyFailures:0, nextRestAt:0, storageAt:0, controllers:new Set(), dirty:true,
-    moveSamples:[], move:null}));
+    moveSamples:[], move:null,plotDirty:true}));
   const binanceRequest={pending:false,lastPoll:0,restGap:1000,nextRestAt:0,controllers:new Set()};
   const validNumber = n => typeof n === 'number' && Number.isFinite(n);
   const timeFormat = new Intl.DateTimeFormat('en-GB', {hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23',timeZone:'Asia/Seoul'});
@@ -174,9 +178,31 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     const now=Date.now();
     return s.lastRx && now-s.lastRx < STALE_MS && now-s.lastEvent < STALE_MS && s.lastEvent<=now+3000;
   }
+  function syncSelection() {
+    let selected;
+    try {selected=window.parent.document.getElementById('btc-live-selection')?.dataset.symbol;} catch(_) {}
+    if(!states.some(s=>s.market==='binance' && s.symbol===selected)) selected=ACTIVE_SYMBOL;
+    if(selected!==ACTIVE_SYMBOL) {ACTIVE_SYMBOL=selected;liveAnalysis.stop();}
+    for(const s of states) if(s.el) write(s.el.dataset,'selected',String(s.symbol===ACTIVE_SYMBOL));
+    write(document.body.dataset,'asset',ACTIVE_SYMBOL);
+    const socket=states[0].socketRef;
+    if(socket?.readyState===1 && subscribedSymbol!==ACTIVE_SYMBOL) {
+      // Two control frames per switch; keep below Binance's five messages/sec
+      // limit, leaving room for protocol pong. Rapid choices use the latest.
+      const delay=lastSubscriptionAt+650-Date.now();
+      if(delay>0) {
+        if(selectionTimer===null) selectionTimer=setTimeout(()=>{selectionTimer=null;schedulePaint();},delay);
+        return;
+      }
+      if(subscribedSymbol) socket.send(JSON.stringify({method:'UNSUBSCRIBE',params:klineStreams(subscribedSymbol),id:++subscriptionId}));
+      socket.send(JSON.stringify({method:'SUBSCRIBE',params:klineStreams(ACTIVE_SYMBOL),id:++subscriptionId}));
+      subscribedSymbol=ACTIVE_SYMBOL;lastSubscriptionAt=Date.now();
+    }
+  }
   function schedulePaint() {
     if (!paintTimer && !disposed && !document.hidden) paintTimer = setTimeout(() => {
       paintTimer = null;
+      syncSelection();
       for (const s of states) {
         if (!s.el) continue;
         const live = fresh(s);
@@ -194,7 +220,8 @@ LIVE_PRICES_HTML = r"""<!doctype html>
               `${s.changeLabel} ${s.change >= 0 ? '+' : ''}${s.change.toFixed(2)}%`);
             write(delta.style,'color',s.change === null ? 'rgb(102, 117, 139)' : s.change >= 0 ? 'rgb(9, 132, 92)' : 'rgb(214, 56, 81)');
           }
-          draw(s); persist(s); s.dirty=false;
+          if(s.plotDirty) {draw(s);s.plotDirty=false;}
+          persist(s); s.dirty=false;
         }
       }
       paintAux();
@@ -207,10 +234,11 @@ LIVE_PRICES_HTML = r"""<!doctype html>
   function addPoint(s, time, price) {
     const minute = Math.floor(time/60000)*60000;
     const last = s.points[s.points.length-1];
+    if(last && last[0]===minute && last[1]===price) {s.dirty=true;return;}
     if (last && last[0] === minute) last[1]=price;
     else if (!last || minute > last[0]) s.points.push([minute,price]);
     s.points=s.points.filter(p => p[0] >= minute-3600000).slice(-MAX_POINTS);
-    s.dirty=true;
+    s.dirty=true;s.plotDirty=true;
   }
   function accept(s, raw, transport) {
     const item = Array.isArray(raw) ? raw[0] : raw;
@@ -260,12 +288,12 @@ LIVE_PRICES_HTML = r"""<!doctype html>
       canvas.width=Math.round(width*scale); canvas.height=Math.round(height*scale);
     }
     const ctx=canvas.getContext('2d'); ctx.setTransform(scale,0,0,scale,0,0); ctx.clearRect(0,0,width,height);
-    canvas.dataset.samples=String(s.points.length);
-    canvas.dataset.span=String(s.points.length>1 ? s.points[s.points.length-1][0]-s.points[0][0] : 0);
-    s.el.dataset.history=s.historyReady ? 'ready' : s.historyFailures ? 'retry' : 'loading';
-    s.el.querySelector('.range span:last-child').textContent=s.historyReady ? '지금' : s.historyFailures ? '이력 재시도' : '이력 조회 중';
-    if (s.points.length) s.el.querySelector('.range span').textContent=clock(s.points[0][0]).slice(0,5)+' KST';
-    s.el.querySelector('.empty').hidden=s.points.length>0;
+    write(canvas.dataset,'samples',String(s.points.length));
+    write(canvas.dataset,'span',String(s.points.length>1 ? s.points[s.points.length-1][0]-s.points[0][0] : 0));
+    write(s.el.dataset,'history',s.historyReady ? 'ready' : s.historyFailures ? 'retry' : 'loading');
+    textAt(s.el,'.range span:last-child',s.historyReady ? '지금' : s.historyFailures ? '이력 재시도' : '이력 조회 중');
+    if (s.points.length) textAt(s.el,'.range span',clock(s.points[0][0]).slice(0,5)+' KST');
+    write(s.el.querySelector('.empty'),'hidden',s.points.length>0);
     if (!s.points.length || !width) return;
     const values=s.points.map(p=>p[1]), low=Math.min(...values), high=Math.max(...values);
     const span=high-low || Math.max(0.00001,low*0.0001), pad=6;
@@ -279,7 +307,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     gradient.addColorStop(0,color+'25'); gradient.addColorStop(1,color+'00');
     ctx.fillStyle=gradient; ctx.fill();
     const [x,y]=xy[xy.length-1]; ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fillStyle=color; ctx.fill();
-    canvas.setAttribute('aria-label', `${s.id} 최근 1시간 가격, ${values[values.length-1].toLocaleString('en-US')}`);
+    write(canvas,'ariaLabel',`${s.name} 최근 1시간 가격, ${values[values.length-1].toLocaleString('en-US')}`);
   }
   async function json(s,url) {
     const controller=new AbortController(); s.controllers.add(controller);
@@ -320,10 +348,10 @@ LIVE_PRICES_HTML = r"""<!doctype html>
         const last=s.points[s.points.length-1];
         s.price=last[1]; s.lastEvent=last[0]; s.transport='history';
       }
-      s.dirty=true; persist(s); schedulePaint();
+      s.dirty=true;s.plotDirty=true; persist(s); schedulePaint();
     } catch (_) {
       s.historyFailures++; s.historyRetryAt=Date.now()+Math.min(60000,11000*2**Math.min(s.historyFailures,3));
-      s.dirty=true; schedulePaint();
+      s.dirty=true;s.plotDirty=true; schedulePaint();
     }
     finally { s.loadingHistory=false; }
   }
@@ -361,11 +389,16 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     if ((s.market==='binance' && s.id!=='binance') || disposed || document.hidden || s.socketRef) return;
     const group=s.market==='binance' ? states.filter(s=>s.market==='binance') : [s];
     let ws;
+    if(s.market==='binance') {
+      s.socket='wss://data-stream.binance.vision/stream?streams='+[...streams,...klineStreams(ACTIVE_SYMBOL)].join('/');
+      subscribedSymbol=ACTIVE_SYMBOL;
+    }
     try { ws=new WebSocket(s.socket); }
     catch (_) { reconnect(s); return; }
     for (const market of group) {market.socketRef=ws; market.connectedAt=Date.now();}
     ws.binaryType='arraybuffer';
     ws.onopen=()=>{
+      if(s.market==='binance') syncSelection();
       if (s.id==='upbit') ws.send(JSON.stringify([
         {ticket:'btc-signal-lab-'+Math.random().toString(36).slice(2)},
         {type:'ticker',codes:[s.symbol],is_only_realtime:true}
@@ -394,6 +427,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     };
   }
   function stop(s) {
+    if(s.id==='binance') {clearTimeout(selectionTimer);selectionTimer=null;}
     clearTimeout(s.retryTimer); s.retryTimer=null;
     const ws=s.socketRef; s.socketRef=null; if (ws) ws.close();
     for (const controller of s.controllers) controller.abort();
@@ -663,13 +697,14 @@ LIVE_PRICES_HTML = r"""<!doctype html>
   // Restore stream values promptly if a native quote fragment replaces its DOM.
   const macroObserver=parentDoc ? new MutationObserver(records=>{
     const fields='.btc-macro-value,.btc-macro-change,.btc-macro-status,.btc-macro-badge,.btc-macro-graph';
-    const selector='.btc-macro-grid,.btc-macro-card,#macro-fx-reference,#btc-news-bridge,#btc-move-alerts,'+fields;
+    const selector='.btc-macro-grid,.btc-macro-card,#macro-fx-reference,#btc-news-bridge,#btc-move-alerts,#btc-live-selection,'+fields;
     const overwritten=records.some(r=>r.target.matches?.(fields) && Object.values(macros).some(s=>s.stream &&
       [[s.nodes?.value,s.priceText],[s.nodes?.change,s.changeText],[s.nodes?.status,s.statusText],[s.nodes?.badge,s.badgeText]]
         .some(([node,text])=>node===r.target && node.textContent!==text)));
-    if (overwritten || records.some(r=>[...r.addedNodes].some(n=>n.nodeType===1 && (n.matches?.(selector) || n.querySelector?.(selector))))) schedulePaint();
+    const selection=records.some(r=>r.type==='attributes' && r.target.id==='btc-live-selection');
+    if (selection || overwritten || records.some(r=>[...r.addedNodes].some(n=>n.nodeType===1 && (n.matches?.(selector) || n.querySelector?.(selector))))) schedulePaint();
   }) : null;
-  if (parentDoc?.body) macroObserver?.observe(parentDoc.body,{childList:true,subtree:true});
+  if (parentDoc?.body) macroObserver?.observe(parentDoc.body,{childList:true,subtree:true,attributes:true,attributeFilter:['data-symbol']});
 
   function paintMoves() {
     const host=parentDoc?.getElementById('btc-move-alerts');
@@ -714,7 +749,11 @@ LIVE_PRICES_HTML = r"""<!doctype html>
   const heartbeat=setInterval(()=>{
     if (disposed || document.hidden) return;
     for (const s of states) {
-      if (s.socketRef && Date.now()-Math.max(s.connectedAt,s.lastWs)>(s.market==='binance' ? 12000 : 20000)) s.socketRef.close();
+      if(s.socketRef && (s.market!=='binance' || s.id==='binance')) {
+        const peers=s.market==='binance' ? states.filter(m=>m.market==='binance') : [s];
+        const latest=Math.max(...peers.map(m=>Math.max(m.connectedAt,m.lastWs)));
+        if(Date.now()-latest>(s.market==='binance' ? 12000 : 20000)) s.socketRef.close();
+      }
       if (s.history && !s.historyReady) history(s);
       poll(s);
     }
@@ -741,11 +780,9 @@ LIVE_PRICES_HTML = r"""<!doctype html>
       const frame=window.frameElement,height=Math.ceil(document.body.scrollHeight)+'px';
       if(frame) {
         frame.style.height=height;
-        const box=frame.parentElement;
-        if(box?.dataset.testid==='stElementContainer') box.style.height=height;
       }
     } catch(_) {}
-    for (const s of states) s.dirty=true; schedulePaint();
+    for (const s of states) {s.dirty=true;s.plotDirty=true;} schedulePaint();
   });
   observer.observe(document.body);
   window.addEventListener('pagehide',()=>{
@@ -764,24 +801,30 @@ LIVE_PRICES_HTML = LIVE_PRICES_HTML.replace("/* LIVE_ANALYSIS_BRIDGE */", LIVE_A
 
 
 def live_prices_html(asset_code="BTC"):
-    asset = ASSETS[asset_code]
+    if asset_code not in ASSETS:
+        raise ValueError("Unsupported live asset")
     markets = json.dumps(
         [[a.code, a.card_id, a.name, a.decimals] for a in ASSETS.values()], ensure_ascii=False
     )
     default_markets = "[['BTC','binance','비트코인',2],['ETH','ethereum','이더리움',2],['SOL','solana','솔라나',2],['XRP','ripple','리플',4]]"
-    return LIVE_PRICES_HTML.replace(default_markets, markets).replace(
-        "const ACTIVE_SYMBOL = 'BTCUSDT';", f"const ACTIVE_SYMBOL = '{asset.stream_symbol}';"
-    )
+    return LIVE_PRICES_HTML.replace(default_markets, markets)
 
 
 def render_live_prices(asset_code="BTC") -> None:
-    """Keep a stable iframe outside analysis fragments so tab clicks keep sockets."""
+    """Keep quotes/history connected across tabs and asset changes."""
+    st.markdown(
+        f'<span hidden id="btc-live-selection" data-symbol="{ASSETS[asset_code].stream_symbol}"></span>',
+        unsafe_allow_html=True,
+    )
     components.html(live_prices_html(asset_code), height=540, scrolling=False)
     st.markdown(LIVE_ANALYSIS_CSS, unsafe_allow_html=True)
     st.markdown(
         """<style>
 #btc-move-alerts[hidden]{display:none}#btc-move-alerts{display:grid;gap:10px;margin:0 0 12px}
 [data-testid="stElementContainer"]:has(#btc-move-alerts[hidden]){display:none}
+[data-testid="stElementContainer"]:has(#btc-live-selection){display:none}
+iframe[data-testid="stIFrame"][srcdoc]{display:block}
+[data-testid="stElementContainer"]:has(> iframe[data-testid="stIFrame"][srcdoc]){height:auto!important;min-height:0!important;max-height:none!important;flex:0 0 auto!important}
 .btc-move-card{border:1px solid #e7eaf2;border-left:4px solid #ce4260;background:#fff;border-radius:16px;padding:14px 16px;overflow-wrap:anywhere}
 .btc-move-card.up{border-left-color:#0a996e}.btc-move-card strong{font-size:16px;color:#192434}
 .btc-move-card p{font-size:13px;color:#59677c;line-height:1.5;margin:6px 0}

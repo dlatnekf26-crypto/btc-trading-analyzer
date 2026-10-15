@@ -24,9 +24,7 @@ def test_asset_identity_news_routing_and_small_price_precision():
     assert asset_news("Crypto markets react to Fed rate cut") == tuple(ASSETS)
     assert asset_news("Dogecoin ETF approved") == ()
     assert price_text(1.1532) == "1.1532" and price_text(100000) == "100,000.00"
-    for code, asset in ASSETS.items():
-        html = live_prices_html(code)
-        assert f"const ACTIVE_SYMBOL = '{asset.stream_symbol}'" in html
+    assert len({live_prices_html(code) for code in ASSETS}) == 1
 
 
 def test_sol_listing_month_is_excluded_from_historical_average():
@@ -51,7 +49,11 @@ def test_four_assets_switch_complete_dashboard_forecast_and_back_without_cross_a
         assert not app.exception and not app.error
         assert any(ASSETS[code].symbol in caption.value for caption in app.caption)
         widget = app.get("iframe")[0].proto.srcdoc
-        assert f"const ACTIVE_SYMBOL = '{ASSETS[code].stream_symbol}'" in widget
+        assert widget == live_prices_html("BTC")
+        assert any(
+            f'id="btc-live-selection" data-symbol="{ASSETS[code].stream_symbol}"' in item.value
+            for item in app.markdown
+        )
         assert len(app.get("iframe")) == 1
         assert any(f'data-symbol="{ASSETS[code].stream_symbol}"' in item.value for item in app.markdown)
         assert any(f"{ASSETS[code].name} 월별 등락" in item.value for item in app.markdown)

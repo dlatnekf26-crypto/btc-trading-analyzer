@@ -35,6 +35,9 @@ def verify(browser, width, url, event_log):
     page.wait_for_function("()=>window.__assetPlot()?.data?.length", timeout=45000)
     cdp = context.new_cdp_session(page)
     results = []
+    transport_token = None
+    history_requests = None
+    last_prices = {}
     for code, (name, price) in ASSETS.items():
         page.get_by_role("radio", name=code, exact=True).tap()
         symbol = code + "USDT"
@@ -50,12 +53,26 @@ def verify(browser, width, url, event_log):
         crypto = next(f for f in page.frames if f.locator("#binance").count())
         crypto.locator('.crypto[data-selected="true"]').wait_for()
         assert crypto.locator(".crypto").count() == 4
-        assert crypto.locator("#solana .price span").inner_text() == "150.25"
-        assert crypto.locator("#ripple .price span").inner_text() == "1.1532"
+        assert crypto.locator("#solana .price span").inner_text() == f"{last_prices.get('SOL', 150.25):,.2f}"
+        assert crypto.locator("#ripple .price span").inner_text() == f"{last_prices.get('XRP', 1.1532):,.4f}"
         assert page.locator("iframe").count() == 1
+        if transport_token is None:
+            crypto.evaluate("window.__stayToken=Math.random()")
+            transport_token = crypto.evaluate("window.__stayToken")
+            history_requests = crypto.evaluate(
+                "window.__quoteFetches.filter(r=>r.url.includes('/klines?')).length"
+            )
+        assert crypto.evaluate("window.__stayToken") == transport_token, (
+            "Asset switch replaced the quote iframe"
+        )
+        assert (
+            crypto.evaluate("window.__quoteFetches.filter(r=>r.url.includes('/klines?')).length")
+            == history_requests
+        )
         assert crypto.evaluate("window.__quoteSockets.length") == 3
-        assert crypto.evaluate(
-            "s=>window.__quoteSockets.some(w=>w.url.includes(s.toLowerCase()+'@kline_1d'))", symbol
+        crypto.wait_for_function(
+            "s=>document.body.dataset.asset===s && (window.__quoteSockets.some(w=>w.url.includes(s.toLowerCase()+'@kline_1d')) || window.__subscriptions.filter(x=>x.method==='SUBSCRIBE').at(-1)?.params.includes(s.toLowerCase()+'@kline_1d'))",
+            arg=symbol,
         )
         assert page.evaluate("document.documentElement.scrollWidth<=innerWidth")
         assert (
@@ -113,6 +130,12 @@ def verify(browser, width, url, event_log):
             "()=>[...document.querySelectorAll('#btc-live-analysis article')].every(e=>e.dataset.status==='실시간 · 잠정')"
         )
         page.wait_for_function("p=>window.__assetPlot()?.dataset.livePrice===String(p)", arg=price)
+        historical = page.locator(".js-plotly-plot:visible").first.evaluate(
+            "p=>({low:Math.min(...p.data[0].close),high:Math.max(...p.data[0].close)})"
+        )
+        assert price * 0.1 < historical["low"] <= historical["high"] < price * 3, (
+            "Live update mixed another coin's history"
+        )
         before = page.locator(".js-plotly-plot:visible").first.evaluate("p=>JSON.stringify(p.data)")
         # A BTC candle sent on ETH/SOL/XRP's connection must not be accepted.
         if code != "BTC":
@@ -152,6 +175,7 @@ def verify(browser, width, url, event_log):
         page.wait_for_timeout(650)
         if code == "XRP":
             page.screenshot(path=f"/tmp/btc-assets-xrp-{width}.png")
+        last_prices[code] = new_price
         results.append(
             {
                 "asset": code,

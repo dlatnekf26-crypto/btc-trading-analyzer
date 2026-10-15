@@ -37,18 +37,6 @@ cache_path = Path(os.getenv("BTC_WEB_DATA_DIR", "data/web")) / "market-cache.sql
 cfg = AppConfig()
 display_timezone = "Asia/Seoul"
 exchange, quote_currency, timeframe = "Binance", "USDT", "1d"
-asset_code = (
-    st.segmented_control(
-        "분석할 코인",
-        list(ASSETS),
-        default="BTC",
-        required=True,
-        key="analysis_asset",
-    )
-    or "BTC"
-)
-asset = ASSETS[asset_code]
-symbol = asset.symbol
 average_lines = ("ema_20", "ema_50", "ema_200")
 
 
@@ -65,15 +53,27 @@ def open_history_comparison() -> None:
 
 
 with st.container(key="market_controls"):
-    market_control, refresh_control = st.columns([5, 2], vertical_alignment="bottom")
+    market_control, refresh_control = st.columns([3, 1], vertical_alignment="bottom")
     with market_control:
-        st.caption(f"{asset.name} · Binance · {symbol} · LIVE")
+        asset_code = (
+            st.segmented_control(
+                "분석할 코인",
+                list(ASSETS),
+                default="BTC",
+                required=True,
+                key="analysis_asset",
+            )
+            or "BTC"
+        )
     with refresh_control:
-        st.button("데이터 새로고침", on_click=request_market_refresh, width="stretch")
+        st.button("새로고침", on_click=request_market_refresh, width="stretch")
+asset = ASSETS[asset_code]
+symbol = asset.symbol
+st.caption(f"{asset.name} · Binance {symbol} · LIVE")
 # Render before any server-side candle request. Quote ticks never rerun Python.
 render_live_prices(asset_code)
 render_macro_quotes()
-st.caption(f"{exchange} {symbol} · 진행 중 봉/잠정 지표는 실시간 · 종합 신호와 과거 검증은 확정 봉 기준")
+st.caption("실시간 분석은 잠정값 · 종합 판단과 과거 검증은 확정 봉 기준")
 
 
 @st.cache_data(ttl=60, max_entries=12, show_spinner=False)

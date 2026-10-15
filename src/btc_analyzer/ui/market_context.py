@@ -12,8 +12,8 @@ from btc_analyzer.data.market_context import MarketContextService, MacroQuote, T
 
 CONTEXT_CSS = """<style>
 .btc-macro-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0 0 8px}
-.btc-macro-card,.btc-news-item{background:#fff;border:1px solid #e7ecf3;border-radius:18px;padding:14px;min-width:0}
-.btc-macro-name{font-size:14px;font-weight:700;margin:0 0 6px;color:#191f28}.btc-macro-value{font-size:26px;font-weight:750;letter-spacing:-.6px;font-variant-numeric:tabular-nums}
+.btc-macro-card,.btc-news-item{background:#fff;border:1px solid #e7ecf3;border-radius:16px;padding:12px;min-width:0}
+.btc-macro-name{font-size:14px;font-weight:700;margin:0 0 6px;color:#191f28}.btc-macro-value{font-size:24px;font-weight:750;letter-spacing:-.6px;font-variant-numeric:tabular-nums}
 .btc-macro-card p{font-size:11px;color:#66758b;margin:4px 0}.btc-macro-card a,.btc-news-item a{color:#25496e;text-decoration:none}.btc-macro-card svg{width:100%;height:32px;display:block;margin:4px 0}
 .btc-macro-graph{height:40px;display:flex;align-items:center}.btc-macro-card .btc-macro-status{min-height:34px;line-height:1.55}
 .btc-macro-heading{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;margin-bottom:7px}.btc-macro-heading .btc-macro-name{margin:0}.btc-macro-badge{font-size:10px;color:#66758b;background:#eff2f7;border-radius:7px;padding:3px 6px;white-space:nowrap}
@@ -70,17 +70,13 @@ def macro_cards(context, now):
             if feed.error or (feed.updated_at and now - feed.updated_at > timedelta(minutes=3)):
                 status += " · 갱신 지연"
             delay = (
-                f" · 제공 지연 {value.delay_minutes}분"
-                if value.delay_minutes is not None
-                else " · 제공 지연 미확인"
+                f" · 지연 {value.delay_minutes}분" if value.delay_minutes is not None else " · 지연 미확인"
             )
             price = f"{value.price:,.2f}"
             graph = sparkline(value.points)
-            change = (
-                "기준값 대기" if value.change is None else f"조회 구간 시작 종가 대비 {value.change:+.2%}"
-            )
+            change = "기준값 대기" if value.change is None else f"구간 대비 {value.change:+.2%}"
             if key in ("tnx", "tyx") and value.change is not None and value.change > -1:
-                change = f"기준 종가 대비 {value.price - value.price / (1 + value.change):+.3f}%p"
+                change = f"기준 대비 {value.price - value.price / (1 + value.change):+.3f}%p"
             badge = "마지막 시세" if age > timedelta(hours=2) else "공개 조회"
             tone = "stale" if age > timedelta(hours=2) else "delayed"
             info = f"{status} · {stamp:%m.%d %H:%M} KST{delay}"

@@ -36,9 +36,11 @@ p, li { line-height: 1.7; }
     border-radius: 12px; min-height: 44px; font-weight: 600;
 }
 [data-testid="stButtonGroup"] button { min-height: 44px; }
-[data-baseweb="tab-list"] { gap: 4px; border: 1px solid #e7ecf3; border-radius: 16px; padding: 5px; background: #fff; }
-[data-baseweb="tab"] { padding: 10px 14px; border-radius: 12px; font-weight: 600; }
-[data-baseweb="tab"][aria-selected="true"] { background: #eaf2ff; color: #216bdd; }
+.st-key-market_controls [data-testid="stButton"] { display: flex; justify-content: flex-end; }
+.st-key-market_controls [data-testid="stButton"] button { max-width: 120px; }
+[data-testid="stTabs"] [role="tablist"], [data-baseweb="tab-list"] { gap: 4px; border: 1px solid #e7ecf3; border-radius: 16px; padding: 5px; background: #fff; }
+[data-testid="stTabs"] [role="tab"], [data-baseweb="tab"] { padding: 10px 14px; border-radius: 12px; font-weight: 600; }
+[data-testid="stTabs"] [role="tab"][aria-selected="true"], [data-baseweb="tab"][aria-selected="true"] { background: #eaf2ff; color: #216bdd; }
 [data-baseweb="tab-highlight"], [data-baseweb="tab-border"] { display: none; }
 [data-baseweb="tab"]:focus-visible, [data-testid="stButton"] button:focus-visible { outline: 2px solid #3182f6; outline-offset: 2px; }
 [data-testid="stPlotlyChart"] { border-radius: 20px; overflow: hidden; background: #fff; border: 1px solid #e7ecf3; }
@@ -174,9 +176,10 @@ button:focus-visible { outline: 3px solid #3182f666; outline-offset: 3px; }
 @media (max-width: 760px) {
     .st-key-market_controls [data-testid="stHorizontalBlock"] { flex-wrap: wrap; gap: 8px 12px; }
     .st-key-market_controls [data-testid="stColumn"] { min-width: 0 !important; }
-    .st-key-market_controls [data-testid="stColumn"]:nth-child(1) { flex: 3 1 58%; }
-    .st-key-market_controls [data-testid="stColumn"]:nth-child(2) { flex: 2 1 34%; }
+    .st-key-market_controls [data-testid="stColumn"]:nth-child(1) { flex: 3 1 69%; }
+    .st-key-market_controls [data-testid="stColumn"]:nth-child(2) { flex: 1 1 25%; }
 
+    .st-key-market_controls [role="radio"] { padding: 9px 8px; min-width: 44px; }
     .btc-match-cards article { padding: 10px; }
     .btc-match-cards strong { font-size: 20px; }
     :is(.btc-forecast-cards,.btc-correction-cards) { grid-template-columns: 1fr; gap: 8px; }
