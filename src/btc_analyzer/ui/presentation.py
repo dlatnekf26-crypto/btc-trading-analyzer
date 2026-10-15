@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 
 from html import escape
+from btc_analyzer.assets import price_text
 import math
 
 if TYPE_CHECKING:
@@ -205,8 +206,8 @@ button:focus-visible { outline: 3px solid #3182f666; outline-offset: 3px; }
 
 BRAND = """
 <div class="btc-brand">
-  <div class="btc-logo" aria-hidden="true">₿</div>
-  <div><h1>BTC SIGNAL LAB</h1><p>지금의 흐름, 근거까지 쉽게</p></div>
+  <div class="btc-logo" aria-hidden="true">◈</div>
+  <div><h1>CRYPTO SIGNAL LAB</h1><p>네 코인의 흐름, 근거까지 쉽게</p></div>
   <span class="btc-brand-tag">가격 · 흐름 · 근거</span>
 </div>
 """
@@ -286,7 +287,7 @@ def market_hero(
  <span class="btc-badge">{escape(exchange)} · 현물</span><span class="btc-badge">{escape(timeframe)}</span>
  <span class="btc-badge btc-badge-{badge_class}">{badge}</span></div>
  <div class="btc-price-label">{escape(price_label)}</div>
- <div class="btc-price">{price:,.2f}<small>{escape(quote)}</small></div>
+ <div class="btc-price">{price_text(price)}<small>{escape(quote)}</small></div>
  <div class="btc-price-meta">{delta}<span>분석 기준 · {escape(confirmed_at)}</span></div>
 </section>
 """
@@ -435,11 +436,11 @@ def buy_watch_card(signal: CompositeSignal) -> str:
         f'data-risk-floor="{watch.risk_floor}" '
         f'data-base-at="{pd.Timestamp(watch.as_of).timestamp() * 1000:.0f}" '
         f'data-expires="{pd.Timestamp(watch.valid_until).timestamp() * 1000:.0f}" data-status="waiting">'
-        f'{title}<b class="btc-buy-watch-price">{watch.low:,.2f} ~ {watch.high:,.2f} USDT</b>'
+        f'{title}<b class="btc-buy-watch-price">{price_text(watch.low)} ~ {price_text(watch.high)} USDT</b>'
         '<p class="btc-buy-watch-distance">실시간 시세 확인 대기 · 현재가와 검토 가격대의 차이를 표시합니다.</p>'
         f"<p>{escape(watch.reason)}</p>"
         "<p>이 가격대에서 분할매수를 검토할 수 있습니다. 진입 전 하락 진정과 주봉·월봉 지지를 확인해야 합니다.</p>"
-        f"<small>회복 비교 기준 {watch.target:,.2f} · 지지 재평가 {watch.invalidation:,.2f} USDT · 이탈 시 보류</small>"
+        f"<small>회복 비교 기준 {price_text(watch.target)} · 지지 재평가 {price_text(watch.invalidation)} USDT · 이탈 시 보류</small>"
         f"<small>{as_of} KST 확정 봉 기준 · 조건부 검토 가격이며 예상 도착 가격이나 자동 매수 신호가 아닙니다.</small></div>"
     )
 

@@ -6,6 +6,7 @@ import re
 from urllib.parse import urlsplit
 
 from btc_analyzer.data.market_context import crypto_relevance
+from btc_analyzer.assets import ASSETS, asset_news
 
 CATALYST = re.compile(
     r"\b(?:ETF|inflows?|outflows?|hacks?|hacked|hacking|exploits?|SEC|Fed|FOMC|CPI|PCE|PPI|"
@@ -39,15 +40,9 @@ def news_bridge(context, now):
                 or not urlsplit(item.url).netloc
             ):
                 continue
-            btc = bool(re.search(r"\bBTC\b|bitcoin|비트코인", item.title, re.I))
-            eth = bool(re.search(r"\bETH\b|ethereum|이더리움", item.title, re.I))
-            assets = " ".join(symbol for symbol, match in (("BTCUSDT", btc), ("ETHUSDT", eth)) if match)
+            assets = " ".join(ASSETS[code].stream_symbol for code in asset_news(item.title))
             if not assets:
-                if re.search(
-                    r"solana|\bsol\b|xrp|ripple|dogecoin|\bdoge\b|솔라나|리플|도지", item.title, re.I
-                ):
-                    continue
-                assets = "BTCUSDT ETHUSDT"
+                continue
             seen.add(item.url)
             links.append(
                 (

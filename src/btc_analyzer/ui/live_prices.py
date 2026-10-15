@@ -1,7 +1,10 @@
 """Browser-owned public quotes: no keys, Python polling, or chart dependencies."""
 
+import json
+
 import streamlit as st
 import streamlit.components.v1 as components
+from btc_analyzer.assets import ASSETS
 
 from btc_analyzer.ui.live_analysis import LIVE_ANALYSIS_CSS, LIVE_ANALYSIS_JS
 
@@ -11,6 +14,8 @@ LIVE_PRICES_HTML = r"""<!doctype html>
 *{box-sizing:border-box}body{margin:0;line-height:1.3;color:#191f28;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 .dashboard{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .market{min-width:0;border:1px solid #e7ecf3;border-radius:18px;padding:12px 15px;background:linear-gradient(135deg,#fff,#f9fbff)}
+.market[data-selected="true"]{border-color:#3182f6;box-shadow:0 0 0 1px #3182f620}
+@media(min-width:800px){.dashboard{grid-template-columns:repeat(4,minmax(0,1fr))}.aux{grid-column:span 2}}
 .name{font-size:11px;color:#66758b}.name b{color:#191f28;margin-right:7px;font-size:14px}
 .price{font-size:27px;font-weight:750;letter-spacing:-.8px;font-variant-numeric:tabular-nums;line-height:1.15;margin:6px 0 4px;white-space:nowrap}.price small{font-size:10px;letter-spacing:0;color:#66758b;font-weight:500;margin-left:4px}
 .change{font-size:11px;min-height:14px;color:#66758b}.status{font-size:10px;margin-top:5px;color:#66758b;min-height:13px}.dot{display:inline-block;width:6px;height:6px;background:#98a5b5;border-radius:50%;margin-right:5px}.fresh .dot{background:#10a878}.reference .dot{background:#3182f6}.stale .price{color:#8793a4}
@@ -36,6 +41,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
 <script>
 (() => {
   'use strict';
+  const ACTIVE_SYMBOL = 'BTCUSDT';
   /* LIVE_ANALYSIS_BRIDGE */
   // Delegate touch inspection to the existing parent charts. No extra iframe,
   // data requests or Streamlit events; passive listeners preserve page scrolling.
@@ -112,16 +118,22 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     };
   })();
   const MAX_POINTS = 61, STALE_MS = 15000, DRAW_MS = 50;
-  const configs = [
-    {id:'binance', market:'binance', symbol:'BTCUSDT', decimals:2, changeLabel:'24시간', restGap:1000,
-     socket:'wss://data-stream.binance.vision/stream?streams=btcusdt@aggTrade/ethusdt@aggTrade/btcusdt@ticker/ethusdt@ticker/btcusdt@kline_1h/btcusdt@kline_4h/btcusdt@kline_1d/btcusdt@kline_1w/btcusdt@kline_1M',
-     history:'https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=60'},
-    {id:'ethereum', market:'binance', symbol:'ETHUSDT', decimals:2, changeLabel:'24시간', restGap:1000,
-     history:'https://data-api.binance.vision/api/v3/klines?symbol=ETHUSDT&interval=1m&limit=60'},
-    {id:'upbit', market:'upbit', symbol:'KRW-BTC', decimals:0, changeLabel:'전일 대비', restGap:11000,
-     socket:'wss://api.upbit.com/websocket/v1',
-     ticker:'https://api.upbit.com/v1/ticker?markets=KRW-BTC', history:null}
-  ];
+  const MARKET_ASSETS = [['BTC','binance','비트코인',2],['ETH','ethereum','이더리움',2],['SOL','solana','솔라나',2],['XRP','ripple','리플',4]];
+  for (const [code,id,name] of MARKET_ASSETS) {
+    let card=document.getElementById(id);
+    if(!card) {card=document.getElementById('binance').cloneNode(true);card.id=id;document.getElementById('forex').before(card);}
+    card.setAttribute('aria-label',name+' 실시간 가격');
+    card.querySelector('.name b').textContent=code;
+    card.querySelector('canvas').setAttribute('aria-label',name+' 최근 1시간 가격 그래프');
+    card.dataset.selected=String(code+'USDT'===ACTIVE_SYMBOL);
+  }
+  const configs=MARKET_ASSETS.map(([code,id,name,decimals])=>({id,market:'binance',name,symbol:code+'USDT',decimals,changeLabel:'24시간',restGap:1000,
+    history:'https://data-api.binance.vision/api/v3/klines?symbol='+code+'USDT&interval=1m&limit=60'}));
+  configs.push({id:'upbit',market:'upbit',symbol:'KRW-BTC',decimals:0,changeLabel:'전일 대비',restGap:11000,
+    socket:'wss://api.upbit.com/websocket/v1',ticker:'https://api.upbit.com/v1/ticker?markets=KRW-BTC',history:null});
+  const streams=configs.filter(c=>c.market==='binance').flatMap(c=>[c.symbol.toLowerCase()+'@aggTrade',c.symbol.toLowerCase()+'@ticker']);
+  for (const tf of ['1h','4h','1d','1w','1M']) streams.push(ACTIVE_SYMBOL.toLowerCase()+'@kline_'+tf);
+  configs[0].socket='wss://data-stream.binance.vision/stream?streams='+streams.join('/');
   let disposed = false, paintTimer = null;
   const states = configs.map(config => ({...config, el:document.getElementById(config.id), points:[],
     socketRef:null, retryTimer:null, retries:0, connectedAt:0, lastRx:0, lastEvent:0,
@@ -188,7 +200,8 @@ LIVE_PRICES_HTML = r"""<!doctype html>
       paintAux();
       paintMacro();
       paintMoves();
-      liveAnalysis.paint({price:states[0].price,event:states[0].lastEvent,fresh:fresh(states[0])});
+      const selected=states.find(s=>s.symbol===ACTIVE_SYMBOL);
+      liveAnalysis.paint({symbol:ACTIVE_SYMBOL,price:selected.price,event:selected.lastEvent,fresh:fresh(selected)});
     }, DRAW_MS);
   }
   function addPoint(s, time, price) {
@@ -255,7 +268,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     s.el.querySelector('.empty').hidden=s.points.length>0;
     if (!s.points.length || !width) return;
     const values=s.points.map(p=>p[1]), low=Math.min(...values), high=Math.max(...values);
-    const span=high-low || Math.max(1,low*0.0001), pad=6;
+    const span=high-low || Math.max(0.00001,low*0.0001), pad=6;
     const end=s.points[s.points.length-1][0], start=end-3600000;
     const xy=s.points.map(p=>[pad+(p[0]-start)/3600000*(width-2*pad), height-pad-(p[1]-low)/span*(height-2*pad)]);
     const color=values[values.length-1] >= values[0] ? '#10a878' : '#e94b65';
@@ -324,12 +337,12 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     finally { s.pending=false; }
   }
   async function pollBinance() {
-    const s=binanceRequest, group=states.slice(0,2);
+    const s=binanceRequest, group=states.filter(s=>s.market==='binance');
     if (s.pending || disposed || document.hidden || group.every(x=>x.transport==='ws' && fresh(x)) ||
         Date.now()-s.lastPoll<5000 || !reserveRest(s)) return;
     s.pending=true; s.lastPoll=Date.now();
     try {
-      const rows=await json(s,'https://data-api.binance.vision/api/v3/ticker/24hr?symbols='+encodeURIComponent('["BTCUSDT","ETHUSDT"]'));
+      const rows=await json(s,'https://data-api.binance.vision/api/v3/ticker/24hr?symbols='+encodeURIComponent(JSON.stringify(group.map(m=>m.symbol))));
       if (!Array.isArray(rows) || disposed || document.hidden) return;
       // A slow REST response cannot displace a healthy, more recent WebSocket.
       for (const item of rows) for (const market of group) {
@@ -345,8 +358,8 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     schedulePaint();
   }
   function connect(s) {
-    if (s.id==='ethereum' || disposed || document.hidden || s.socketRef) return;
-    const group=s.market==='binance' ? states.slice(0,2) : [s];
+    if ((s.market==='binance' && s.id!=='binance') || disposed || document.hidden || s.socketRef) return;
+    const group=s.market==='binance' ? states.filter(s=>s.market==='binance') : [s];
     let ws;
     try { ws=new WebSocket(s.socket); }
     catch (_) { reconnect(s); return; }
@@ -450,7 +463,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     textAt(fxEl,'.change','1 USD당 원화 · '+(fx.source || '고시 환율'));
     textAt(fxEl,'.status span',fx.rate===null ? '환율 연결 대기' :
       (fxReady ? '' : '갱신 지연 · ')+dayFormat.format(new Date(fx.asOf))+(fx.daily ? ' 기준' : ' '+clock(fx.asOf)+(fx.market ? ' 시장 시세' : ' 고시')));
-    const btc=states[0], domestic=states[2];
+    const btc=states.find(s=>s.symbol==='BTCUSDT'), domestic=states.find(s=>s.market==='upbit');
     const quotesReady=fresh(btc) && fresh(domestic) && Math.abs(btc.lastEvent-domestic.lastEvent)<=15000;
     const ready=quotesReady && fxReady && pegReady;
     write(premiumEl,'className','market aux '+(ready ? 'reference' : 'stale'));
@@ -662,7 +675,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     const host=parentDoc?.getElementById('btc-move-alerts');
     if (!host) return;
     const now=Date.now(), alerts=[];
-    for (const s of states.slice(0,2)) {
+    for (const s of states.filter(s=>s.market==='binance')) {
       const move=s.move;
       if (!move || !fresh(s) || s.lastEvent>now+3000 || now-move.at>600000 || now<move.at) continue;
       const news=[...(parentDoc.getElementById('btc-news-bridge')?.querySelectorAll('a') || [])].filter(link=>{
@@ -685,7 +698,8 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     for (const {symbol,move,news} of alerts) {
       const card=parentDoc.createElement('article'); card.className='btc-move-card '+(move.direction>0 ? 'up' : 'down');
       card.dataset.symbol=symbol;card.dataset.detected=String(move.at);
-      append(card,'strong',`${symbol==='BTCUSDT' ? '비트코인' : '이더리움'} 급${move.direction>0 ? '상승' : '하락'} · 약 ${move.window/60000}분 ${move.change>=0 ? '+' : ''}${(move.change*100).toFixed(2)}%`);
+      const name=states.find(s=>s.symbol===symbol).name;
+      append(card,'strong',`${name} 급${move.direction>0 ? '상승' : '하락'} · 약 ${move.window/60000}분 ${move.change>=0 ? '+' : ''}${(move.change*100).toFixed(2)}%`);
       append(card,'p',`${clock(move.at)} KST 감지 · 비교 ${Math.round((move.at-move.start)/1000)}초 · Binance`, 'btc-move-meta');
       append(card,'p',news.length ? '관련 가능 · 움직임 전후의 소식' : '원인 확인 중 · 가까운 시각의 코인 관련 속보가 아직 없어요.');
       for (const item of news) {
@@ -722,7 +736,17 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     } else {connectMacro();pollRates();}
     schedulePaint();
   });
-  const observer=new ResizeObserver(()=>{ for (const s of states) s.dirty=true; schedulePaint(); });
+  const observer=new ResizeObserver(()=>{
+    try {
+      const frame=window.frameElement,height=Math.ceil(document.body.scrollHeight)+'px';
+      if(frame) {
+        frame.style.height=height;
+        const box=frame.parentElement;
+        if(box?.dataset.testid==='stElementContainer') box.style.height=height;
+      }
+    } catch(_) {}
+    for (const s of states) s.dirty=true; schedulePaint();
+  });
   observer.observe(document.body);
   window.addEventListener('pagehide',()=>{
     disposeChartTouch();
@@ -739,9 +763,20 @@ LIVE_PRICES_HTML = r"""<!doctype html>
 LIVE_PRICES_HTML = LIVE_PRICES_HTML.replace("/* LIVE_ANALYSIS_BRIDGE */", LIVE_ANALYSIS_JS)
 
 
-def render_live_prices() -> None:
+def live_prices_html(asset_code="BTC"):
+    asset = ASSETS[asset_code]
+    markets = json.dumps(
+        [[a.code, a.card_id, a.name, a.decimals] for a in ASSETS.values()], ensure_ascii=False
+    )
+    default_markets = "[['BTC','binance','비트코인',2],['ETH','ethereum','이더리움',2],['SOL','solana','솔라나',2],['XRP','ripple','리플',4]]"
+    return LIVE_PRICES_HTML.replace(default_markets, markets).replace(
+        "const ACTIVE_SYMBOL = 'BTCUSDT';", f"const ACTIVE_SYMBOL = '{asset.stream_symbol}';"
+    )
+
+
+def render_live_prices(asset_code="BTC") -> None:
     """Keep a stable iframe outside analysis fragments so tab clicks keep sockets."""
-    components.html(LIVE_PRICES_HTML, height=362, scrolling=False)
+    components.html(live_prices_html(asset_code), height=540, scrolling=False)
     st.markdown(LIVE_ANALYSIS_CSS, unsafe_allow_html=True)
     st.markdown(
         """<style>

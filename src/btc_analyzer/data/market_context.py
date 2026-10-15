@@ -1,7 +1,7 @@
 """Bounded, nonblocking public macro quotes and headline feeds; no trading keys."""
 
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 import json
@@ -13,6 +13,7 @@ from urllib.parse import quote, urlencode, urlsplit
 from xml.etree import ElementTree
 
 import requests
+from btc_analyzer.assets import asset_news
 
 from btc_analyzer.data.economic_calendar import EconomicEvent
 from btc_analyzer.data.sentiment import FEAR_API, FEAR_REFRESH_SECONDS, FearGreed, parse_fear_greed
@@ -72,6 +73,16 @@ class MarketContext:
 
     def feed(self, key: str) -> FeedState:
         return next((f for f in self.feeds if f.key == key), FeedState(key))
+
+    def for_asset(self, code):
+        return MarketContext(
+            tuple(
+                replace(feed, value=tuple(item for item in feed.value if code in asset_news(item.title)))
+                if feed.key.startswith("news") and isinstance(feed.value, tuple)
+                else feed
+                for feed in self.feeds
+            )
+        )
 
     def news(self, now: datetime, *, fresh_only: bool = False) -> tuple[NewsItem, ...]:
         items = []
@@ -152,7 +163,7 @@ def parse_quote(payload: dict, symbol: str, now: datetime) -> MacroQuote:
 def crypto_relevance(title: str) -> str | None:
     """Require an explicit coin connection and a market event, not generic macro news."""
     text = title.casefold()
-    coin = r"bitcoin|ethereum|cryptocurrenc\w*|\bcrypto\b|\bbtc\b|\beth\b|비트코인|이더리움|암호화폐|가상(?:자산|화폐)|코인"
+    coin = r"bitcoin|ethereum|solana|ripple(?!\s+effects?\b)|\bxrp\b|\bsol\b|cryptocurrenc\w*|\bcrypto\b|\bbtc\b|\beth\b|비트코인|이더리움|솔라나|리플|암호화폐|가상(?:자산|화폐)|코인"
     if not re.search(coin, text):
         return None
     if re.search(
@@ -187,7 +198,8 @@ def classify_headline(title: str):
     elif re.search(r"payroll|jobs report|unemployment|\bgdp\b|고용|실업|경제지표", text):
         topic = "economy"
     elif re.search(
-        r"bitcoin|ethereum|\bbtc\b|\beth\b|\bcrypto\b|비트코인|이더리움|암호화폐|가상자산|\betf\b", text
+        r"bitcoin|ethereum|solana|ripple(?!\s+effects?\b)|\bxrp\b|\bsol\b|\bbtc\b|\beth\b|\bcrypto\b|비트코인|이더리움|솔라나|리플|암호화폐|가상자산|\betf\b",
+        text,
     ):
         topic = "crypto"
     else:
@@ -207,7 +219,7 @@ def classify_headline(title: str):
     )
     down = bool(re.search(r"falls?|drops?|declines?|plunges?|slides?|lower|급락|하락|내려|인하", text))
     negated = bool(re.search(r"\bnot\b|\bno\b|denies?|fails?|cancel|ruled out|무산|부인|취소|않|아니", text))
-    direction, uncertainty, explanation = 0, 0.5, "제목만으로 BTC에 미치는 방향을 확정하기 어려워요."
+    direction, uncertainty, explanation = 0, 0.5, "제목만으로 해당 코인에 미치는 방향을 확정하기 어려워요."
     if not negated:
         if topic == "oil" and up != down:
             direction = -1 if up else 1
@@ -309,7 +321,7 @@ def parse_news(raw: bytes, now: datetime) -> tuple[NewsItem, ...]:
     return deduplicate_news(items)
 
 
-def _download(url: str) -> bytes:
+def _download(url: str, *, max_bytes=MAX_BYTES) -> bytes:
     # Bounded streams retain the platform proxy/TLS checks and never follow off-host redirects.
     with requests.get(
         url,
@@ -324,7 +336,7 @@ def _download(url: str) -> bytes:
         parts, size, started = [], 0, time.monotonic()
         for part in response.iter_content(16_384):
             size += len(part)
-            if size > MAX_BYTES or time.monotonic() - started > 5:
+            if size > max_bytes or time.monotonic() - started > 5:
                 raise ValueError("Response limit exceeded")
             parts.append(part)
         return b"".join(parts)
@@ -338,9 +350,9 @@ def fetch_feed(key: str, now: datetime):
         return parse_quote(json.loads(_download(url)), SYMBOLS[key], now)
     language = "ko" if key == "news_ko" else "en-US"
     query = (
-        "(비트코인 OR 이더리움 OR 암호화폐 OR 가상자산) (ETF OR 규제 OR 수급 OR 가격 OR 금리 OR CPI OR 유가 OR 전쟁) when:1d"
+        "(비트코인 OR 이더리움 OR 솔라나 OR 리플 OR 암호화폐) (ETF OR 규제 OR 수급 OR 가격 OR 금리 OR CPI OR 유가 OR 전쟁) when:1d"
         if key == "news_ko"
-        else "(bitcoin OR ethereum OR cryptocurrency OR crypto) (ETF OR regulation OR inflows OR price OR Fed OR CPI OR oil OR war) when:1d"
+        else "(bitcoin OR ethereum OR solana OR XRP OR crypto) (ETF OR regulation OR inflows OR price OR Fed OR CPI OR oil OR war) when:1d"
     )
     params = urlencode(
         {

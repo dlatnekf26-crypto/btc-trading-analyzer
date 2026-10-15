@@ -139,7 +139,8 @@ def test_public_default_live_binance_and_usdt_quote(monkeypatch, tmp_path, entry
     assert captured["include_macro"] is True
     widget = app.get("iframe")[0].proto.srcdoc
     assert "data-stream.binance.vision" in widget and "api.upbit.com/websocket/v1" in widget
-    assert "BTCUSDT" in widget and "ETHUSDT" in widget and "KRW-BTC" in widget
+    assert "BTCUSDT" in widget and "KRW-BTC" in widget
+    assert all(f'"{code}"' in widget for code in ("BTC", "ETH", "SOL", "XRP"))
     assert 'id="upbit"' not in widget
     assert 'id="forex"' in widget and 'id="premium"' in widget
     assert "tradingview" not in widget.lower()

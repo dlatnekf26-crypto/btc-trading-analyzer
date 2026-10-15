@@ -134,10 +134,11 @@ def render_macro_quotes():
 
 
 @st.fragment(run_every=10)
-def render_coin_news():
+def render_coin_news(asset_code="BTC"):
     now = datetime.now(UTC)
     context = current_context()
     st.markdown(news_bridge(context, now), unsafe_allow_html=True)
+    context = context.for_asset(asset_code)
     st.markdown("**코인에 영향을 주는 주요 뉴스**")
     st.caption("코인 수급·규제 + 코인과 연결된 금리·유가·전쟁 | 30초마다 자료 조회 · 기사 제공 지연은 별도")
     news = context.news(now)

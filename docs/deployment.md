@@ -123,3 +123,14 @@ docker run --rm -p 8501:8501 btc-trading-analyzer:web
 예측의 초록 점선과 범위는 현재 가격×기존 수익률 경로의 조건부 표시입니다. 기존 우세 방향 비중·지표 후보의 검증/채택·기준 종가/과거 재현·과거 성적·뉴스/경제 발표 가정을 보존합니다. 현재 봉의 지표는 잠정 카드로 함께 설명하며 미검증 가중치를 추가하지 않습니다. 최대 0.5초 주기와 Plotly 단일 진행 중 업데이트로 틱을 합치고 Python에 시세 이벤트를 보내지 않습니다. Streamlit fragment가 차트를 바꿔도 새 자료에서 최신 상태를 복원합니다.
 
 정상 TLS로 실제 Binance 공개 WebSocket의 다섯 kline을 수신하고 파서가 모두 수락함을 확인했습니다(2026-10-08 17:30 KST). 실제 메시지는 `/tmp/btc-realtime-actual-klines.json`에 기록했습니다. 공개 Streamlit 재빌드/방문 수신·물리 Safari 확인과는 구분합니다. 개발용 검사는 `python scripts/check_realtime_analysis.py --app-url <검사 서버> --event-log <계측 로그>`를 사용합니다.
+
+
+## 네 코인 분석과 ETF 일별 수급
+
+상단 자산 선택은 BTC/ETH/SOL/XRP이며 Binance USDT 쌍으로 공통 분석을 전환합니다. 네 시세의 aggTrade/ticker를 기존 `data-stream.binance.vision` 한 소켓에서 받고 선택 자산의 1h/4h/1d/1w/1M만 추가 구독합니다. REST 대체 ticker도 네 심볼 한 요청입니다. 시세 카드/최근 분봉은 별도로 갱신하며 서버 이력/예측을 틱마다 다시 계산하지 않습니다. 각 분석/브라우저 seed/가격 차트·예측에는 심볼을 전달해 전환 중 다른 코인 자료를 수락하지 않습니다.
+
+ETF 서버 자료원은 `farside.co.uk/bitcoin-etf-flow-all-data/`와 `farside.co.uk/ethereum-etf-flow-all-data/`입니다. 기존 TLS/프록시를 유지하고 최대 2MB·한 피드에 한 진행 중 요청·10분 캐시/오류 대기와 마지막 발표를 사용합니다. 일별 Total 순유입(백만 USD), 날짜·펀드 열/총합 검사를 적용합니다. 음수 괄호·명시된 0·미제공 대시/빈칸을 구분하며 미발표일의 값을 만들지 않습니다. SOURCE 표의 ETH 날짜 제목은 빈 칸인 실제 형식을 허용하되 ETHA/IBIT 열을 검사해 자산을 분리합니다. 네이티브 카드/막대/펀드 표를 사용해 차트 SDK/iframe을 늘리지 않습니다.
+
+**2026-10-15 KST 실제 HTTPS 200 및 BTC/ETH 각 최근 60개 원자료 파싱을 확인했습니다.** 당시 최신 거래일은 10월 14일, 총순유입 −150.5 / −19.7백만 USD였습니다. 이 수치는 해당 확인 시점의 자료이며 고정값으로 앱에 넣지 않습니다. SOL/XRP의 같은 Farside 경로는 404여서 해당 코인 전용 ETF 유입/유출은 연결하지 않습니다.
+
+기존 custom 도메인/프리셋을 보존해 환경 초안에 `farside.co.uk`, `www.farside.co.uk`를 추가 저장했습니다. 현재 실제 접속 성공과 별도로, 다음 환경에 설정을 유지하려면 환경 설정에서 저장·게시합니다. 추가 패키지/API 키는 필요 없습니다. 공개 Streamlit 재배포/실사용자 연결은 별도 확인 대상입니다.

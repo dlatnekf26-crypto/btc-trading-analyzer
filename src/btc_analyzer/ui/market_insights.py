@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 import streamlit as st
+from btc_analyzer.assets import ASSETS
 
 from btc_analyzer.analysis.monthly_heatmap import monthly_heatmap
 from btc_analyzer.data.market_context import UTC
@@ -79,8 +80,9 @@ def render_sentiment():
 
 
 @st.cache_data(ttl=3600, max_entries=24, show_spinner=False, hash_funcs=MARKET_HASH_FUNCS)
-def cached_heatmap(frame, cutoff, years):
-    return monthly_heatmap(frame, cutoff, years)
+def cached_heatmap(frame, cutoff, years, asset_code="BTC"):
+    listed = ASSETS[asset_code].listed
+    return monthly_heatmap(frame, cutoff, years, (listed.year, listed.month))
 
 
 def heatmap_cell(cell):
@@ -124,7 +126,7 @@ def heatmap_cell(cell):
     return f'<div class="btc-heatmap-cell" data-year="{cell.year or "mean"}" data-month="{cell.month}" data-status="{cell.status}" style="--cell-bg:{bg};--cell-fg:{fg}"><input type="radio" name="btc-heat-choice" id="{identifier}" aria-label="{escape(title + " · " + note)}"><label for="{identifier}">{number}<span class="btc-heatmap-detail">{escape(title)}<br>{escape(note)}</span></label></div>'
 
 
-def heatmap_card(result):
+def heatmap_card(result, asset_code="BTC"):
     header = ['<span class="btc-heatmap-hour">연도</span>']
     for month in range(1, 13):
         if month == 7:
@@ -147,7 +149,7 @@ def heatmap_card(result):
     period = f"{result.years[-1]}–{result.years[0]}" if result.years else "자료 대기"
     return (
         '<article class="btc-insight-card btc-heatmap-card" aria-label="연도별 월간 등락 히트맵">'
-        f'<div class="btc-insight-heading"><strong>비트코인 월별 등락</strong><span class="btc-insight-badge">{period}</span></div>'
+        f'<div class="btc-insight-heading"><strong>{ASSETS[asset_code].name} 월별 등락</strong><span class="btc-insight-badge">{period}</span></div>'
         '<p>여러 해의 1~12월 · 초록 상승 / 빨강 하락</p><div class="btc-heatmap">'
         + "".join(rows)
         + '<div class="btc-heatmap-prompt">칸을 터치하거나 마우스를 올려 해당 월의 등락률을 확인하세요.</div></div>'
@@ -156,7 +158,7 @@ def heatmap_card(result):
 
 
 @st.fragment
-def render_heatmap(frame, cutoff):
+def render_heatmap(frame, cutoff, asset_code="BTC"):
     years = (
         st.segmented_control(
             "히트맵 이력",
@@ -167,15 +169,18 @@ def render_heatmap(frame, cutoff):
         )
         or 0
     )
-    result = cached_heatmap(frame, pd.Timestamp(cutoff).floor("h"), years)
-    st.markdown(heatmap_card(result), unsafe_allow_html=True)
+    result = cached_heatmap(frame, pd.Timestamp(cutoff).floor("h"), years, asset_code)
+    st.markdown(heatmap_card(result, asset_code), unsafe_allow_html=True)
 
 
-def render_market_insights(frame, cutoff):
+def render_market_insights(frame, cutoff, asset_code="BTC"):
     st.markdown(CSS + "<strong>시장 심리와 월별 흐름</strong>", unsafe_allow_html=True)
     sentiment, heatmap = st.columns([1, 2], gap="small")
     with sentiment:
         render_sentiment()
     with heatmap:
-        render_heatmap(frame, cutoff)
+        render_heatmap(frame, cutoff, asset_code)
+    from btc_analyzer.ui.etf_view import render_etf_flows
+
+    render_etf_flows()
     render_economic_releases()

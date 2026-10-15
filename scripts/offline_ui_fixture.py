@@ -48,9 +48,15 @@ def offline_market_data(checkout: Path):
 
     class Client:
         def fetch_ohlcv(self, symbol, timeframe, since, limit):
-            if symbol != "BTC/USDT":
+            scales = {"BTC/USDT": 1, "ETH/USDT": 0.03, "SOL/USDT": 0.0015, "XRP/USDT": 0.000012}
+            if symbol not in scales:
                 raise AssertionError(f"Unexpected analysis market: {symbol}")
-            return [row for row in rows[timeframe] if row[0] >= since][:limit]
+            scale = scales[symbol]
+            return [
+                [row[0], *[value * scale for value in row[1:5]], row[5]]
+                for row in rows[timeframe]
+                if row[0] >= since
+            ][:limit]
 
         def fetch_ticker(self, symbol):
             raise AssertionError("Current prices belong to the browser, not the Python analysis")
@@ -87,6 +93,18 @@ def offline_context_data():
     def get(url, **kwargs):
         host = urlsplit(url).hostname
         now = datetime.now(timezone.utc)
+        if host == "farside.co.uk":
+            funds = ("IBIT", "FBTC") if "bitcoin" in url else ("ETHA", "FETH")
+            rows = []
+            for i in reversed(range(10)):
+                at = (now - timedelta(days=i)).strftime("%d %b %Y")
+                rows.append(f"<tr><td>{at}</td><td>{20 - i}.0</td><td>(5.0)</td><td>{15 - i}.0</td></tr>")
+            table = (
+                f"<table><tr><th>Date</th><th>{funds[0]}</th><th>{funds[1]}</th><th>Total</th></tr>"
+                + "".join(rows)
+                + "</table>"
+            )
+            return Response(table.encode())
         if host == "api.alternative.me":
             today = now.replace(hour=0, minute=0, second=0, microsecond=0)
             body = {

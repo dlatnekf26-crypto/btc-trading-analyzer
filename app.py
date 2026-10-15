@@ -18,6 +18,7 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from btc_analyzer.config import AppConfig
+from btc_analyzer.assets import ASSETS
 from btc_analyzer.candles import candle_boundary
 from btc_analyzer.data.service import DataService
 from btc_analyzer.data.base_provider import DataError
@@ -29,13 +30,25 @@ from btc_analyzer.ui.market_context import render_macro_quotes, render_coin_news
 
 load_dotenv(override=False)
 logging.basicConfig(level=os.getenv("BTC_LOG_LEVEL", "INFO"))
-st.set_page_config(page_title="BTC Signal Lab · 실시간 시장 분석", page_icon="₿", layout="wide")
+st.set_page_config(page_title="Crypto Signal Lab · 실시간 시장 분석", page_icon="◈", layout="wide")
 st.markdown(CSS, unsafe_allow_html=True)
 st.markdown(BRAND, unsafe_allow_html=True)
 cache_path = Path(os.getenv("BTC_WEB_DATA_DIR", "data/web")) / "market-cache.sqlite3"
 cfg = AppConfig()
 display_timezone = "Asia/Seoul"
-exchange, symbol, quote_currency, timeframe = "Binance", "BTC/USDT", "USDT", "1d"
+exchange, quote_currency, timeframe = "Binance", "USDT", "1d"
+asset_code = (
+    st.segmented_control(
+        "분석할 코인",
+        list(ASSETS),
+        default="BTC",
+        required=True,
+        key="analysis_asset",
+    )
+    or "BTC"
+)
+asset = ASSETS[asset_code]
+symbol = asset.symbol
 average_lines = ("ema_20", "ema_50", "ema_200")
 
 
@@ -54,11 +67,11 @@ def open_history_comparison() -> None:
 with st.container(key="market_controls"):
     market_control, refresh_control = st.columns([5, 2], vertical_alignment="bottom")
     with market_control:
-        st.caption("Binance · BTC/USDT · LIVE")
+        st.caption(f"{asset.name} · Binance · {symbol} · LIVE")
     with refresh_control:
         st.button("데이터 새로고침", on_click=request_market_refresh, width="stretch")
 # Render before any server-side candle request. Quote ticks never rerun Python.
-render_live_prices()
+render_live_prices(asset_code)
 render_macro_quotes()
 st.caption(f"{exchange} {symbol} · 진행 중 봉/잠정 지표는 실시간 · 종합 신호와 과거 검증은 확정 봉 기준")
 
@@ -94,7 +107,7 @@ def dashboard() -> None:
 
     from btc_analyzer.ui.live_analysis import render_live_analysis
 
-    render_live_analysis(enriched, cfg.indicators)
+    render_live_analysis(enriched, cfg.indicators, asset.stream_symbol)
     if st.session_state.get("dashboard_tab") not in (
         None,
         "시장 개요",
@@ -131,11 +144,12 @@ def dashboard() -> None:
                 display_timezone=display_timezone,
                 average_lines=average_lines,
                 quote_currency=quote_currency,
+                asset_code=asset_code,
             )
             from btc_analyzer.ui.session_patterns import render_session_patterns
             from btc_analyzer.ui.market_insights import render_market_insights
 
-            render_market_insights(bundle.get("1M"), cutoff)
+            render_market_insights(bundle.get("1M"), cutoff, asset_code)
             render_session_patterns(bundle.get("1h"), cutoff)
             with st.expander("종합 판단의 전체 근거"):
                 for reason in combined.reasons:
@@ -235,4 +249,4 @@ def dashboard() -> None:
 dashboard()
 # News remains an independent fragment and keeps the live alert bridge current
 # on every tab, without pushing the price/forecast chart below a long news feed.
-render_coin_news()
+render_coin_news(asset_code)

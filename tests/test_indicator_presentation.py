@@ -40,7 +40,7 @@ def test_invalid_rsi_is_not_a_market_state(value):
 
 def test_macd_below_zero_can_still_be_above_signal():
     card = cards(macd=-5, macd_signal=-7)[2]
-    assert card.state == "기준선 위" and card.value == "+2.00 USDT"
+    assert card.state == "기준선 위" and card.value == "+2.0000 USDT"
     assert "0 아래" in card.meaning
     card = cards(macd=5, macd_signal=7)[2]
     assert card.state == "기준선 아래" and "0 위" in card.meaning
@@ -101,3 +101,8 @@ def test_focused_charts_preserve_numbers_units_and_touch_axes(features, kind, co
         assert "중심선" in fig.layout.yaxis.title.text
     if kind == "RSI":
         assert tuple(fig.layout.yaxis.range) == (0, 100)
+
+
+def test_small_coin_macd_keeps_nonzero_difference_visible():
+    card = cards(macd=0.000062, macd_signal=0.000031)[2]
+    assert card.value == "+0.000031 USDT"

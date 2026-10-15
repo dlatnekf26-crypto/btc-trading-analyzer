@@ -1,6 +1,7 @@
 """Chart controls reuse closed-candle features without a separate strategy run."""
 
 from html import escape
+from btc_analyzer.assets import price_text
 
 import streamlit as st
 
@@ -9,7 +10,7 @@ from btc_analyzer.ui.cache_keys import MARKET_HASH_FUNCS
 from btc_analyzer.config import COMPOSITE_TIMEFRAMES
 from btc_analyzer.candles import candle_close
 from btc_analyzer.strategy.composite import FRAME_LABELS
-from btc_analyzer.ui.charts import price_chart, READ_CHART_CONFIG
+from btc_analyzer.ui.charts import price_chart, READ_CHART_CONFIG, bind_asset
 
 
 @st.cache_data(ttl=3600, max_entries=24, show_spinner=False, hash_funcs=MARKET_HASH_FUNCS)
@@ -69,8 +70,10 @@ def market_chart_spec(
 
 
 @st.fragment
-def render_market_chart(*, bundle, enriched, cfg, display_timezone, average_lines, quote_currency):
-    st.markdown('<p class="btc-section-label">필요한 만큼, 자유롭게</p>', unsafe_allow_html=True)
+def render_market_chart(
+    *, bundle, enriched, cfg, display_timezone, average_lines, quote_currency, asset_code="BTC"
+):
+    st.markdown('<p class="btc-section-label">가격 흐름 · 시간대와 지표 선택</p>', unsafe_allow_html=True)
     st.subheader("차트로 확인하기")
     chart_tf = st.segmented_control(
         "차트 시간대",
@@ -99,7 +102,7 @@ def render_market_chart(*, bundle, enriched, cfg, display_timezone, average_line
         st.markdown(
             '<div class="btc-chart-summary" aria-label="차트 가격 요약">'
             f"<span>{FRAME_LABELS[chart_tf]} 확정 종가 · {candle_close(visible.index[-1], chart_tf).tz_convert(display_timezone):%m.%d %H:%M}</span>"
-            f"<strong>{last_price:,.2f} <small>{escape(quote_currency)}</small></strong>"
+            f"<strong>{price_text(last_price)} <small>{escape(quote_currency)}</small></strong>"
             f"<span>표시 구간 변화 {last_price / first_price - 1:+.1%} · 초록 봉 상승 / 빨간 봉 하락</span></div>",
             unsafe_allow_html=True,
         )
@@ -116,7 +119,7 @@ def render_market_chart(*, bundle, enriched, cfg, display_timezone, average_line
             cfg.indicators.ichimoku_displacement,
         )
         st.plotly_chart(
-            fig,
+            bind_asset(fig, asset_code),
             width="stretch",
             key="chart_01",
             theme=None,

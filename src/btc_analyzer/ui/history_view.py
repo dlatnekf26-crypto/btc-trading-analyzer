@@ -228,6 +228,6 @@ def render_history_view(
             current, past = correction_context(
                 frame, tf, report.query_end, tuple(match.end for match in report.matches)
             )
-        render_prediction(result, timezone, quote, period, current, past)
+        render_prediction(result, timezone, quote, period, current, past, symbol.split("/")[0])
     else:
         render_comparison(report, timezone, duration_label(tf, forward))

@@ -1,6 +1,7 @@
 """Compact correction outlook and source-linked release what-if controls."""
 
 from html import escape
+from btc_analyzer.assets import price_text
 from zoneinfo import ZoneInfo
 
 import streamlit as st
@@ -49,7 +50,7 @@ def outlook_html(outlook, timezone, quote):
     if outlook.window_start is not None:
         start, end = outlook.window_start.tz_convert(timezone), outlook.window_end.tz_convert(timezone)
         timing = f"{start:%m.%d} ~ {end:%m.%d}"
-        price = f"{outlook.low:,.0f} ~ {outlook.high:,.0f}"
+        price = f"{price_text(outlook.low)} ~ {price_text(outlook.high)}"
         timing_note = "하락 사례의 첫 도달 시점 중간 50% · KST"
         price_note = f"{quote} · 하락 사례의 기간 내 저점 중간 50%"
     else:
@@ -85,7 +86,7 @@ def render_correction(result, context_values, past_values, news, base, now, time
     outlook = correction_outlook(result, threshold)
     st.markdown(outlook_html(outlook, timezone, quote), unsafe_allow_html=True)
     st.caption(
-        f"조정 기준 {outlook.trigger_price:,.2f} {quote} 이하의 봉 종가 · 고점 대비 낙폭과는 달라요. 과거 경로를 현재 변동성에 맞춰 0.5~2배 환산했어요. 과거 비중은 미래 확률이 아니며, 시점·가격은 조정이 발생한다는 조건의 추정이에요."
+        f"조정 기준 {price_text(outlook.trigger_price)} {quote} 이하의 봉 종가 · 고점 대비 낙폭과는 달라요. 과거 경로를 현재 변동성에 맞춰 0.5~2배 환산했어요. 과거 비중은 미래 확률이 아니며, 시점·가격은 조정이 발생한다는 조건의 추정이에요."
     )
     evidence = technical_evidence(context_values)
     if evidence.reasons:

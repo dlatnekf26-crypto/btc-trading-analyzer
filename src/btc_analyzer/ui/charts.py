@@ -6,6 +6,9 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 import plotly.graph_objects as go
+from btc_analyzer.assets import ASSETS
+
+
 from plotly.subplots import make_subplots
 
 if TYPE_CHECKING:
@@ -21,6 +24,18 @@ READ_CHART_CONFIG = {
     "showAxisRangeEntryBoxes": False,
     "responsive": True,
 }
+
+
+def bind_asset(spec, asset_code):
+    """Carry asset identity through browser updates and preserve XRP decimals."""
+    asset = ASSETS[asset_code]
+    spec["layout"]["meta"]["btcLive"]["symbol"] = asset.stream_symbol
+    if asset.decimals > 2:
+        spec["layout"]["yaxis"].update(tickformat=",.4f", hoverformat=",.4f")
+        for trace in spec["data"]:
+            if "hovertemplate" in trace:
+                trace["hovertemplate"] = trace["hovertemplate"].replace(",.2f", ",.4f")
+    return spec
 
 
 def style_chart(fig: go.Figure, height: int = 540) -> go.Figure:
@@ -302,8 +317,9 @@ def indicator_chart(df: pd.DataFrame, timezone: str = "Asia/Seoul", kind: str = 
             else ("%", "중심선 대비 · %" if kind == "BB" else "종가 대비 · %")
         )
     style_chart(fig, 360)
+    precision = 6 if kind == "MACD" and df.close.iloc[-1] < 10 else 2
     for trace in fig.data:
-        trace.hovertemplate = f"%{{y:,.2f}}{unit}<extra>%{{fullData.name}}</extra>"
+        trace.hovertemplate = f"%{{y:,.{precision}f}}{unit}<extra>%{{fullData.name}}</extra>"
     fig.update_layout(
         uirevision=f"indicators-{kind}-{df.attrs.get('timeframe')}",
         showlegend=kind == "MACD",
@@ -313,7 +329,7 @@ def indicator_chart(df: pd.DataFrame, timezone: str = "Asia/Seoul", kind: str = 
     )
     fig.update_yaxes(
         title_text=axis,
-        tickformat=".0f" if kind == "RSI" else ".2f",
+        tickformat=".0f" if kind == "RSI" else f".{precision}f",
         rangemode="tozero" if kind != "MACD" else "normal",
     )
     if kind == "RSI":

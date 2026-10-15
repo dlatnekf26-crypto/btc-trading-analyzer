@@ -1,6 +1,7 @@
 """Price forecast presentation: absolute prices, uncertainty and measured errors."""
 
 from html import escape
+from btc_analyzer.assets import price_text
 from datetime import datetime
 
 import numpy as np
@@ -14,7 +15,7 @@ from btc_analyzer.analysis.direction_outlook import direction_outlook
 from btc_analyzer.analysis.direction_explanation import explain_direction
 from btc_analyzer.analysis.price_explanation import explain_price
 from btc_analyzer.candles import candle_close
-from btc_analyzer.ui.charts import style_chart, READ_CHART_CONFIG
+from btc_analyzer.ui.charts import style_chart, READ_CHART_CONFIG, bind_asset
 from btc_analyzer.ui.market_context import current_context
 from btc_analyzer.data.market_context import UTC
 from btc_analyzer.ui.direction_view import COLORS, direction_cards, direction_headline, direction_reason_card
@@ -213,11 +214,11 @@ def prediction_chart(
     fig.add_annotation(
         x=future[-1],
         y=primary.center[-1] if primary else prediction.center[-1],
-        text=f"우세 {primary.label} · {primary.center[-1]:,.0f}"
+        text=f"우세 {primary.label} · {price_text(primary.center[-1])}"
         if primary
         else "방향 우열 없음"
         if outlook
-        else f"예상 {prediction.center[-1]:,.0f}",
+        else f"예상 {price_text(prediction.center[-1])}",
         showarrow=False,
         xanchor="right",
         yshift=18,
@@ -374,6 +375,7 @@ def render_prediction(
     period: str,
     context_values=None,
     past_values=(),
+    asset_code="BTC",
 ):
     prediction = result.prediction
     if prediction is None:
@@ -381,7 +383,7 @@ def render_prediction(
         return
     report = result.history
     now = datetime.now(UTC)
-    news = project_news(result, current_context(), now)
+    news = project_news(result, current_context().for_asset(asset_code), now)
     use_news = st.toggle("뉴스 영향 함께 반영", value=True, key="forecast_use_news")
     active_news = news if use_news and news.effects else None
     outlook = direction_outlook(result, active_news)
@@ -428,11 +430,13 @@ def render_prediction(
         st.markdown(
             f'<div class="btc-replay-summary"><strong>당시에는 {match.forward_return:+.1%} 움직였어요</strong>'
             f"<span>{match.start.tz_convert(timezone):%Y.%m.%d} ~ {match.end.tz_convert(timezone):%Y.%m.%d} · 유사도 {match.similarity:.0f}점</span>"
-            f"<span>같은 움직임이면 {replay_price:,.2f} {escape(quote)} · 주황색은 선택한 과거 사례의 재현이에요.</span></div>",
+            f"<span>같은 움직임이면 {price_text(replay_price)} {escape(quote)} · 주황색은 선택한 과거 사례의 재현이에요.</span></div>",
             unsafe_allow_html=True,
         )
     target = prediction.dates[-1].tz_convert(timezone)
-    st.caption(f"예측 도착일 {target:%Y.%m.%d} · 기준 종가 {report.anchor_price:,.2f} {quote}에서 출발해요.")
+    st.caption(
+        f"예측 도착일 {target:%Y.%m.%d} · 기준 종가 {price_text(report.anchor_price)} {quote}에서 출발해요."
+    )
     chart_slot = st.container()
     from btc_analyzer.ui.correction_view import render_correction
 
@@ -465,7 +469,7 @@ def render_prediction(
         )
     move = shown.center[-1] / report.anchor_price - 1
     direction = "상승 쪽" if move >= 0.005 else "하락 쪽" if move <= -0.005 else "횡보 쪽"
-    price_label = f"{shown.center[-1]:,.2f}"
+    price_label = f"{price_text(shown.center[-1])}"
     range_label = (
         "발표 조건부 범위"
         if release_projection
@@ -479,7 +483,9 @@ def render_prediction(
         shown = active_news or prediction
         range_label = "뉴스 가정 포함 범위" if active_news else "기술 모델 변동 범위"
         leaders = [scenario for scenario in comparison.scenarios if scenario.key in comparison.leaders]
-        price_label = f"{leaders[0].center[-1]:,.2f}" if len(leaders) == 1 else "한 방향으로 좁히기 어려워요"
+        price_label = (
+            f"{price_text(leaders[0].center[-1])}" if len(leaders) == 1 else "한 방향으로 좁히기 어려워요"
+        )
         note = (
             f"{escape(quote)} · 기준 종가 대비 {leaders[0].center[-1] / report.anchor_price - 1:+.1%}"
             if len(leaders) == 1
@@ -491,7 +497,7 @@ def render_prediction(
             f'<div class="btc-forecast-cards btc-direction-summary" aria-label="예측 요약"><article>'
             f"<p>{escape(period)} 뒤 · {direction}</p><strong>{price_label}</strong><span>{note}</span>"
             f"<span>선정 이유: {escape(explanation.selection) if explanation else '근거 확인 중'}</span>"
-            f"<span>{range_label} {shown.lower[-1]:,.0f} ~ {shown.upper[-1]:,.0f} {escape(quote)} · {status}</span>"
+            f"<span>{range_label} {price_text(shown.lower[-1])} ~ {price_text(shown.upper[-1])} {escape(quote)} · {status}</span>"
             f"<span>방향별 경로는 미검증 · 비중은 확률이 아니에요</span></article></div>"
         )
         if comparison
@@ -499,7 +505,7 @@ def render_prediction(
             f'<div class="btc-forecast-cards" aria-label="예측 요약">'
             f"<article><p>{escape(period)} 뒤 {scope} · {direction}</p><strong>{price_label}</strong>"
             f"<span>{note}</span></article>"
-            f"<article><p>{range_label}</p><strong>{shown.lower[-1]:,.0f} ~ {shown.upper[-1]:,.0f}</strong>"
+            f"<article><p>{range_label}</p><strong>{price_text(shown.lower[-1])} ~ {price_text(shown.upper[-1])}</strong>"
             f"<span>{escape(quote)} · 보장된 가격 범위가 아니에요</span></article>"
             f"<article><p>기술 모델의 과거 검증</p><strong>{status}</strong>"
             f"<span>{len(report.matches)}개 유사 사례 · 방향별 경로·뉴스·발표 가정은 미검증</span></article></div>"
@@ -508,7 +514,7 @@ def render_prediction(
     )
     if active_news:
         st.markdown(
-            f'<div class="btc-news-scenario"><strong>뉴스 가정으로 기본 전망 대비 {news.shift:+.2%} 조정</strong><br>기본 예상 {prediction.center[-1]:,.2f} {escape(quote)} → 뉴스 반영 {news.center[-1]:,.2f} {escape(quote)}<br>제목 기반의 제한된 가정이에요. 뉴스 반영 후 정확도가 높아졌다는 검증은 아직 없습니다.</div>',
+            f'<div class="btc-news-scenario"><strong>뉴스 가정으로 기본 전망 대비 {news.shift:+.2%} 조정</strong><br>기본 예상 {price_text(prediction.center[-1])} {escape(quote)} → 뉴스 반영 {price_text(news.center[-1])} {escape(quote)}<br>제목 기반의 제한된 가정이에요. 뉴스 반영 후 정확도가 높아졌다는 검증은 아직 없습니다.</div>',
             unsafe_allow_html=True,
         )
         with st.expander("어떤 뉴스가 전망에 들어갔나요?"):
@@ -552,17 +558,20 @@ def render_prediction(
             unsafe_allow_html=True,
         )
         st.plotly_chart(
-            prediction_spec(
-                result,
-                timezone,
-                quote,
-                show_range,
-                selected if mode == "model" else None,
-                active_news,
-                correction,
-                event,
-                release_projection,
-                comparison,
+            bind_asset(
+                prediction_spec(
+                    result,
+                    timezone,
+                    quote,
+                    show_range,
+                    selected if mode == "model" else None,
+                    active_news,
+                    correction,
+                    event,
+                    release_projection,
+                    comparison,
+                ),
+                asset_code,
             ),
             width="stretch",
             key="future_price_chart",
@@ -591,7 +600,7 @@ def render_prediction(
             "옅은 영역은 변동 범위, 주황 세로 구간은 과거 조정 시점, 갈색 선은 발표 시각이에요. 분홍 점선은 발표 결과의 별도 가정이며 방향 비중을 바꾸지 않아요."
         )
     st.caption(
-        f"기준 종가 {report.anchor_price:,.2f} {quote} · {report.query_end.tz_convert(timezone):%Y.%m.%d %H:%M} · {timezone}"
+        f"기준 종가 {price_text(report.anchor_price)} {quote} · {report.query_end.tz_convert(timezone):%Y.%m.%d %H:%M} · {timezone}"
     )
     if prediction.calibrated_cases:
         st.caption(

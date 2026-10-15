@@ -135,8 +135,19 @@ class MarketFixture:
             }
         elif history:
             end = now // 60000 * 60000
-            base = 3000 if market == "ethereum" else 100000
-            body = [[end - (59 - i) * 60000, base, base, base, str(base + i)] for i in range(60)]
+            base = (
+                3000
+                if market == "ethereum"
+                else 150
+                if "SOLUSDT" in url
+                else 1.15
+                if "XRPUSDT" in url
+                else 100000
+            )
+            body = [
+                [end - (59 - i) * 60000, base, base, base, str(base + i * (0.001 if base < 10 else 1))]
+                for i in range(60)
+            ]
         elif market == "upbit":
             body = [
                 {"market": "KRW-BTC", "trade_price": 135252000, "signed_change_rate": 0.01, "timestamp": now}
@@ -147,7 +158,9 @@ class MarketFixture:
             quotes = [
                 {
                     "symbol": symbol,
-                    "lastPrice": "3000.25" if symbol == "ETHUSDT" else "100000",
+                    "lastPrice": {"ETHUSDT": "3000.25", "SOLUSDT": "150.25", "XRPUSDT": "1.1532"}.get(
+                        symbol, "100000"
+                    ),
                     "priceChangePercent": "2.34",
                     "closeTime": now,
                 }
@@ -240,7 +253,7 @@ def verify(browser, width, app_url=None, event_log=None):
         widget = page.main_frame
     widget.locator('#premium[data-ready="true"]').wait_for(timeout=20000)
     assert widget.locator("#upbit").count() == 0
-    assert widget.locator(".market").count() == 4
+    assert widget.locator(".market").count() == 6
     assert widget.locator("iframe").count() == 0
     assert widget.evaluate("window.__quoteSockets.length") == 3
     assert widget.locator("#ethereum .price span").inner_text() == "3,000.25"
@@ -278,7 +291,7 @@ def verify(browser, width, app_url=None, event_log=None):
         )
         < 1e-10
     )
-    assert widget.locator(".crypto.fresh").count() == 2
+    assert widget.locator(".crypto.fresh").count() == 4
     for packet in (
         "not json",
         json.dumps({"s": "DOGEUSDT", "c": "1", "E": now + 1}),
@@ -309,7 +322,7 @@ def verify(browser, width, app_url=None, event_log=None):
     fixture.rest = False
     page.clock.fast_forward(16000)
     page.clock.run_for(400)
-    assert widget.locator(".crypto.stale").count() == 2
+    assert widget.locator(".crypto.stale").count() == 4
     assert widget.locator("#premium").get_attribute("data-ready") == "false"
     assert "시세 지연" in widget.locator("#premium .status").inner_text()
     # Simulated transports emit no periodic packets. Let both watchdogs finish

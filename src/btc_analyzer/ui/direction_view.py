@@ -1,6 +1,7 @@
 """Compact direction comparison cards for the existing forecast fragment."""
 
 from html import escape
+from btc_analyzer.assets import price_text
 
 
 COLORS = {"up": "#079b72", "flat": "#64748b", "down": "#dc5267"}
@@ -19,7 +20,7 @@ def direction_cards(outlook, anchor, quote):
         cards.append(
             f'<article class="btc-direction-card {scenario.key}{" leading" if leading else ""}" data-direction="{scenario.key}">'
             f"<p><b>{scenario.label}</b><span>{badge}</span></p>"
-            f"<strong>{scenario.center[-1]:,.0f}</strong><small>{escape(quote)} · {movement:+.1%}</small>"
+            f"<strong>{price_text(scenario.center[-1])}</strong><small>{escape(quote)} · {movement:+.1%}</small>"
             f'<div class="btc-direction-weight">{scenario.share:.0%}<span>가중 비중</span></div>'
             f'<div class="btc-direction-track"><i style="width:{scenario.share * 100:.2f}%"></i></div>'
             f"<small>{f'유사 사례 {scenario.cases}개' if scenario.cases else '사례 없음 · 선정 제외'}</small></article>"

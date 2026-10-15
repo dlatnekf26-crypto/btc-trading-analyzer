@@ -25,7 +25,7 @@ class MonthlyHeatmap:
     bars: int
 
 
-def monthly_heatmap(frame, cutoff, years=0):
+def monthly_heatmap(frame, cutoff, years=0, listed_month=(2017, 8)):
     if years not in (0, 5):
         raise ValueError("월별 히트맵은 전체 또는 최근 5년입니다.")
     cutoff = pd.Timestamp(cutoff)
@@ -53,7 +53,9 @@ def monthly_heatmap(frame, cutoff, years=0):
         data = data.loc[valid & grid & (candle_close(data.index, "1M") <= cutoff)]
     # Bound the rendered history to Binance's actual launch era, not invented years.
     if not data.empty:
-        data = data.loc[data.index >= pd.Timestamp("2017-08-01", tz="UTC")]
+        data = data.loc[
+            data.index >= pd.Timestamp(year=listed_month[0], month=listed_month[1], day=1, tz="UTC")
+        ]
     first = int(data.index[0].year) if not data.empty else cutoff.year
     if years:
         first = max(first, cutoff.year - years + 1)
@@ -68,7 +70,7 @@ def monthly_heatmap(frame, cutoff, years=0):
             stamp = pd.Timestamp(year=year, month=month, day=1, tz="UTC")
             status = (
                 "partial"
-                if value is not None and (year, month) == (2017, 8)
+                if value is not None and (year, month) == listed_month
                 else "closed"
                 if value is not None
                 else "open"
@@ -81,7 +83,7 @@ def monthly_heatmap(frame, cutoff, years=0):
         values = [
             value
             for (year, number), value in returns.items()
-            if number == month and year in shown and (year, number) != (2017, 8)
+            if number == month and year in shown and (year, number) != listed_month
         ]
         averages.append(
             MonthlyCell(None, month, float(np.mean(values)) if values else None, len(values), "average")

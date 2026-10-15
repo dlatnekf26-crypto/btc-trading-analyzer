@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from html import escape
+from btc_analyzer.assets import price_text
 import math
 
 import pandas as pd
@@ -75,7 +76,7 @@ def indicator_cards(features: pd.DataFrame, cfg: IndicatorConfig) -> list[Indica
         card = IndicatorCard(
             card.label,
             state,
-            f"{line - signal:+,.2f} USDT",
+            f"{price_text(line - signal, signed=True)} USDT",
             f"MACD − 기준선 차이 · MACD 자체는 {zero}.",
             tone,
         )
@@ -123,7 +124,7 @@ def indicator_cards(features: pd.DataFrame, cfg: IndicatorConfig) -> list[Indica
         if min(cloud_a, cloud_b) <= close <= max(cloud_a, cloud_b):
             state, tone = "구름 안", "neutral"
         card = IndicatorCard(
-            card.label, state, f"{close:,.2f} USDT", "현재 구름과 확정 종가의 위치를 비교해요.", tone
+            card.label, state, f"{price_text(close)} USDT", "현재 구름과 확정 종가의 위치를 비교해요.", tone
         )
     cards.append(card)
     return cards
@@ -230,6 +231,9 @@ def render_indicators(enriched, cfg, timezone):
             ]:
                 value = number(row, key)
                 values.append(
-                    {"지표": label, "현재값 · USDT": f"{value:,.2f}" if value is not None else "자료 부족"}
+                    {
+                        "지표": label,
+                        "현재값 · USDT": f"{price_text(value)}" if value is not None else "자료 부족",
+                    }
                 )
             st.dataframe(pd.DataFrame(values), hide_index=True, width="stretch")

@@ -72,7 +72,8 @@ def test_gap_seed_restarts_and_missing_live_candles_are_not_smoothed():
     )
 
 
-def test_protocol_calendar_boundaries_and_bad_packets():
+@pytest.mark.parametrize("symbol", ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT"])
+def test_protocol_calendar_boundaries_and_bad_packets(symbol):
     now = int(pd.Timestamp("2026-10-08T00:23:00Z").timestamp() * 1000)
     packets = []
     for tf in ("1h", "4h", "1d", "1w", "1M"):
@@ -82,10 +83,10 @@ def test_protocol_calendar_boundaries_and_bad_packets():
             {
                 "e": "kline",
                 "E": now,
-                "s": "BTCUSDT",
+                "s": symbol,
                 "k": {
                     "i": tf,
-                    "s": "BTCUSDT",
+                    "s": symbol,
                     "t": int(start.timestamp() * 1000),
                     "T": int(end.timestamp() * 1000) - 1,
                     "o": "100",
@@ -98,16 +99,16 @@ def test_protocol_calendar_boundaries_and_bad_packets():
             }
         )
     results = javascript(
-        "console.log(JSON.stringify(input.packets.map(p=>LiveCandles.parse(p,input.now))))",
-        {"packets": packets, "now": now},
+        "console.log(JSON.stringify(input.packets.map(p=>LiveCandles.parse(p,input.now,input.symbol))))",
+        {"packets": packets, "now": now, "symbol": symbol},
     )
     assert all(result for result in results)
     assert results[-1]["end"] == int(pd.Timestamp("2026-11-01T00:00Z").timestamp() * 1000)
     assert results[-2]["at"] == int(pd.Timestamp("2026-10-05T00:00Z").timestamp() * 1000)
     rejected = []
     for field, value, nested in (
-        ("s", "ETHUSDT", False),
-        ("s", "ETHUSDT", True),
+        ("s", "ETHUSDT" if symbol != "ETHUSDT" else "BTCUSDT", False),
+        ("s", "ETHUSDT" if symbol != "ETHUSDT" else "BTCUSDT", True),
         ("E", now - 15001, False),
         ("E", now + 3001, False),
         ("t", now, True),
@@ -126,8 +127,8 @@ def test_protocol_calendar_boundaries_and_bad_packets():
         (packet["k"] if nested else packet)[field] = value
         rejected.append(packet)
     assert javascript(
-        "console.log(JSON.stringify(input.packets.map(p=>LiveCandles.parse(p,input.now))))",
-        {"packets": rejected, "now": now},
+        "console.log(JSON.stringify(input.packets.map(p=>LiveCandles.parse(p,input.now,input.symbol))))",
+        {"packets": rejected, "now": now, "symbol": symbol},
     ) == [None] * len(rejected)
 
 

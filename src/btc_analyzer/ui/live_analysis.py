@@ -74,7 +74,7 @@ def live_seed_json(enriched, cfg):
     return json.dumps({"frames": frames, "cfg": parameters}, separators=(",", ":"), allow_nan=False)
 
 
-def render_live_analysis(enriched, cfg):
+def render_live_analysis(enriched, cfg, symbol="BTCUSDT"):
     seeds = {
         tf: frame[["open", "high", "low", "close", "volume", "bars_since_gap", "atr"]]
         for tf, frame in enriched.items()
@@ -82,7 +82,7 @@ def render_live_analysis(enriched, cfg):
     }
     payload = escape(live_seed_json(seeds, cfg), quote=True)
     st.markdown(
-        f'<section id="btc-live-analysis" data-seeds="{payload}" aria-label="실시간 잠정 분석">'
+        f'<section id="btc-live-analysis" data-symbol="{escape(symbol, quote=True)}" data-seeds="{payload}" aria-label="실시간 잠정 분석">'
         '<div class="btc-live-heading"><strong>지금, 다섯 시간대</strong>'
         '<span class="btc-live-status">진행 중 봉 연결 대기</span></div>'
         '<div class="btc-live-frames">'
@@ -126,9 +126,9 @@ const LiveCandles = (()=>{
     return tf==='1M' ? Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,1) :
       time+({'1h':3600000,'4h':14400000,'1d':86400000,'1w':604800000}[tf]);
   }
-  function parse(packet,now) {
+  function parse(packet,now,symbol='BTCUSDT') {
     const k=packet?.k, tf=k?.i;
-    if(packet?.e!=='kline' || packet.s!=='BTCUSDT' || k?.s!=='BTCUSDT' || !frames.includes(tf) ||
+    if(packet?.e!=='kline' || packet.s!==symbol || k?.s!==symbol || !frames.includes(tf) ||
        !Number.isSafeInteger(packet.E) || packet.E>now+3000 || now-packet.E>15000 ||
        !Number.isSafeInteger(k.t) || !Number.isSafeInteger(k.T) || k.t!==boundary(k.t,tf) ||
        k.T!==end(k.t,tf)-1 || packet.E<k.t || typeof k.x!=='boolean' ||
@@ -176,7 +176,7 @@ const LiveCandles = (()=>{
 function makeLiveAnalysis(root) {
   let doc;
   try {doc=root.document;} catch(_) {return {accept(){},paint(){},stop(){},dispose(){}};}
-  let host=null,payload=null,cfg=null,books={},dirty=true,lastPaint=0,disposed=false,timer=null,latestQuote=null;
+  let host=null,payload=null,cfg=null,books={},symbol=null,dirty=true,lastPaint=0,disposed=false,timer=null,latestQuote=null;
   const plots=new WeakMap(),held=new WeakSet(),invalidWatch=new WeakSet(),formatters=new Map();
   function array(value) {
     if(value?.bdata) {
@@ -198,6 +198,7 @@ function makeLiveAnalysis(root) {
   function load() {
     const node=doc.getElementById('btc-live-analysis'),raw=node?.dataset.seeds;
     if(node!==host) {host=node;dirty=true;}
+    if(node?.dataset.symbol && node.dataset.symbol!==symbol) {symbol=node.dataset.symbol;books={};payload=null;latestQuote=null;}
     if(!raw || raw===payload) return;
     try {
       const parsed=JSON.parse(raw); cfg=parsed.cfg;
@@ -213,7 +214,7 @@ function makeLiveAnalysis(root) {
     } catch(_) { /* Incomplete DOM replacement is retried on the next heartbeat. */ }
   }
   function accept(packet) {
-    load(); const k=LiveCandles.parse(packet,Date.now());
+    load(); const k=LiveCandles.parse(packet,Date.now(),symbol);
     if(!k || !cfg) return;
     const b=books[k.tf]; if(!b || (b.candle && (k.at<b.candle.at || k.event<=b.candle.event || (b.candle.closed && k.at===b.candle.at)))) return;
     const updated=LiveCandles.advance(b.seed,k,cfg);
@@ -284,7 +285,7 @@ function makeLiveAnalysis(root) {
       // A marker adds the current price without moving axes or hiding hover.
       plot.dataset.liveEvent=String(k.event);plot.dataset.livePrice=String(k.row[4]);plot.dataset.liveTimeframe=k.tf;
       const summary=doc.querySelector('.btc-chart-summary');
-      text(summary?.querySelector('strong'),`${k.row[4].toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} USDT`);
+      text(summary?.querySelector('strong'),`${k.row[4].toLocaleString('en-US',{minimumFractionDigits:k.row[4]<10 ? 4 : 2,maximumFractionDigits:k.row[4]<10 ? 4 : 2})} USDT`);
       text(summary?.querySelector('span'),`${meta.label} · 진행 중 봉 · ${clock.format(new Date(k.event))} KST`);
       text(summary?.querySelector('span:last-child'),`현재 봉 ${k.row[4]/k.row[1]-1>=0 ? '+' : ''}${((k.row[4]/k.row[1]-1)*100).toFixed(2)}% · EMA/밴드 잠정 · 일목 구름은 확정 봉`);
     });
@@ -297,7 +298,7 @@ function makeLiveAnalysis(root) {
     text(card?.querySelector('.btc-live-status'),live ? `현재가 출발 · ${clock.format(new Date(quote.event))} KST · 잠정 지표 ${active.length}/5` : '시세 수신 대기/지연 · 조건부 경로 갱신 보류');
     if(!live) return;
     const ratio=quote.price/meta.anchor, center=meta.center.map(y=>y*ratio), lower=meta.lower.map(y=>y*ratio), upper=meta.upper.map(y=>y*ratio);
-    const money=n=>n.toLocaleString('en-US',{maximumFractionDigits:2,minimumFractionDigits:2});
+    const money=n=>n.toLocaleString('en-US',{maximumFractionDigits:n<10 ? 4 : 2,minimumFractionDigits:n<10 ? 4 : 2});
     text(card?.querySelector('strong'),`${money(center.at(-1))} USDT`);
     text(card?.querySelector('.btc-live-forecast-range'),`현재 ${money(quote.price)} → ${meta.label} · 범위 ${money(lower.at(-1))} ~ ${money(upper.at(-1))}`);
     const directions=active.map(tf=>metrics(books[tf].features,books[tf].candle.row[4]).trend);
@@ -346,7 +347,8 @@ function makeLiveAnalysis(root) {
       return;
     }
     if(timer!==null) {clearTimeout(timer);timer=null;}
-    load();const now=Date.now();lastPaint=now;watchDistance(quote,now);
+    load();if(quote?.symbol && quote.symbol!==symbol) return;
+    const now=Date.now();lastPaint=now;watchDistance(quote,now);
     if(host) {
       const active=LiveCandles.frames.filter(tf=>current(books[tf],now));
       text(host.querySelector('.btc-live-status'),active.length ? `실시간 ${active.length}/5 · ${clock.format(new Date(Math.max(...active.map(tf=>books[tf].candle.event))))} KST` : '봉 수신 대기/지연');
@@ -364,6 +366,7 @@ function makeLiveAnalysis(root) {
     for(const plot of doc.querySelectorAll('.js-plotly-plot')) {
       if(!plot.isConnected || !plot.data?.length || !plot.getClientRects().length || held.has(plot)) continue;
       const meta=plot.layout?.meta?.btcLive;
+      if(meta?.symbol && meta.symbol!==symbol) continue;
       if(meta?.kind==='market') {
         market(plot,meta,books[meta.timeframe],now);
         if(!current(books[meta.timeframe],now) && plot.dataset.liveEvent)

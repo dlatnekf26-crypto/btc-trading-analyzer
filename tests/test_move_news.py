@@ -27,6 +27,8 @@ def test_fresh_catalyst_links_keep_asset_direction_source_and_time():
     assert 'data-published="' in html and 'data-fetched="' in html
     assert 'data-source="Source"' in html
     assert 'data-assets="ETHUSDT"' in bridge(replace(ITEM, title="Ethereum exchange hack"))
+    assert 'data-assets="SOLUSDT"' in bridge(replace(ITEM, title="솔라나 코인 해킹 발생"))
+    assert 'data-assets="XRPUSDT"' in bridge(replace(ITEM, title="XRP ETF inflows surge"))
     assert "BTCUSDT ETHUSDT" in bridge(replace(ITEM, title="Crypto market reacts to Fed rate cut"))
     assert "&lt;img" in bridge(
         replace(ITEM, title="Bitcoin ETF inflows <img src=x>", source='Source"<script>')
@@ -44,7 +46,7 @@ def test_no_stale_future_failed_speculation_price_only_or_unrelated_causes():
         replace(ITEM, title="Bitcoin price rising, software update"),
         replace(ITEM, title="Bitcoin ETF approval rumor"),
         replace(ITEM, title="유가 급등"),
-        replace(ITEM, title="솔라나 코인 해킹 발생"),
+        replace(ITEM, title="도지 코인 해킹 발생"),
         replace(ITEM, url="javascript:alert(1)"),
     ):
         assert "<a " not in bridge(item)
