@@ -14,7 +14,8 @@ RUN python -m pip install --no-cache-dir -r requirements.txt \
     && mkdir -p /app/data \
     && chown appuser:appuser /app/data
 
-COPY app.py web_app.py ./
+COPY app.py web_app.py checkout_bootstrap.py ./
+COPY pwa ./pwa
 COPY .streamlit ./.streamlit
 COPY scripts/start_web.sh ./scripts/start_web.sh
 USER appuser

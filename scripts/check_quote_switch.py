@@ -136,6 +136,25 @@ def switching(browser):
     }
 
 
+def hidden_canvas_work(browser):
+    page = open_widget(browser, widget_html())
+    page.evaluate("""()=>{
+      window.__hiddenDraws=0;const ctx=document.querySelector('#ethereum canvas').getContext('2d'),original=ctx.clearRect;
+      ctx.clearRect=function(...args){window.__hiddenDraws++;return original.apply(this,args);};
+    }""")
+    for n in range(100):
+        send(page.main_frame, "ETHUSDT", 3000 + n, page.evaluate("Date.now()"))
+        page.clock.run_for(100)
+    assert page.evaluate("window.__hiddenDraws") == 0
+    page.evaluate("document.querySelector('#btc-live-selection').dataset.symbol='ETHUSDT'")
+    page.clock.run_for(1000)
+    assert page.evaluate("window.__hiddenDraws") > 0
+    assert page.locator('.crypto[data-selected="true"]').get_attribute("id") == "ethereum"
+    assert page.locator("#ethereum .price span").inner_text() == "3,099.00"
+    cleanup(page, page.main_frame)
+    return {"hidden_price_changes": 100, "hidden_draws": 0, "draw_on_selection": True}
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--before-widget", type=Path)
@@ -143,6 +162,7 @@ if __name__ == "__main__":
     with sync_playwright() as p:
         browser = p.chromium.launch(executable_path="/usr/bin/chromium", args=["--no-sandbox"])
         result = {"switching": switching(browser), "after": canvas_work(browser, widget_html())}
+        result["hidden_canvas"] = hidden_canvas_work(browser)
         assert result["after"]["unchanged_draws"] == 0
         if args.before_widget:
             # This benchmark needs only price parsing; the archived bridge's

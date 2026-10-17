@@ -4,6 +4,12 @@
 
 ## Streamlit Community Cloud
 
+PWA를 포함한 공개 시작 파일은 **web_app.py**, 고정 운영 의존성은 Streamlit **1.65**입니다. 공식 `st.App` 라우트가 manifest·service worker·고정 아이콘/오프라인 안내를 제공합니다. 기존 Cloud 앱도 같은 시작 파일로 다시 빌드해야 설치 기능이 반영됩니다. `app.py` 직접 실행은 분석 화면을 제공하지만 PWA 주소는 제공하지 않습니다.
+
+HTTPS의 루트 경로(`/`)에 배포하세요. 리버스 프록시는 `/manifest.webmanifest`, `/service-worker.js`, `/app-assets/*` 및 Streamlit WebSocket을 같은 출처로 전달해야 합니다. `server.enableStaticServing`은 계속 false이며 CORS/XSRF를 끄지 않습니다. worker는 올바른 JavaScript MIME과 `/` 범위로 제공하고, 캐시는 아이콘 2개/연결 안내 HTML만 보관합니다. 시장 API·HTML 대시보드·예측·개인 기록을 저장하지 않습니다. 오프라인 중에는 실시간 화면 대신 연결 안내를 표시하고 다시 연결하면 새 데이터를 요청합니다.
+
+배포 후 상단 **앱으로 설치**를 누르거나 iOS Safari **공유 → 홈 화면에 추가**를 사용하세요. 브라우저 설치 지원/이미 설치 여부에 따라 메뉴가 다릅니다. 새 버전은 다음 앱 시작 시 적용하며 열린 차트를 강제로 새로고침하지 않습니다. 설치 파일과 개발 Chromium 검증은 실제 공개 배포나 물리 iPhone 검증과 구분합니다.
+
 1. [Streamlit Community Cloud](https://share.streamlit.io/)에 본인의 GitHub 계정으로 로그인합니다. 저장소 접근 권한을 연결합니다. 비밀번호·인증 토큰을 채팅이나 소스 파일에 넣지 않습니다.
 2. **Create app** / **New app**에서 다음을 입력합니다.
 

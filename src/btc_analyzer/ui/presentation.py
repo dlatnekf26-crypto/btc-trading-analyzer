@@ -16,12 +16,12 @@ from btc_analyzer.strategy.composite import CompositeSignal, FRAME_LABELS, FRAME
 CSS = """
 <style>
 :root { --btc-muted: #66758b; --btc-line: #e7ecf3; --btc-blue: #3182f6; }
-.stApp { background: #f6f8fc; color: #191f28; }
+.stApp { background: #fff; color: #191f28; }
 html, body, [class*="css"], .stApp {
     font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Pretendard', 'Segoe UI', sans-serif;
 }
-[data-testid="stHeader"] { background: rgba(245, 247, 251, .94); }
-.block-container { max-width: 1440px; padding: 4.5rem 2rem 3rem; }
+[data-testid="stHeader"] { background: rgba(255, 255, 255, .94); }
+.block-container { max-width: 1120px; padding: 4.2rem 2rem 3rem; }
 [data-testid="stSidebar"] { background: #fff; border-right: 1px solid #e7ecf3; }
 [data-testid="stSidebar"] .block-container { padding: 1rem; }
 h1, h2, h3 { letter-spacing: -.045em; color: #191f28; }
@@ -206,6 +206,47 @@ button:focus-visible { outline: 3px solid #3182f666; outline-offset: 3px; }
 }
 </style>
 """
+
+CSS = CSS.replace(
+    "</style>",
+    """
+.btc-install{display:flex;justify-content:flex-end;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px;color:#6b7684;margin-left:auto}
+.btc-install[hidden], [data-testid="stElementContainer"]:has(#btc-pwa-install[hidden]){display:none}
+.btc-install button{background:#f2f6fc;color:#3182f6;border:0;border-radius:11px;padding:10px 13px;min-height:44px;font:inherit;font-weight:650;cursor:pointer}
+.btc-install-help{max-width:280px}
+.btc-brand{margin:0}.btc-brand h1{font-size:15px}.btc-logo{width:30px;height:30px;border-radius:10px;font-size:21px}.btc-brand p{font-size:11px}
+.btc-chart-summary{display:none}
+[data-testid="stElementContainer"]:has(.btc-chart-summary){display:none}
+.st-key-chart_controls [data-testid="stHorizontalBlock"]{flex-wrap:nowrap;gap:6px}
+.st-key-chart_controls [data-testid="stColumn"]{min-width:0!important}
+.st-key-chart_controls [data-testid="stColumn"]:first-child{flex:4 1 80%}
+.st-key-chart_controls [data-testid="stColumn"]:last-child{flex:1 1 18%}
+.st-key-chart_controls [data-testid="stPopover"] button{min-height:44px;padding:8px}
+.st-key-chart_controls [role="radio"]{padding:9px 10px;min-height:44px}
+.btc-chart-reader{border-top:1px solid #f0f2f5;padding-top:12px;min-width:0;font-variant-numeric:tabular-nums}
+.btc-reader-heading{display:flex;justify-content:space-between;gap:8px;color:#6b7684;font-size:11px;margin-bottom:10px}
+.btc-reader-values{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:9px 14px;min-height:82px}
+.btc-reader-values>div{min-width:0;grid-column:span 2}.btc-reader-values>div:nth-child(-n+4){grid-column:span 3}.btc-reader-values span{display:block;font-size:11px;color:#8b95a1}.btc-reader-values b{display:block;font-size:14px;font-weight:600;color:#333d4b;white-space:nowrap}
+.btc-read-open,.btc-read-high,.btc-read-low,.btc-read-close{grid-row:1}
+.btc-read-ema_20 span{color:#b67e1e}.btc-read-ema_50 span{color:#3182f6}.btc-read-ema_200 span{color:#8c65da}
+.btc-chart-nav{display:flex;align-items:center;justify-content:space-between;gap:5px;margin-top:11px}
+.btc-chart-nav button{border:0;border-radius:10px;background:#f7f9fc;color:#6b7684;min-height:44px;padding:9px 12px;font:inherit;font-size:12px;cursor:pointer;touch-action:manipulation}
+.btc-chart-nav button[data-chart-action="latest"]{color:#3182f6;background:#eef5ff;font-weight:600}
+[data-testid="stTabs"] [role="tablist"]{border:0;border-bottom:1px solid #edf0f4;background:#fff;border-radius:0;padding:0;gap:15px}
+[data-testid="stTabs"] [role="tab"]{border-radius:0;padding:12px 3px;color:#8b95a1}
+[data-testid="stTabs"] [role="tab"][aria-selected="true"]{background:#fff;color:#191f28;box-shadow:inset 0 -2px #191f28}
+[data-testid="stPlotlyChart"]{border:0;border-radius:0}
+@media(max-width:760px){
+ .block-container{padding:3.7rem 1rem max(2rem,env(safe-area-inset-bottom))}
+ .btc-reader-values{gap:8px 5px}
+ .btc-reader-values>div{grid-column:span 4}.btc-reader-values>div:nth-child(-n+4){grid-column:span 3}
+ .btc-read-open,.btc-read-high,.btc-read-low,.btc-read-close{grid-row:auto}
+ .btc-reader-values b{font-size:12px}.btc-reader-values span{font-size:10px}
+ [data-testid="stTabs"] [role="tablist"]{gap:10px}
+ [data-testid="stTabs"] [role="tab"]{font-size:13px;padding:10px 3px}
+}
+</style>""",
+)
 
 BRAND = """
 <div class="btc-brand">

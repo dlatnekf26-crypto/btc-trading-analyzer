@@ -281,6 +281,8 @@ function makeLiveAnalysis(root) {
         lines.y.push([...array(trace.y),...ys].slice(-meta.bars));lines['marker.color'].push(null);
       }
       await root.Plotly.restyle(plot,lines,lineIndices);
+      if(doc.getElementById('btc-chart-reader')?.dataset.mode==='latest')
+        chartReader.inspect(plot,Infinity,'latest');
       // Overlays from the server remain explicitly closed-candle geometry.
       // A marker adds the current price without moving axes or hiding hover.
       plot.dataset.liveEvent=String(k.event);plot.dataset.livePrice=String(k.row[4]);plot.dataset.liveTimeframe=k.tf;

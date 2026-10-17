@@ -27,12 +27,16 @@ from btc_analyzer.ui.analysis_cache import market_snapshot
 from btc_analyzer.ui.presentation import BRAND, CSS, LABELS, korean, composite_cards, decision_panel
 from btc_analyzer.ui.live_prices import render_live_prices
 from btc_analyzer.ui.market_context import render_macro_quotes, render_coin_news
+from btc_analyzer.ui.pwa import INSTALL_CONTROL
 
 load_dotenv(override=False)
 logging.basicConfig(level=os.getenv("BTC_LOG_LEVEL", "INFO"))
 st.set_page_config(page_title="Crypto Signal Lab · 실시간 시장 분석", page_icon="◈", layout="wide")
 st.markdown(CSS, unsafe_allow_html=True)
-st.markdown(BRAND, unsafe_allow_html=True)
+st.markdown(
+    BRAND.replace('<span class="btc-brand-tag">가격 · 흐름 · 근거</span>', INSTALL_CONTROL),
+    unsafe_allow_html=True,
+)
 cache_path = Path(os.getenv("BTC_WEB_DATA_DIR", "data/web")) / "market-cache.sqlite3"
 cfg = AppConfig()
 display_timezone = "Asia/Seoul"
@@ -62,6 +66,7 @@ with st.container(key="market_controls"):
                 default="BTC",
                 required=True,
                 key="analysis_asset",
+                label_visibility="collapsed",
             )
             or "BTC"
         )
@@ -69,11 +74,8 @@ with st.container(key="market_controls"):
         st.button("새로고침", on_click=request_market_refresh, width="stretch")
 asset = ASSETS[asset_code]
 symbol = asset.symbol
-st.caption(f"{asset.name} · Binance {symbol} · LIVE")
 # Render before any server-side candle request. Quote ticks never rerun Python.
 render_live_prices(asset_code)
-render_macro_quotes()
-st.caption("실시간 분석은 잠정값 · 종합 판단과 과거 검증은 확정 봉 기준")
 
 
 @st.cache_data(ttl=60, max_entries=12, show_spinner=False)
@@ -107,7 +109,6 @@ def dashboard() -> None:
 
     from btc_analyzer.ui.live_analysis import render_live_analysis
 
-    render_live_analysis(enriched, cfg.indicators, asset.stream_symbol)
     if st.session_state.get("dashboard_tab") not in (
         None,
         "시장 개요",
@@ -117,17 +118,17 @@ def dashboard() -> None:
     ):
         st.session_state["dashboard_tab"] = "시장 개요"
     prediction_active = st.session_state.get("dashboard_tab") == "미래 예측"
-    with (
-        st.expander("현재 시장 · 종합 매수·매도 판단", expanded=False)
-        if prediction_active
-        else st.container()
-    ):
-        st.markdown(decision_panel(combined), unsafe_allow_html=True)
-        st.caption(
-            f"수주~수개월 관점 · 마지막 확정 {pd.Timestamp(combined.timestamp).tz_convert(display_timezone):%m.%d %H:%M} KST"
-        )
-        if not prediction_active:
-            st.button("미래 예측 보기 →", type="primary", on_click=open_history_comparison)
+
+    def render_current_analysis():
+        with st.expander("종합 판단 · 매수·매도와 가격 근거", expanded=False):
+            render_live_analysis(enriched, cfg.indicators, asset.stream_symbol)
+            st.markdown(decision_panel(combined), unsafe_allow_html=True)
+            st.caption(
+                f"수주~수개월 관점 · 마지막 확정 {pd.Timestamp(combined.timestamp).tz_convert(display_timezone):%m.%d %H:%M} KST"
+            )
+            if not prediction_active:
+                st.button("미래 예측 보기 →", type="primary", on_click=open_history_comparison)
+
     tabs = st.tabs(
         ["시장 개요", "기술 지표", "다중 시간대", "미래 예측"],
         key="dashboard_tab",
@@ -146,6 +147,7 @@ def dashboard() -> None:
                 quote_currency=quote_currency,
                 asset_code=asset_code,
             )
+            render_current_analysis()
             from btc_analyzer.ui.session_patterns import render_session_patterns
             from btc_analyzer.ui.market_insights import render_market_insights
 
@@ -245,8 +247,13 @@ def dashboard() -> None:
                 refresh=refresh,
             )
 
+    if not tabs[0].open:
+        render_current_analysis()
+
 
 dashboard()
+with st.expander("대외 시장 · 나스닥·유가·국채", expanded=False):
+    render_macro_quotes()
 # News remains an independent fragment and keeps the live alert bridge current
 # on every tab, without pushing the price/forecast chart below a long news feed.
 render_coin_news(asset_code)

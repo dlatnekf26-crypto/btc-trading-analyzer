@@ -52,9 +52,18 @@ def verify(browser, width, url, event_log):
         )
         crypto = next(f for f in page.frames if f.locator("#binance").count())
         crypto.locator('.crypto[data-selected="true"]').wait_for()
+        if not crypto.locator(".quote-extra").evaluate("e=>e.open"):
+            crypto.locator(".quote-extra summary").tap()
+        crypto.wait_for_function(
+            "()=>document.querySelector('#solana .price span')?.textContent!=='—' && document.querySelector('#ripple .price span')?.textContent!=='—'"
+        )
         assert crypto.locator(".crypto").count() == 4
-        assert crypto.locator("#solana .price span").inner_text() == f"{last_prices.get('SOL', 150.25):,.2f}"
-        assert crypto.locator("#ripple .price span").inner_text() == f"{last_prices.get('XRP', 1.1532):,.4f}"
+        assert (
+            crypto.locator("#solana .price span").text_content() == f"{last_prices.get('SOL', 150.25):,.2f}"
+        ), crypto.locator("#solana .price span").text_content()
+        assert (
+            crypto.locator("#ripple .price span").text_content() == f"{last_prices.get('XRP', 1.1532):,.4f}"
+        )
         assert page.locator("iframe").count() == 1
         if transport_token is None:
             crypto.evaluate("window.__stayToken=Math.random()")

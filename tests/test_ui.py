@@ -138,8 +138,8 @@ def test_ichimoku_view_and_overlay_controls_preserve_signal(monkeypatch, tmp_pat
     assert not app.exception and not app.error
     summary = next(item.value for item in app.markdown if 'aria-label="종합 신호 근거"' in item.value)
     assert not any("일목균형표, 이렇게 읽어요" in item.value for item in app.subheader)
-    assert any("일목 구름은 확정 봉의 이동 표시" in item.value for item in app.caption)
-    assert any("현재 봉의 구름 위치" in item.value for item in app.caption)
+    reader = next(item.value for item in app.markdown if 'id="btc-chart-reader"' in item.value)
+    assert all(key in reader for key in ("ema_20", "ema_50", "ema_200", "bb_upper", "bb_lower"))
     next(item for item in app.get("button_group") if item.label == "차트 보기").set_value("상세").run()
     assert not app.exception and not app.error
     assert any(item.label == "표시할 봉 수" for item in app.select_slider)
@@ -153,6 +153,8 @@ def test_ichimoku_view_and_overlay_controls_preserve_signal(monkeypatch, tmp_pat
         ["일목균형표", "이동평균선", "볼린저밴드"]
     ).run()
     assert not app.exception and not app.error
+    assert any("일목 구름은 확정 봉의 이동 표시" in item.value for item in app.caption)
+    assert any("현재 봉의 구름 위치" in item.value for item in app.caption)
     next(item for item in app.get("button_group") if item.label == "겹쳐 볼 지표").set_value([]).run()
     assert not app.exception and not app.error
     assert next(item.value for item in app.markdown if 'aria-label="종합 신호 근거"' in item.value) == summary

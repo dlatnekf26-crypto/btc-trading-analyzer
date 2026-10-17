@@ -7,6 +7,8 @@ import streamlit.components.v1 as components
 from btc_analyzer.assets import ASSETS
 
 from btc_analyzer.ui.live_analysis import LIVE_ANALYSIS_CSS, LIVE_ANALYSIS_JS
+from btc_analyzer.ui.chart_reader import CHART_READER_JS
+from btc_analyzer.ui.pwa import PWA_JS
 
 LIVE_PRICES_HTML = r"""<!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -22,6 +24,20 @@ LIVE_PRICES_HTML = r"""<!doctype html>
 .plot{min-width:0;position:relative;margin-top:5px}canvas{width:100%;height:42px;display:block;touch-action:pan-y}.range{display:flex;justify-content:space-between;gap:3px;font-size:9px;color:#66758b;margin-top:2px}.empty{position:absolute;inset:12px 0 auto;text-align:center;font-size:10px;color:#8793a4}
 .aux{min-height:114px}.aux .change{font-size:10px;min-height:26px}.note{margin:7px 2px 0;color:#7b8797;font-size:10px;line-height:1.45}
 @media(max-width:450px){.market{padding:11px 10px;border-radius:16px}.name b{font-size:12px}.name{font-size:10px}.price{font-size:clamp(17px,5.2vw,23px)}.status{font-size:9px}.aux .change{font-size:9px}.range{font-size:8px}}
+.dashboard{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.quote-extra{grid-column:1/-1;order:3}.quote-extra summary{min-height:44px;padding:12px 2px;color:#8b95a1;font-size:11px;cursor:pointer;touch-action:manipulation}.quote-extra-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.market.crypto{background:#f7f9fc;border:0;border-radius:12px;padding:10px 12px;order:1}
+.crypto:not([data-selected="true"]) .plot,.crypto:not([data-selected="true"]) .status{display:none}
+.crypto:not([data-selected="true"]) .price{font-size:clamp(14px,3.9vw,19px);margin:5px 0}
+.crypto:not([data-selected="true"]) .price small{display:none}
+.market.crypto[data-selected="true"]{grid-column:1/-1;order:0;background:#fff;box-shadow:none;padding:4px 2px 12px;border-radius:0;display:grid;grid-template-columns:minmax(0,1fr) 100px;column-gap:14px}
+.crypto[data-selected="true"] .name{grid-column:1/-1}.crypto[data-selected="true"] .name b{font-size:18px}
+.crypto[data-selected="true"] .price{font-size:clamp(30px,6.7vw,42px);letter-spacing:-1.3px;margin:10px 0 7px}
+.crypto[data-selected="true"] .change{font-size:13px;grid-column:1}.crypto[data-selected="true"] .status{grid-column:1}
+.crypto[data-selected="true"] .plot{grid-column:2;grid-row:2/5;align-self:center}.crypto[data-selected="true"] canvas{height:56px}.crypto[data-selected="true"] .range{display:none}
+.market.aux{grid-column:auto;min-height:0;padding:10px 2px 4px;border:0;border-radius:0;background:#fff;order:2}.market.aux .price{font-size:19px}.market.aux .status{margin-top:3px}.market.aux .change{display:none}
+#forex{grid-column:1/3}#premium{grid-column:3}.aux .name b{font-size:11px}.aux .name{font-size:9px}.note{display:none}
+@media(min-width:800px){.market.crypto[data-selected="true"]{grid-template-columns:minmax(0,1fr) 190px}.crypto[data-selected="true"] canvas{height:65px}}
 </style></head><body><div class="dashboard">
 <section class="market crypto stale" id="binance" aria-label="비트코인 실시간 가격">
 <div class="name"><b>BTC</b>Binance</div><div class="price"><span>—</span><small>USDT</small></div><div class="change">24시간 변동 대기</div><div class="status"><i class="dot"></i><span>연결 중…</span></div>
@@ -43,6 +59,8 @@ LIVE_PRICES_HTML = r"""<!doctype html>
   'use strict';
   let ACTIVE_SYMBOL = 'BTCUSDT';
   /* LIVE_ANALYSIS_BRIDGE */
+  /* CHART_READER_BRIDGE */
+  /* PWA_BRIDGE */
   // Delegate touch inspection to the existing parent charts. No extra iframe,
   // data requests or Streamlit events; passive listeners preserve page scrolling.
   const disposeChartTouch=(()=>{
@@ -63,6 +81,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
       const vertical=Math.max(0,Math.min(bounds.height,point.y-bounds.top));
       // Use the same Plotly tooltip as the mouse, with a real axis coordinate.
       root.Plotly.Fx.hover(point.chart,{xval:point.axis.p2c(pixel),yval:point.yaxis.p2c(vertical)},[point.subplot]);
+      chartReader.inspect(point.chart,point.axis.p2c(pixel));
       lastChart=point.chart;
     }
     function paint(now) {
@@ -131,6 +150,15 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     card.querySelector('canvas').setAttribute('aria-label',name+' 최근 1시간 가격 그래프');
     card.dataset.selected=String(code+'USDT'===ACTIVE_SYMBOL);
   }
+  const deck=document.querySelector('.dashboard'),extra=document.createElement('details');
+  extra.className='quote-extra';extra.innerHTML='<summary>다른 코인 · 환율 · 김치프리미엄</summary><div class="quote-extra-grid"></div>';
+  deck.append(extra);
+  const extraGrid=extra.querySelector('.quote-extra-grid');
+  function arrangeQuotes(){
+    for(const [code,id] of MARKET_ASSETS){const card=document.getElementById(id),target=code+'USDT'===ACTIVE_SYMBOL?deck:extraGrid;if(card.parentElement!==target)target.prepend(card);}
+    for(const id of ['forex','premium']){const card=document.getElementById(id);if(card.parentElement!==extraGrid)extraGrid.append(card);}
+  }
+  arrangeQuotes();
   const configs=MARKET_ASSETS.map(([code,id,name,decimals])=>({id,market:'binance',name,symbol:code+'USDT',decimals,changeLabel:'24시간',restGap:1000,
     history:'https://data-api.binance.vision/api/v3/klines?symbol='+code+'USDT&interval=1m&limit=60'}));
   configs.push({id:'upbit',market:'upbit',symbol:'KRW-BTC',decimals:0,changeLabel:'전일 대비',restGap:11000,
@@ -182,8 +210,12 @@ LIVE_PRICES_HTML = r"""<!doctype html>
     let selected;
     try {selected=window.parent.document.getElementById('btc-live-selection')?.dataset.symbol;} catch(_) {}
     if(!states.some(s=>s.market==='binance' && s.symbol===selected)) selected=ACTIVE_SYMBOL;
-    if(selected!==ACTIVE_SYMBOL) {ACTIVE_SYMBOL=selected;liveAnalysis.stop();}
+    if(selected!==ACTIVE_SYMBOL) {
+      ACTIVE_SYMBOL=selected;liveAnalysis.stop();
+      const next=states.find(s=>s.symbol===selected);next.dirty=true;next.plotDirty=true;
+    }
     for(const s of states) if(s.el) write(s.el.dataset,'selected',String(s.symbol===ACTIVE_SYMBOL));
+    arrangeQuotes();disposePwa.sync?.();
     write(document.body.dataset,'asset',ACTIVE_SYMBOL);
     const socket=states[0].socketRef;
     if(socket?.readyState===1 && subscribedSymbol!==ACTIVE_SYMBOL) {
@@ -220,7 +252,7 @@ LIVE_PRICES_HTML = r"""<!doctype html>
               `${s.changeLabel} ${s.change >= 0 ? '+' : ''}${s.change.toFixed(2)}%`);
             write(delta.style,'color',s.change === null ? 'rgb(102, 117, 139)' : s.change >= 0 ? 'rgb(9, 132, 92)' : 'rgb(214, 56, 81)');
           }
-          if(s.plotDirty) {draw(s);s.plotDirty=false;}
+          if(s.plotDirty && s.symbol===ACTIVE_SYMBOL) {draw(s);s.plotDirty=false;}
           persist(s); s.dirty=false;
         }
       }
@@ -787,6 +819,8 @@ LIVE_PRICES_HTML = r"""<!doctype html>
   observer.observe(document.body);
   window.addEventListener('pagehide',()=>{
     disposeChartTouch();
+    chartReader.dispose();
+    disposePwa();
     liveAnalysis.dispose();
     disposed=true; stopMacro(); macroObserver?.disconnect(); clearInterval(heartbeat); clearTimeout(paintTimer); observer.disconnect(); states.forEach(stop); rates.forEach(s=>s.controllers.forEach(c=>c.abort()));
     binanceRequest.controllers.forEach(c=>c.abort());
@@ -798,6 +832,8 @@ LIVE_PRICES_HTML = r"""<!doctype html>
 </script></body></html>"""
 
 LIVE_PRICES_HTML = LIVE_PRICES_HTML.replace("/* LIVE_ANALYSIS_BRIDGE */", LIVE_ANALYSIS_JS)
+LIVE_PRICES_HTML = LIVE_PRICES_HTML.replace("/* CHART_READER_BRIDGE */", CHART_READER_JS)
+LIVE_PRICES_HTML = LIVE_PRICES_HTML.replace("/* PWA_BRIDGE */", PWA_JS)
 
 
 def live_prices_html(asset_code="BTC"):

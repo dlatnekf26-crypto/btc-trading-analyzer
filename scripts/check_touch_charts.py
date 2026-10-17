@@ -110,8 +110,10 @@ def verify(browser, width, url, event_log):
         assert any(char.isdigit() for char in plot.locator(".hoverlayer").text_content())
     inspect(page, cdp, page.locator(".js-plotly-plot:visible").first, event_log, "market")
     # A control still receives a touch after swiping on the chart.
+    page.get_by_role("button", name="지표", exact=True).tap()
     page.get_by_role("radio", name="상세", exact=True).tap()
     page.get_by_text("표시할 봉 수", exact=True).wait_for()
+    page.keyboard.press("Escape")
     inspect(page, cdp, page.locator(".js-plotly-plot:visible").first, event_log, "detailed market")
     page.get_by_role("tab", name="미래 예측", exact=True).tap()
     page.get_by_text("기간별 가격 전망", exact=True).wait_for()

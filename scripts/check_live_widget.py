@@ -28,7 +28,20 @@ def widget_html():
         if isinstance(node, ast.Assign)
         and any(isinstance(target, ast.Name) and target.id == "LIVE_ANALYSIS_JS" for target in node.targets)
     )
-    return template.replace("/* LIVE_ANALYSIS_BRIDGE */", bridge)
+    template = template.replace("/* LIVE_ANALYSIS_BRIDGE */", bridge)
+    for filename, constant, marker in (
+        ("chart_reader.py", "CHART_READER_JS", "CHART_READER_BRIDGE"),
+        ("pwa.py", "PWA_JS", "PWA_BRIDGE"),
+    ):
+        module = ast.parse(path.with_name(filename).read_text())
+        value = next(
+            ast.literal_eval(n.value)
+            for n in module.body
+            if isinstance(n, ast.Assign)
+            and any(isinstance(t, ast.Name) and t.id == constant for t in n.targets)
+        )
+        template = template.replace(f"/* {marker} */", value)
+    return template
 
 
 def install_quote_transport(page):
