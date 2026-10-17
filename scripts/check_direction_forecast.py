@@ -16,7 +16,7 @@ from check_touch_charts import inspect
 
 def traces(plot):
     return plot.evaluate(
-        "p=>p.data.filter(t=>!t.name.startsWith('실시간')).map(t=>({name:t.name,x:t.x,y:t.y,meta:t.meta,line:t.line}))"
+        "p=>p.data.filter((t,i)=>!t.name.startsWith('실시간') && !Object.hasOwn(p.layout.meta.btcLive.indicatorOverlays ?? {},i)).map(t=>({name:t.name,x:t.x,y:t.y,meta:t.meta,line:t.line}))"
     )
 
 

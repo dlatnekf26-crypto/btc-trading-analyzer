@@ -91,6 +91,7 @@ def render_history_view(
     demo_bars: int = 800,
     demo_price: float = 90_000,
     live_deadline=None,
+    market_frames=None,
 ):
     st.subheader("기간별 가격 전망")
     st.write("예상 가격과 닮았던 과거를 함께 확인하세요.")
@@ -118,6 +119,10 @@ def render_history_view(
     )
     if not demo and live_deadline is not None:
         cutoff = min(utc(live_deadline), pd.Timestamp.now(tz="UTC"))
+
+    def span_label(tf, count):
+        return f"{count}거래봉" if market_frames is not None else duration_label(tf, count)
+
     tf = "1d"
     with st.expander("비교 조건 · 새로고침", expanded=horizon == "custom"):
         if horizon == "custom":
@@ -136,7 +141,7 @@ def render_history_view(
             "최근 비교 구간",
             WINDOW_OPTIONS[tf],
             value=WINDOW_OPTIONS[tf][1],
-            format_func=lambda count: f"{duration_label(tf, count)} · {count}봉",
+            format_func=lambda count: f"{span_label(tf, count)} · {count}봉",
             key=f"similarity_window_{tf}",
         )
         if horizon == "custom":
@@ -144,18 +149,27 @@ def render_history_view(
                 "이후 관찰할 봉 수",
                 FORWARD_OPTIONS[tf],
                 value=FORWARD_OPTIONS[tf][1],
-                format_func=lambda count: duration_label(tf, count),
+                format_func=lambda count: span_label(tf, count),
                 key=f"similarity_forward_{tf}",
             )
         else:
-            forward = horizon_days(candle_boundary(utc(cutoff), "1d"), horizon)
+            if market_frames is not None:
+                from btc_analyzer.data.nasdaq import horizon_bars
+                from btc_analyzer.market_clock import bar_closes
+
+                daily = market_frames("1d")
+                forward = horizon_bars(bar_closes(daily, daily.index[-1], "1d"), horizon)
+            else:
+                forward = horizon_days(candle_boundary(utc(cutoff), "1d"), horizon)
         minimum = st.select_slider("최소 유사도 · 점", (50, 60, 70, 80), value=60)
         st.caption(
             "가격 경로·변동성·상대 거래량을 비교합니다. 예측은 추세·모멘텀·변동성·거래량·일목도 검토하고 과거 오차가 줄어든 지표 조합을 반영해요. 이후 결과로 사례를 고르지 않으며 유사도는 상승 확률이 아니에요."
         )
         manual_refresh = st.button("비교 자료 새로고침")
-    period = HORIZON_LABELS.get(horizon, duration_label(tf, forward))
-    st.caption(f"{FRAME_LABELS[tf]} · 최근 {duration_label(tf, window)} 패턴 → {period} 뒤 전망")
+    period = HORIZON_LABELS.get(
+        horizon, f"{forward}거래봉" if market_frames is not None else duration_label(tf, forward)
+    )
+    st.caption(f"{FRAME_LABELS[tf]} · 최근 {span_label(tf, window)} 패턴 → {period} 뒤 전망")
     refresh_sequence = st.session_state.get("market_refresh_sequence", 0)
     forced = manual_refresh or (
         (refresh or refresh_sequence > 0)
@@ -164,7 +178,10 @@ def render_history_view(
     st.session_state["_history_refresh_consumed"] = refresh_sequence
     boundary = candle_boundary(utc(cutoff), tf).isoformat()
     with st.spinner("과거 확정 봉에서 비슷한 흐름을 찾는 중…"):
-        if demo:
+        if market_frames is not None:
+            frame = market_frames(tf)
+            boundary = utc(cutoff).isoformat()
+        elif demo:
             # Keep the exact dashboard path, including a 5m research base.
             frame = demo_history(research_timeframe, demo_bars, demo_price, tf)
             original = demo_frames.get(tf)
@@ -217,7 +234,13 @@ def render_history_view(
         else:
             st.caption("최근 구간보다 앞에서 이후 관찰까지 끝난 연속 데이터가 부족합니다.")
         return
-    quote = symbol.split("/")[-1] if exchange == "Binance" else symbol.split("-")[0]
+    quote = (
+        "pt"
+        if market_frames is not None
+        else symbol.split("/")[-1]
+        if exchange == "Binance"
+        else symbol.split("-")[0]
+    )
     if mode == "예측 경로":
         from btc_analyzer.ui.correction_view import correction_context
 
@@ -228,6 +251,17 @@ def render_history_view(
             current, past = correction_context(
                 frame, tf, report.query_end, tuple(match.end for match in report.matches)
             )
-        render_prediction(result, timezone, quote, period, current, past, symbol.split("/")[0])
+        from btc_analyzer.analysis.projected_indicators import projection_seed
+
+        render_prediction(
+            result,
+            timezone,
+            quote,
+            period,
+            current,
+            past,
+            "NQ" if market_frames is not None else symbol.split("/")[0],
+            projection_seed(frame, tf, report.query_end),
+        )
     else:
         render_comparison(report, timezone, duration_label(tf, forward))

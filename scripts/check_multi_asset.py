@@ -165,6 +165,17 @@ def verify(browser, width, url, event_log):
         new_price = price * 1.005
         crypto.evaluate("p=>{window.__assetPrice=p;window.__emitAsset();}", new_price)
         page.wait_for_function("p=>window.__assetPlot()?.dataset.livePrice===String(p)", arg=new_price)
+        # Independently continue the closed seed through the live forecast path.
+        mismatch = plot.evaluate("""p=>{
+          const m=p.layout.meta.btcLive,seed=m.indicatorSeed,path=p.data[m.liveIndices[2]].y;
+          let count=seed.count,tail=seed.tail.slice(),ema={...seed.ema};
+          for(let i=1;i<path.length;i++){count++;tail=[...tail.slice(-19),path[i]];for(const n in ema)ema[n]+=2/(Number(n)+1)*(path[i]-ema[n]);}
+          const middle=tail.reduce((s,n)=>s+n,0)/20,width=2*Math.sqrt(tail.reduce((s,n)=>s+(n-middle)**2,0)/20);
+          const expected={bb_middle:middle,bb_upper:middle+width,bb_lower:middle-width};
+          for(const n in ema)expected['ema_'+n]=count>=Number(n)?ema[n]:null;
+          return Object.entries(m.indicatorOverlays).filter(([i,k])=>expected[k]===null?p.data[i].y.at(-1)!==null:Math.abs(p.data[i].y.at(-1)-expected[k])>1e-7);
+        }""")
+        assert not mismatch, (code, mismatch)
         if baseline is not None:
             assert event_log.read_text() == baseline
         if code == "XRP":
@@ -178,7 +189,7 @@ def verify(browser, width, url, event_log):
         frozen = plot.evaluate("p=>JSON.stringify(p.data)")
         page.wait_for_timeout(650)
         assert plot.evaluate("p=>JSON.stringify(p.data)") == frozen
-        assert any(c.isdigit() for c in plot.locator(".hoverlayer").text_content())
+        assert any(c.isdigit() for c in plot.locator(".btc-crosshair").text_content())
         touch(cdp, "touchEnd")
         crypto.evaluate("clearInterval(window.__assetTimer)")
         page.wait_for_timeout(650)

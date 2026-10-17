@@ -1,370 +1,24 @@
 """Price forecast presentation: absolute prices, uncertainty and measured errors."""
 
 from html import escape
-from btc_analyzer.assets import price_text
+from btc_analyzer.assets import MARKETS, price_text
 from datetime import datetime
 
-import numpy as np
-import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 
-from btc_analyzer.analysis.forecast import ForecastReport, MIN_CALIBRATION, forecast_dates
+from btc_analyzer.analysis.forecast import ForecastReport, MIN_CALIBRATION
 from btc_analyzer.analysis.news_projection import project_news
 from btc_analyzer.analysis.direction_outlook import direction_outlook
 from btc_analyzer.analysis.direction_explanation import explain_direction
 from btc_analyzer.analysis.price_explanation import explain_price
-from btc_analyzer.candles import candle_close
-from btc_analyzer.ui.charts import style_chart, READ_CHART_CONFIG, bind_asset
+from btc_analyzer.ui.charts import READ_CHART_CONFIG, bind_asset
 from btc_analyzer.ui.market_context import current_context
 from btc_analyzer.data.market_context import UTC
-from btc_analyzer.ui.direction_view import COLORS, direction_cards, direction_headline, direction_reason_card
+from btc_analyzer.ui.direction_view import direction_cards, direction_headline, direction_reason_card
 
 
-def analogue_path(report, index=0):
-    """Rebase one complete observed path without shrinking or volatility scaling."""
-    match = report.matches[index]
-    return tuple(report.anchor_price * np.asarray(match.path) / 100)
-
-
-def prediction_chart(
-    result: ForecastReport,
-    timezone: str,
-    quote: str,
-    show_range: bool = True,
-    analogue_index: int | None = 0,
-    news_projection=None,
-    correction=None,
-    event=None,
-    event_projection=None,
-    outlook=None,
-):
-    report, prediction = result.history, result.prediction
-    if prediction is None:
-        raise ValueError("No forecast available")
-    fig = go.Figure()
-    future = pd.DatetimeIndex(prediction.dates).tz_convert(timezone).strftime("%Y-%m-%d %H:%M").tolist()
-    past = (
-        pd.DatetimeIndex(
-            forecast_dates(
-                candle_close(report.query_start, report.timeframe), report.timeframe, report.window
-            )
-        )
-        .tz_convert(timezone)
-        .strftime("%Y-%m-%d %H:%M")
-        .tolist()
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=future,
-            y=np.round(prediction.upper, 2).tolist(),
-            visible=show_range,
-            mode="lines",
-            line={"width": 0},
-            showlegend=False,
-            hoverinfo="skip",
-            name="범위 상단",
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=future,
-            y=np.round(prediction.lower, 2).tolist(),
-            visible=show_range,
-            mode="lines",
-            line={"width": 0},
-            fill="tonexty",
-            fillcolor="rgba(49,130,246,0.13)",
-            name="예상 변동 범위",
-            hoverinfo="skip",
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=past,
-            y=[round(value * report.anchor_price / 100, 2) for value in report.current_path],
-            mode="lines",
-            line={"color": "#53647b", "width": 2.5},
-            name="확정 가격",
-            hovertemplate=f"%{{y:,.2f}} {escape(quote)}<extra>확정 가격</extra>",
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=future,
-            y=np.round(prediction.center, 2).tolist(),
-            mode="lines",
-            name="예상 중심 경로",
-            line={"color": "#3182f6", "width": 3, "dash": "dash"},
-            hovertemplate=f"%{{y:,.2f}} {escape(quote)}<extra>모델 예상</extra>",
-        )
-    )
-    if analogue_index is not None:
-        match = report.matches[analogue_index]
-        observed = (
-            pd.DatetimeIndex(
-                forecast_dates(candle_close(match.start, report.timeframe), report.timeframe, len(match.path))
-            )
-            .tz_convert(timezone)
-            .strftime("%Y-%m-%d %H:%M")
-            .tolist()
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=past + future[1:],
-                y=np.round(analogue_path(report, analogue_index), 2).tolist(),
-                customdata=observed,
-                mode="lines",
-                name="과거 사례 재현",
-                line={"color": "#ed9a24", "width": 2, "dash": "dot"},
-                hovertemplate=f"환산 %{{y:,.2f}} {escape(quote)}<br>당시 %{{customdata}}<extra>과거 실제 경로</extra>",
-            )
-        )
-    if news_projection is not None and news_projection.effects:
-        fig.add_trace(
-            go.Scatter(
-                x=future,
-                y=np.round(news_projection.upper, 2).tolist(),
-                mode="lines",
-                line={"width": 0},
-                visible=show_range,
-                showlegend=False,
-                hoverinfo="skip",
-                name="뉴스 가정 상단",
-            )
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=future,
-                y=np.round(news_projection.lower, 2).tolist(),
-                mode="lines",
-                line={"width": 0},
-                fill="tonexty",
-                fillcolor="rgba(139,92,246,0.08)",
-                visible=show_range,
-                showlegend=False,
-                hoverinfo="skip",
-                name="뉴스 가정 범위",
-            )
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=future,
-                y=np.round(news_projection.center, 2).tolist(),
-                mode="lines",
-                line={"color": "#8b5cf6", "width": 3},
-                name="뉴스 반영 시나리오",
-                hovertemplate=f"%{{y:,.2f}} {escape(quote)}<extra>뉴스 가정 · 미검증</extra>",
-            )
-        )
-    if outlook is not None:
-        # Send only the displayed paths. The model view uses a separate cached
-        # spec, preserving its original values without hidden duplicate traces.
-        fig.data = tuple(
-            trace for trace in fig.data if trace.name in ("범위 상단", "예상 변동 범위", "확정 가격")
-        )
-        fig.data[1].showlegend = False
-        if news_projection is not None and news_projection.effects:
-            fig.data[0].y = np.round(news_projection.upper, 2).tolist()
-            fig.data[1].y = np.round(news_projection.lower, 2).tolist()
-        for scenario in outlook.scenarios:
-            leading = scenario.key in outlook.leaders
-            label = scenario.label + (
-                " 가정 · 사례 없음" if scenario.assumed else " · 우세" if leading else ""
-            )
-            fig.add_trace(
-                go.Scatter(
-                    x=future,
-                    y=np.round(scenario.center, 2).tolist(),
-                    mode="lines",
-                    name=label,
-                    line={
-                        "color": COLORS[scenario.key],
-                        "width": 3.5 if leading else 1.7,
-                        "dash": "dot" if scenario.assumed else "solid",
-                    },
-                    opacity=1 if leading else 0.7,
-                    meta={"direction": scenario.key, "assumed": scenario.assumed, "share": scenario.share},
-                    hovertemplate=f"%{{y:,.2f}} {escape(quote)}<extra>{label} · 가중 비중 {scenario.share:.0%}</extra>",
-                )
-            )
-    fig.add_shape(
-        type="line",
-        x0=future[0],
-        x1=future[0],
-        y0=0,
-        y1=1,
-        yref="paper",
-        line={"color": "#b3bfd1", "dash": "dot", "width": 1},
-    )
-    fig.add_annotation(
-        x=future[0],
-        y=1.03,
-        yref="paper",
-        text="예측 시작",
-        showarrow=False,
-        xanchor="left",
-        font={"size": 11, "color": "#66758b"},
-    )
-    primary = (
-        next((scenario for scenario in outlook.scenarios if scenario.key in outlook.leaders), None)
-        if outlook and len(outlook.leaders) == 1
-        else None
-    )
-    fig.add_annotation(
-        x=future[-1],
-        y=primary.center[-1] if primary else prediction.center[-1],
-        text=f"우세 {primary.label} · {price_text(primary.center[-1])}"
-        if primary
-        else "방향 우열 없음"
-        if outlook
-        else f"예상 {price_text(prediction.center[-1])}",
-        showarrow=False,
-        xanchor="right",
-        yshift=18,
-        font={"size": 12, "color": COLORS[primary.key] if primary else "#3182f6"},
-        bgcolor="rgba(255,255,255,0.85)",
-    )
-    style_chart(fig, height=440)
-    fig.update_layout(
-        uirevision=f"forecast-{report.timeframe}-{report.window}-{report.forward}",
-        margin={"t": 60, "l": 12, "r": 12},
-        transition={"duration": 150},
-        legend={"y": 1.02, "yanchor": "bottom", "traceorder": "normal"},
-    )
-    fig.update_xaxes(
-        title=f"확정 가격 → {'세 방향 비교' if outlook else '예상 경로'} · {timezone}",
-        tickformat="%m.%d<br>%H:%M" if report.timeframe in ("1h", "4h") else "%y.%m.%d",
-        nticks=5,
-    )
-    if correction is not None and correction.window_start is not None:
-        fig.add_vrect(
-            x0=correction.window_start.tz_convert(timezone).strftime("%Y-%m-%d %H:%M"),
-            x1=correction.window_end.tz_convert(timezone).strftime("%Y-%m-%d %H:%M"),
-            fillcolor="#f59f35",
-            opacity=0.09,
-            line_width=0,
-            layer="below",
-        )
-    if event is not None:
-        release = pd.Timestamp(event.at).tz_convert(timezone).strftime("%Y-%m-%d %H:%M")
-        fig.add_shape(
-            type="line",
-            x0=release,
-            x1=release,
-            y0=0,
-            y1=1,
-            yref="paper",
-            line={"color": "#936624", "dash": "dot", "width": 1},
-        )
-        fig.add_annotation(
-            x=release,
-            y=0.90,
-            yref="paper",
-            text="주요 발표",
-            showarrow=False,
-            font={"size": 11, "color": "#936624"},
-            bgcolor="rgba(255,255,255,0.85)",
-        )
-    if event_projection is not None:
-        fig.add_trace(
-            go.Scatter(
-                x=future,
-                y=np.round(event_projection.center, 2).tolist(),
-                name="발표 조건부 경로",
-                mode="lines",
-                line={"color": "#d84f86", "width": 2, "dash": "dash"},
-                hovertemplate=f"%{{y:,.2f}} {quote}<extra>발표 결과 가정 · 미검증</extra>",
-            )
-        )
-    # Keep the validated model, direction shares and historical replay intact.
-    # This additional browser path expresses the same return assumptions from
-    # the latest price; it is not a recalibrated or independently tested model.
-    live_center = (
-        event_projection.center
-        if event_projection
-        else primary.center
-        if primary
-        else (news_projection or prediction).center
-    )
-    live_range = event_projection or news_projection or prediction
-    live_start = len(fig.data)
-    for name, fill in (("실시간 범위 상단", False), ("실시간 조건부 범위", True)):
-        fig.add_trace(
-            go.Scatter(
-                x=future,
-                y=[None] * len(future),
-                mode="lines",
-                name=name,
-                line={"width": 0},
-                fill="tonexty" if fill else None,
-                fillcolor="rgba(16,168,119,0.09)",
-                showlegend=False,
-                visible=show_range,
-                hoverinfo="skip",
-            )
-        )
-    fig.add_trace(
-        go.Scatter(
-            x=future,
-            y=[None] * len(future),
-            mode="lines",
-            name="실시간 출발 · 조건부",
-            line={"color": "#09845c", "width": 3, "dash": "dash"},
-            hovertemplate=f"%{{y:,.2f}} {escape(quote)}<extra>현재가 기준 · 기존 수익률 경로 가정</extra>",
-        )
-    )
-    fig.update_layout(
-        meta={
-            "btcLive": {
-                "kind": "forecast",
-                "timezone": timezone,
-                "anchor": report.anchor_price,
-                "baseAt": int(prediction.dates[0].timestamp() * 1000),
-                "center": np.asarray(live_center).tolist(),
-                "upper": np.asarray(live_range.upper).tolist(),
-                "lower": np.asarray(live_range.lower).tolist(),
-                "offsets": [
-                    int((date - prediction.dates[0]).total_seconds() * 1000) for date in prediction.dates
-                ],
-                "liveIndices": [live_start, live_start + 1, live_start + 2],
-                "label": "발표 조건부 경로"
-                if event_projection
-                else f"{primary.label} 사례 경로"
-                if primary
-                else "중심 경로 가정",
-            }
-        }
-    )
-    fig.update_yaxes(title=quote, tickformat=",.0f")
-    return fig
-
-
-@st.cache_data(ttl=3600, max_entries=24, show_spinner=False)
-def prediction_spec(
-    result,
-    timezone,
-    quote,
-    show_range,
-    analogue_index=0,
-    news_projection=None,
-    correction=None,
-    event=None,
-    event_projection=None,
-    outlook=None,
-):
-    return prediction_chart(
-        result,
-        timezone,
-        quote,
-        show_range,
-        analogue_index,
-        news_projection,
-        correction,
-        event,
-        event_projection,
-        outlook,
-    ).to_dict()
+from btc_analyzer.ui.forecast_chart import analogue_path, prediction_spec
+from btc_analyzer.ui.forecast_chart import prediction_chart as prediction_chart
 
 
 @st.fragment(run_every=15)
@@ -376,6 +30,7 @@ def render_prediction(
     context_values=None,
     past_values=(),
     asset_code="BTC",
+    indicator_seed=None,
 ):
     prediction = result.prediction
     if prediction is None:
@@ -384,7 +39,15 @@ def render_prediction(
     report = result.history
     now = datetime.now(UTC)
     news = project_news(result, current_context().for_asset(asset_code), now)
-    use_news = st.toggle("뉴스 영향 함께 반영", value=True, key="forecast_use_news")
+    use_news = (
+        st.toggle(
+            "뉴스 영향 함께 반영",
+            value=asset_code != "NQ",
+            key="forecast_use_news",
+            disabled=asset_code == "NQ",
+        )
+        and asset_code != "NQ"
+    )
     active_news = news if use_news and news.effects else None
     outlook = direction_outlook(result, active_news)
     explanation = explain_direction(result, outlook, context_values, active_news, use_news)
@@ -411,6 +74,7 @@ def render_prediction(
     )
     comparison = outlook if mode == "comparison" else None
     show_range = st.toggle("예상 변동 범위 함께 보기", value=True, key="forecast_show_range")
+    show_indicators = st.toggle("예상 이평선·볼린저밴드", value=True, key="forecast_indicators")
     if st.session_state.get("forecast_analogue", 0) not in range(len(report.matches)):
         st.session_state["forecast_analogue"] = 0
     selected = st.session_state.get("forecast_analogue", 0)
@@ -548,13 +212,35 @@ def render_prediction(
             f"과거 검증에서 가격 유지 가정보다 평균 오차가 {improvement:.0%} 작았습니다. 미래 성능을 보장하지 않습니다."
         )
     with chart_slot:
+        if asset_code != "NQ":
+            st.markdown(
+                '<section id="btc-live-forecast" class="btc-live-forecast" aria-label="실시간 조건부 예측">'
+                "<p>현재가에서 출발하는 예상 · 실시간</p><strong>시세 연결 중…</strong>"
+                '<span class="btc-live-status">시세 수신 대기</span>'
+                '<p class="btc-live-forecast-range"></p><p class="btc-live-forecast-reason"></p>'
+                "<p>초록 점선은 현재가 기준 조건부 경로예요. 기존 예상/과거 재현은 기준 종가를 유지하며, "
+                "과거 성적은 확정 모델만 평가한 결과예요.</p></section>",
+                unsafe_allow_html=True,
+            )
+
+        asset = MARKETS[asset_code]
+        fields = (
+            ("ema_20", "EMA 20"),
+            ("ema_50", "EMA 50"),
+            ("ema_200", "EMA 200"),
+            ("bb_upper", "볼린저 상단"),
+            ("bb_middle", "볼린저 중심"),
+            ("bb_lower", "볼린저 하단"),
+        )
+        cells = (
+            "".join(
+                f'<div><span>예상 {label}</span><b data-field="{key}">—</b></div>' for key, label in fields
+            )
+            if show_indicators
+            else ""
+        )
         st.markdown(
-            '<section id="btc-live-forecast" class="btc-live-forecast" aria-label="실시간 조건부 예측">'
-            "<p>현재가에서 출발하는 예상 · 실시간</p><strong>시세 연결 중…</strong>"
-            '<span class="btc-live-status">시세 수신 대기</span>'
-            '<p class="btc-live-forecast-range"></p><p class="btc-live-forecast-reason"></p>'
-            "<p>초록 점선은 현재가 기준 조건부 경로예요. 기존 예상/과거 재현은 기준 종가를 유지하며, "
-            "과거 성적은 확정 모델만 평가한 결과예요.</p></section>",
+            f'<section id="btc-forecast-reader" class="btc-chart-reader" data-symbol="{asset.stream_symbol}" data-decimals="{asset.decimals}"><div class="btc-cursor-reading">가리킨 가격 <b data-field="cursor">—</b><small> {escape(quote)}</small></div><div class="btc-reader-heading"><span data-reader-time>길게 눌러 움직이면 예상 지표도 확인해요</span></div><div class="btc-reader-values">{cells}</div></section>',
             unsafe_allow_html=True,
         )
         st.plotly_chart(
@@ -570,6 +256,7 @@ def render_prediction(
                     event,
                     release_projection,
                     comparison,
+                    indicator_seed if show_indicators else None,
                 ),
                 asset_code,
             ),
@@ -578,6 +265,10 @@ def render_prediction(
             theme=None,
             config=READ_CHART_CONFIG,
         )
+        if show_indicators:
+            st.caption(
+                "점선 이평·밴드는 이 예상 경로가 실현된다는 가정의 지표입니다. 가격의 예상 변동 범위와는 다릅니다."
+            )
         if price_explanation is not None:
             st.markdown(
                 direction_reason_card(

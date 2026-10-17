@@ -1,0 +1,7 @@
+#btc-live-analysis,.btc-live-forecast{border:1px solid #e7ecf3;background:linear-gradient(120deg,#fff,#f5f9ff);border-radius:18px;padding:14px 16px;margin:10px 0}
+.btc-live-heading{display:flex;gap:12px;justify-content:space-between;align-items:center;flex-wrap:wrap}.btc-live-heading strong{font-size:15px;color:#192434}
+.btc-live-status,.btc-live-note,.btc-live-forecast p{font-size:12px;color:#66758b;line-height:1.55;margin:6px 0 0}
+.btc-live-frames{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:12px}.btc-live-frames article{display:flex;flex-direction:column;gap:5px;min-width:0}
+.btc-live-frames b{font-size:11px;color:#66758b}.btc-live-frames strong{font-size:15px;color:#192434}.btc-live-frames span{font-size:11px;color:#66758b}.btc-live-frames article[data-direction="1"] strong{color:#09845c}.btc-live-frames article[data-direction="-1"] strong{color:#d63851}
+.btc-live-forecast strong{font-size:20px;color:#09845c;font-variant-numeric:tabular-nums}.btc-live-forecast .btc-live-status{display:block}
+@media(max-width:600px){.btc-live-frames{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.btc-live-status{font-size:11px}#btc-live-analysis,.btc-live-forecast{padding:12px}}

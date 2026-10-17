@@ -13,6 +13,7 @@ from btc_analyzer.candles import candle_close
 from btc_analyzer.strategy.composite import FRAME_LABELS
 from btc_analyzer.ui.charts import price_chart, READ_CHART_CONFIG, bind_asset
 from btc_analyzer.ui.chart_reader import reader_html
+from btc_analyzer.market_clock import bar_closes
 
 
 @st.cache_data(ttl=3600, max_entries=24, show_spinner=False, hash_funcs=MARKET_HASH_FUNCS)
@@ -53,7 +54,7 @@ def market_chart_spec(
                 "timezone": timezone,
                 "bars": bars,
                 "label": FRAME_LABELS[timeframe],
-                "closedEnd": int(candle_close(features.index[-1], timeframe).timestamp() * 1000),
+                "closedEnd": int(bar_closes(features, features.index[-1], timeframe).timestamp() * 1000),
             }
         },
     )
@@ -81,7 +82,9 @@ def market_chart_spec(
     fig.update_xaxes(range=[left.tz_convert(timezone), right.tz_convert(timezone)])
     fig.update_yaxes(side="right", title_text=None, row=1, col=1)
     fig.update_yaxes(side="right", row=2, col=1)
-    fig.update_layout(height=470, margin={"t": 30, "b": 30, "l": 5, "r": 5}, legend={"y": 1.01})
+    fig.update_layout(
+        height=470, margin={"t": 30, "b": 30, "l": 5, "r": 5}, legend={"y": 1.01}, hovermode=False
+    )
     # Plotly's date axes use display wall time. Integer milliseconds avoid
     # repeating long ISO/timezone strings in every overlay; source cutoffs stay UTC.
     for trace in fig.data:
@@ -173,7 +176,7 @@ def render_market_chart(
                 "일목 구름은 확정 봉의 이동 표시예요. 현재 봉의 구름 위치는 위 잠정 분석에서 확인해요."
             )
         st.caption(
-            "좌우로 짚으면 해당 봉의 가격·이평선·밴드를 함께 읽어요. 이전/다음 구간으로 이동하고, 위아래로 밀면 스크롤돼요."
+            "좌우로 밀면 차트 이동 · 길게 눌러 움직이면 가리킨 가격 확인 · 위아래로 밀면 페이지 스크롤"
         )
     else:
         st.info(

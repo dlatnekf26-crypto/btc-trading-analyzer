@@ -19,19 +19,15 @@ def test_dashboard_only_has_requested_views_and_never_opens_account_db(monkeypat
     monkeypatch.setattr(Database, "__init__", forbidden)
     app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
     assert not app.exception and not app.error
-    assert [tab.label for tab in app.tabs] == ["시장 개요", "기술 지표", "다중 시간대", "미래 예측"]
+    assert [tab.label for tab in app.tabs] == ["시장 개요", "미래 예측"]
     assert any('aria-label="종합 신호 근거"' in item.value for item in app.markdown)
     assert not app.warning
     assert not any(x.label in ("거래소", "데이터 모드") for x in app.selectbox)
     assert len(app.get("iframe")) == 1
     assert not app.sidebar.selectbox and not app.number_input and not app.file_uploader
-    for tab in ["기술 지표", "다중 시간대", "미래 예측"]:
-        app.session_state["dashboard_tab"] = tab
-        app.run()
-        assert not app.exception and not app.error
-        if tab == "다중 시간대":
-            assert any('aria-label="분석 요약"' in item.value for item in app.markdown)
-            assert any('aria-label="다섯 시간대 방향"' in item.value for item in app.markdown)
+    app.session_state["dashboard_tab"] = "미래 예측"
+    app.run()
+    assert not app.exception and not app.error
     assert not path.exists()
 
 
@@ -49,32 +45,13 @@ def test_live_invalid_binance_symbol_shows_error(monkeypatch, tmp_path):
     assert any("INVALID/USDT" in x.value for x in app.error)
 
 
-def test_indicator_controls_and_korean_values_preserve_composite_analysis():
+def test_removed_views_are_absent_and_the_main_chart_keeps_indicators():
     app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
-    original = next(x.value for x in app.markdown if 'aria-label="종합 신호 근거"' in x.value)
-    app.session_state["dashboard_tab"] = "기술 지표"
-    app.run()
-    for kind in ("RSI", "MACD", "ATR", "BB", "VOLUME"):
-        next(x for x in app.get("button_group") if x.label == "자세히 볼 지표").set_value(kind)
-        # AppTest reruns the full script and does not serialize selected st.tabs
-        # state yet. Browser checks exercise actual fragment reruns separately.
-        app.session_state["dashboard_tab"] = "기술 지표"
-        app.run()
-        assert not app.exception and not app.error
-        assert len(app.get("plotly_chart")) == 1
-        assert next(x.value for x in app.markdown if 'aria-label="종합 신호 근거"' in x.value) == original
-        assert any('aria-label="기술지표 현재 상태"' in x.value for x in app.markdown)
-    for timeframe in ("1h", "4h", "1d", "1w", "1M"):
-        next(x for x in app.get("button_group") if x.label == "지표 시간대").set_value(timeframe)
-        app.session_state["dashboard_tab"] = "기술 지표"
-        app.run()
-        assert not app.exception and not app.error
-    app.session_state["indicator_values"] = True
-    app.session_state["dashboard_tab"] = "기술 지표"
-    app.run()
-    table = app.dataframe[-1].value
-    assert list(table.columns) == ["지표", "현재값 · USDT"]
-    assert table.loc[table["지표"] == "볼린저밴드 · 중심", "현재값 · USDT"].iloc[0] != "자료 부족"
+    assert [tab.label for tab in app.tabs] == ["시장 개요", "미래 예측"]
+    assert not any("최근 횡보" in item.value for item in app.markdown)
+    assert not app.dataframe
+    reader = next(item.value for item in app.markdown if 'id="btc-chart-reader"' in item.value)
+    assert all(key in reader for key in ("ema_20", "ema_50", "ema_200", "bb_upper", "bb_lower"))
 
 
 def test_removed_tab_state_recovers_and_existing_database_is_untouched(monkeypatch, tmp_path):
@@ -100,9 +77,6 @@ def test_five_horizon_chart_switch_keeps_composite_decision(monkeypatch, tmp_pat
         assert not app.exception and not app.error
         assert next(x.value for x in app.markdown if 'aria-label="종합 신호 근거"' in x.value) == original
         assert any(item.value.startswith(label + " · ") for item in app.caption)
-    app.session_state["dashboard_tab"] = "다중 시간대"
-    app.run()
-    assert any("월봉 EMA200" in item.value for item in app.caption)
     assert not (tmp_path / "five-horizon.sqlite").exists()
 
 

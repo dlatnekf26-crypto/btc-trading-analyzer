@@ -1,4 +1,4 @@
-"""Real browser touch inputs: inspect prices, preserve chart ranges, scroll and tap.
+"""Real browser touch inputs: inspect free prices, pan charts, scroll and tap.
 
 Use a developer-injected Live app for deterministic data. This is Chromium device
 emulation, not proof for every physical phone or Safari version.
@@ -29,6 +29,7 @@ def touch(cdp, kind, points=()):
 def inspect(page, cdp, plot, event_log, label, subplot=0):
     region = plot.locator(".nsewdrag").nth(subplot)
     region.scroll_into_view_if_needed()
+    page.wait_for_timeout(200)  # Wait for Plotly/Streamlit layout transitions before device coordinates.
     rect = region.bounding_box()
     assert rect and rect["width"] > 100
     # Stay in the visible graph region even when the taller indicator chart
@@ -39,16 +40,18 @@ def inspect(page, cdp, plot, event_log, label, subplot=0):
     original = ranges(plot)
     baseline = event_log.read_text() if event_log else None
     touch(cdp, "touchStart", [(x, y)])
-    page.wait_for_timeout(100)
-    before = plot.locator(".hoverlayer").text_content()
+    page.wait_for_timeout(400)
+    crosshair = plot.locator(".btc-crosshair:visible")
+    tooltip = crosshair if crosshair.count() else plot.locator(".hoverlayer")
+    before = tooltip.text_content()
     assert before and any(char.isdigit() for char in before), f"{label}: price missing while finger is down"
     for step in range(1, 6):
         touch(cdp, "touchMove", [(x + rect["width"] * 0.08 * step, y)])
         page.wait_for_timeout(40)
-    after = plot.locator(".hoverlayer").text_content()
+    after = tooltip.text_content()
     assert after and before != after, f"{label}: tooltip did not follow the finger"
     touch(cdp, "touchEnd")
-    assert ranges(plot) == original
+    assert ranges(plot) == original, (label, original, ranges(plot))
     # Double tapping cannot reset/zoom the axes.
     for _ in range(2):
         touch(cdp, "touchStart", [(x, y)])
@@ -58,7 +61,7 @@ def inspect(page, cdp, plot, event_log, label, subplot=0):
     touch(cdp, "touchStart", [(x, y), (x + 40, y + 30)])
     touch(cdp, "touchMove", [(x - 15, y - 15), (x + 70, y + 45)])
     touch(cdp, "touchEnd")
-    assert ranges(plot) == original
+    assert ranges(plot) == original, (label, original, ranges(plot))
     scroller = page.locator('[data-testid="stMain"]')
     before_scroll = scroller.evaluate("e=>e.scrollTop")
     remaining = scroller.evaluate("e=>e.scrollHeight-e.clientHeight-e.scrollTop")
@@ -76,7 +79,7 @@ def inspect(page, cdp, plot, event_log, label, subplot=0):
     assert (scroller.evaluate("e=>e.scrollTop") - before_scroll) * -direction > 20, (
         f"{label}: chart trapped vertical scrolling"
     )
-    assert ranges(plot) == original
+    assert ranges(plot) == original, (label, original, ranges(plot))
     if baseline is not None:
         assert event_log.read_text() == baseline, f"{label}: hovering reran Python analysis"
     assert not page.locator('[data-testid="stException"]').count()
@@ -107,7 +110,7 @@ def verify(browser, width, url, event_log):
         rect = plot.locator(".nsewdrag").first.bounding_box()
         page.mouse.move(rect["x"] + rect["width"] * 0.4, rect["y"] + rect["height"] * 0.5)
         page.wait_for_timeout(150)
-        assert any(char.isdigit() for char in plot.locator(".hoverlayer").text_content())
+        assert any(char.isdigit() for char in plot.locator(".btc-crosshair").text_content())
     inspect(page, cdp, page.locator(".js-plotly-plot:visible").first, event_log, "market")
     # A control still receives a touch after swiping on the chart.
     page.get_by_role("button", name="지표", exact=True).tap()
@@ -134,38 +137,6 @@ def verify(browser, width, url, event_log):
     plot = page.locator(".js-plotly-plot:visible").first
     for subplot in range(plot.locator(".nsewdrag").count()):
         inspect(page, cdp, plot, event_log, f"comparison {subplot + 1}", subplot)
-    page.get_by_role("tab", name="기술 지표", exact=True).tap()
-    page.get_by_text("기술지표 한눈에 보기", exact=True).wait_for()
-    assert page.locator(".btc-indicator-card:visible").count() == 6
-    for label in ("매수·매도 힘", "추세 탄력", "변동 폭", "밴드 폭", "거래량"):
-        baseline = event_log.read_text() if event_log else None
-        page.get_by_role("radio", name=label, exact=True).tap()
-        expected = {
-            "매수·매도 힘": "매수·매도 힘",
-            "추세 탄력": "MACD",
-            "변동 폭": "평균 변동 폭",
-            "밴드 폭": "볼린저밴드 폭",
-            "거래량": "평균 대비 거래량",
-        }[label]
-        page.wait_for_function(
-            "name=>[...document.querySelectorAll('.js-plotly-plot')].some(p=>p.offsetParent!==null && p._fullData?.some(t=>t.name===name))",
-            arg=expected,
-        )
-        plot = page.locator(".js-plotly-plot:visible").first
-        page.get_by_text("최근 120개 확정 봉", exact=False).wait_for()
-        inspect(page, cdp, plot, event_log, f"indicators {label}")
-        if baseline is not None:
-            assert event_log.read_text() == baseline, "Indicator selection reran parent analysis"
-        assert page.evaluate("document.documentElement.scrollWidth<=innerWidth")
-    page.screenshot(path=f"/tmp/btc-touch-indicators-{width}.png", full_page=True)
-    page.get_by_role("radio", name="월봉", exact=True).tap()
-    page.get_by_text("월봉 · 확정 봉 마감", exact=False).wait_for()
-    assert page.locator(".btc-indicator-card:visible").count() == 6
-    page.get_by_role("radio", name="일봉", exact=True).tap()
-    page.get_by_text("일봉 · 확정 봉 마감", exact=False).wait_for()
-    page.get_by_role("tab", name="미래 예측", exact=True).tap()
-    # Target the actual button so Playwright waits for enabled state after the
-    # tab rerun; tapping a text child can be dropped while its button is disabled.
     page.get_by_role("radio", name="예측 경로", exact=True).tap()
     page.get_by_role("radio", name="모델·과거 경로", exact=True).tap()
     page.get_by_text("함께 볼 과거 경로 · 유사도 순", exact=True).wait_for()

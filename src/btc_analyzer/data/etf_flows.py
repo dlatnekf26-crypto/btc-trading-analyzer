@@ -11,6 +11,7 @@ from btc_analyzer.data.market_context import _download
 ETF_URLS = {
     "BTC": "https://farside.co.uk/bitcoin-etf-flow-all-data/",
     "ETH": "https://farside.co.uk/ethereum-etf-flow-all-data/",
+    "SOL": "https://farside.co.uk/sol/",
 }
 
 
@@ -86,23 +87,28 @@ def parse_etf_flows(body: bytes, asset: str, now: datetime):
     parser = _Tables()
     parser.feed(body.decode("utf-8"))
     for table in parser.tables:
-        header = next(
+        anchor = {"BTC": "IBIT", "ETH": "ETHA", "SOL": "BSOL"}[asset]
+        original_header = next(
             (
                 row
                 for row in table
-                if row and row[0].casefold() in ("date", "") and row[-1].casefold() == "total"
+                if row
+                and row[0].casefold() in ("date", "")
+                and anchor in row
+                and row[-1].casefold() in ("total", "")
             ),
             None,
         )
-        if header is None or not 3 <= len(header) <= 40:
+        if original_header is None or not 3 <= len(original_header) <= 40:
             continue
+        header = [*original_header[:-1], "Total"]
         names = tuple(header[1:-1])
-        if ("IBIT" if asset == "BTC" else "ETHA") not in names:
+        if anchor not in names:
             continue  # A wrong/redirected asset table cannot become this flow.
         if len(set(names)) != len(names) or any(not re.fullmatch(r"[A-Z0-9-]{2,12}", n) for n in names):
             raise ValueError("Unexpected ETF fund columns")
         days = {}
-        for row in table[table.index(header) + 1 :]:
+        for row in table[table.index(original_header) + 1 :]:
             if not row:
                 continue
             at = None

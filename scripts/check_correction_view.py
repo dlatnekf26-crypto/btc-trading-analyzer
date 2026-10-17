@@ -15,7 +15,7 @@ def traces(plot):
     deadline = time.monotonic() + 15
     while time.monotonic() < deadline:
         value = plot.evaluate(
-            "p=>p.data?.length ? p.data.filter(t=>!t.name.startsWith('실시간')).map(t=>({name:t.name,x:t.x,y:t.y})) : null"
+            "p=>p.data?.length ? p.data.filter((t,i)=>!t.name.startsWith('실시간') && !Object.hasOwn(p.layout.meta.btcLive.indicatorOverlays ?? {},i)).map(t=>({name:t.name,x:t.x,y:t.y})) : null"
         )
         if value is not None:
             return value
@@ -32,7 +32,7 @@ def verify(browser, width, url, event_log):
     fixture = MarketFixture(page)
     page.goto(url)
     # Complete the initial market render before requesting a different tab.
-    page.locator(".btc-pattern-card").wait_for(timeout=45000)
+    page.locator("#btc-chart-reader").wait_for(timeout=45000)
     page.wait_for_function("()=>document.querySelector('.js-plotly-plot')?.data?.length > 0")
     page.get_by_role("tab", name="미래 예측", exact=True).tap(timeout=45000)
     page.locator(".btc-release-card").wait_for(timeout=25000)

@@ -133,7 +133,7 @@ def test_public_default_live_binance_and_usdt_quote(monkeypatch, tmp_path, entry
     app = AppTest.from_file(Path(__file__).resolve().parents[1] / entry, default_timeout=30).run()
     assert not app.exception
     assert not app.error
-    assert len(app.tabs) == 4
+    assert len(app.tabs) == 2
     assert captured["exchange"] == "Binance"
     assert captured["symbol"] == "BTC/USDT"
     assert captured["include_macro"] is True
@@ -167,7 +167,7 @@ def test_public_visitors_never_read_or_write_existing_private_records(
         assert not app.exception and not app.error
         assert "_btc_private_storage" not in app.session_state
         assert "backtest_result" not in app.session_state
-        assert len(app.tabs) == 4
+        assert len(app.tabs) == 2
     assert private_path.read_bytes() == original
     assert not (tmp_path / "web" / "sessions").exists()
 

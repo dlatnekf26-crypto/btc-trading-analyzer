@@ -47,4 +47,4 @@ def test_sentiment_and_period_heatmap_keep_the_same_market_chart_and_no_extra_if
     )
     assert "0.3%" in releases and "150K" in releases and "시장 예상" in releases and "이전 발표" in releases
     assert "자주 움직인 시간" not in "".join(item.value for item in app.markdown)
-    assert sum(item.value.count('class="btc-pattern-card"') for item in app.markdown) == 1
+    assert sum(item.value.count('class="btc-pattern-card"') for item in app.markdown) == 0

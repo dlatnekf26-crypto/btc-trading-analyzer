@@ -2,6 +2,7 @@
 
 from btc_analyzer.analysis.direction_explanation import DirectionExplanation, OutlookReason
 from btc_analyzer.analysis.forecast import MIN_CALIBRATION
+from btc_analyzer.assets import price_text
 
 
 def explain_price(result, projection, period, quote, outlook=None, direction=None):
@@ -13,15 +14,17 @@ def explain_price(result, projection, period, quote, outlook=None, direction=Non
         [scenario for scenario in outlook.scenarios if scenario.key in outlook.leaders] if outlook else []
     )
     if len(leaders) == 1:
-        price = f"{leaders[0].label} 우세 경로 {leaders[0].center[-1]:,.2f} {quote}"
+        price = f"{leaders[0].label} 우세 경로 {price_text(leaders[0].center[-1])} {quote}"
         calculation = "그 방향에 속한 과거 경로를 현재 변동성에 맞춘 뒤 지표/패턴 유사도 비중으로 합쳤어요."
     elif leaders:
         price = "공동 우세라 한 가격으로 좁히지 않았어요"
         calculation = "세 방향의 도착 가격을 함께 확인해 주세요."
     else:
-        price = f"{projection.center[-1]:,.2f} {quote}"
+        price = f"{price_text(projection.center[-1])} {quote}"
         calculation = "유사 사례의 가중 평균 경로에 표본 신뢰도와 현재 변동성을 반영했어요."
-    basis = f"확정 종가 {result.history.anchor_price:,.2f} {quote} → {period} 뒤 {price}. {calculation}"
+    basis = (
+        f"확정 종가 {price_text(result.history.anchor_price)} {quote} → {period} 뒤 {price}. {calculation}"
+    )
     if not evidence.selected:
         basis = basis.replace("지표/패턴 유사도", "가격 패턴 유사도")
     rows = [OutlookReason("가격 계산", basis)]
@@ -36,7 +39,7 @@ def explain_price(result, projection, period, quote, outlook=None, direction=Non
             "지표를 반영했어요. "
             + error
             + f"오차가 {(1 - evidence.technical_mae / evidence.pattern_mae):.1%} 작아졌어요. "
-            + f"모델 중심선 기준 {evidence.baseline_prediction.center[-1]:,.2f} → {prediction.center[-1]:,.2f} {quote}."
+            + f"모델 중심선 기준 {price_text(evidence.baseline_prediction.center[-1])} → {price_text(prediction.center[-1])} {quote}."
         )
         tone = "support"
     else:

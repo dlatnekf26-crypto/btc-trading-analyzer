@@ -128,10 +128,9 @@ def embedded(browser, width, url, event_log):
     install_quote_transport(page)
     FlatHistory(page)
     page.goto(url)
-    page.get_by_text("최근 횡보 흐름", exact=True).wait_for(timeout=45000)
+    page.locator("#btc-chart-reader").wait_for(timeout=45000)
     page.locator("#btc-news-bridge a").first.wait_for(state="attached", timeout=15000)
-    assert page.locator(".btc-pattern-card").count() == 1
-    assert "KST" in page.locator(".btc-pattern-grid").inner_text()
+    assert page.locator(".btc-pattern-card").count() == 0
     crypto = next(frame for frame in page.frames if frame.locator("#binance").count())
     crypto.locator('#binance[data-history="ready"]').wait_for()
     # Both Binance assets arrive on the existing socket.
@@ -179,7 +178,7 @@ def embedded(browser, width, url, event_log):
     context.close()
     return {
         "width": width,
-        "patterns": "passed",
+        "removed_patterns": "passed",
         "move_news": "passed",
         "touch_scroll_hover": "passed",
         "parent_analysis_checked": baseline is not None,

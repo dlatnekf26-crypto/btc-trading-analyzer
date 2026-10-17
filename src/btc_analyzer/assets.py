@@ -13,14 +13,15 @@ class Asset:
     decimals: int
     listed: date
     news_pattern: str
+    pair: str | None = None
 
     @property
     def symbol(self):
-        return f"{self.code}/USDT"
+        return self.pair or f"{self.code}/USDT"
 
     @property
     def stream_symbol(self):
-        return f"{self.code}USDT"
+        return self.pair or f"{self.code}USDT"
 
 
 ASSETS = {
@@ -32,6 +33,9 @@ ASSETS = {
         Asset("XRP", "리플", "ripple", 4, date(2018, 5, 4), r"\bXRP\b|ripple(?!\s+effects?\b)|리플"),
     )
 }
+
+
+MARKETS = {**ASSETS, "NQ": Asset("NQ", "나스닥100 선물", "macro-nq", 2, date(1999, 6, 21), "", "NQ=F")}
 
 
 def asset_news(title):

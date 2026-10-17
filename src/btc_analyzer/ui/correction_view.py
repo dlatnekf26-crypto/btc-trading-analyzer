@@ -8,7 +8,7 @@ import streamlit as st
 
 from btc_analyzer import __checkout_signature__
 from btc_analyzer.analysis.correction import correction_outlook, project_event, technical_evidence
-from btc_analyzer.candles import candle_boundary
+from btc_analyzer.market_clock import bar_closes
 from btc_analyzer.data.economic_calendar import (
     upcoming_events,
     release_condition,
@@ -20,7 +20,7 @@ from btc_analyzer.ui.economic_releases import calendar_service
 
 @st.cache_data(ttl=3600, max_entries=24, show_spinner=False, hash_funcs=MARKET_HASH_FUNCS)
 def correction_context(frame, timeframe, origin, match_ends):
-    closed = frame.loc[frame.index < candle_boundary(origin, timeframe)]
+    closed = frame.loc[bar_closes(frame, frame.index, timeframe) <= origin]
     if closed.empty:
         return {}, ()
     features = indicators(closed, timeframe=timeframe)

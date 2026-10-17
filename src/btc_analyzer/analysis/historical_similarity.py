@@ -6,10 +6,11 @@ import numpy as np
 import pandas as pd
 from numpy.lib.stride_tricks import sliding_window_view
 
-from btc_analyzer.candles import candle_boundary, candle_close, candle_grid
+from btc_analyzer.candles import candle_boundary, candle_grid
 from btc_analyzer.config import COMPOSITE_TIMEFRAMES
 from btc_analyzer.analysis.forecast_context import CONTEXT_SCALES, context_indicators
 from btc_analyzer.data.base_provider import utc
+from btc_analyzer.market_clock import bar_closes, gap_groups, session_index
 
 HISTORY_BARS = {"1h": 3000, "4h": 3000, "1d": 3000, "1w": 520, "1M": 120}
 WINDOW_OPTIONS = {
@@ -44,6 +45,7 @@ class HistoricalMatch:
     volatility: float
     context_similarity: float | None = None
     technical_similarity: float | None = None
+    dates: tuple[pd.Timestamp, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -64,6 +66,8 @@ class SimilarityReport:
     volatility: float
     context_used: bool = False
     technical_used: bool = False
+    market: str = "crypto"
+    current_dates: tuple[pd.Timestamp, ...] = ()
 
 
 def prepare_history(
@@ -94,20 +98,30 @@ def prepare_history(
     columns = ["open", "high", "low", "close", "volume"]
     if not set(columns).issubset(raw.columns):
         raise ValueError("가격과 거래량 데이터가 필요합니다.")
-    boundary = candle_boundary(utc(as_of), timeframe)
+    session_market = raw.attrs.get("market") == "NQ"
+    boundary = utc(as_of) if session_market else candle_boundary(utc(as_of), timeframe)
     frame = raw[columns].copy()
     frame.index = pd.to_datetime(frame.index, utc=True)
-    frame = frame.loc[frame.index.notna() & (candle_close(frame.index, timeframe) <= boundary)]
+    frame = frame.loc[frame.index.notna() & (bar_closes(frame, frame.index, timeframe) <= boundary)]
     frame = frame.loc[~frame.index.duplicated(keep="last")].sort_index().tail(HISTORY_BARS[timeframe])
     frame = frame.apply(pd.to_numeric, errors="coerce")
     valid = np.isfinite(frame).all(axis=1) & (frame[columns[:4]] > 0).all(axis=1) & (frame.volume >= 0)
     valid &= frame.high >= frame[["open", "close", "low"]].max(axis=1)
     valid &= frame.low <= frame[["open", "close", "high"]].min(axis=1)
-    valid &= candle_grid(frame.index.to_series(), timeframe)
+    valid &= (
+        frame.index.isin(session_index(frame.attrs["bar_starts"]))
+        if session_market
+        else candle_grid(frame.index.to_series(), timeframe)
+    )
     frame = frame.loc[valid]
     if len(frame) < window:
         raise ValueError(f"최근 비교에 필요한 연속 확정 봉 {window}개가 부족합니다.")
-    if candle_close(frame.index[-1], timeframe) != boundary:
+    latest = (
+        session_index(frame.attrs["bar_ends"])[session_index(frame.attrs["bar_ends"]) <= boundary][-1]
+        if session_market
+        else boundary
+    )
+    if bar_closes(frame, frame.index[-1], timeframe) != latest:
         raise ValueError("최신 확정 봉이 아직 도착하지 않았습니다. 데이터 갱신 후 다시 비교하세요.")
     return PreparedHistory(frame, timeframe, window)
 
@@ -126,8 +140,7 @@ class PreparedHistory:
         self._context = None
         self._technical = None
         self._score_cache = None
-        breaks = np.r_[0, (frame.index[1:] != candle_close(frame.index[:-1], timeframe)).astype(int)]
-        self.gaps = np.cumsum(breaks)
+        self.gaps = gap_groups(frame, timeframe)
         self.paths = sliding_window_view(np.log(self.close), window)
         self.paths = self.paths - self.paths[:, :1]
         self.scales = np.sqrt(np.mean(self.paths**2, axis=1))
@@ -241,7 +254,7 @@ class PreparedHistory:
                 HistoricalMatch(
                     start=frame.index[start],
                     end=frame.index[end],
-                    observed_until=candle_close(frame.index[observed_end], timeframe),
+                    observed_until=bar_closes(frame, frame.index[observed_end], timeframe),
                     similarity=float(scores[start]),
                     price_similarity=float(price_scores[start]),
                     volatility_similarity=float(volatility_scores[start]),
@@ -253,6 +266,9 @@ class PreparedHistory:
                     volatility=float(volatility[start]),
                     context_similarity=float(context_scores[start]) if context_used else None,
                     technical_similarity=float(technical_scores[start]) if technical_used else None,
+                    dates=tuple(bar_closes(frame, frame.index[start : observed_end + 1], timeframe))
+                    if frame.attrs.get("market") == "NQ"
+                    else (),
                 )
             )
             if len(selected) == max_matches:
@@ -262,9 +278,9 @@ class PreparedHistory:
             window,
             forward,
             frame.index[0],
-            candle_close(frame.index[last], timeframe),
+            bar_closes(frame, frame.index[last], timeframe),
             frame.index[query_start],
-            candle_close(frame.index[last], timeframe),
+            bar_closes(frame, frame.index[last], timeframe),
             tuple((close[query_start : last + 1] / close[last] * 100).tolist()),
             len(starts),
             float(scores[ranked[0]]) if len(ranked) and np.isfinite(scores[ranked[0]]) else None,
@@ -274,6 +290,10 @@ class PreparedHistory:
             float(volatility[query_start]),
             context_used,
             technical_used,
+            frame.attrs.get("market", "crypto"),
+            tuple(bar_closes(frame, frame.index[query_start : last + 1], timeframe))
+            if frame.attrs.get("market") == "NQ"
+            else (),
         )
 
 

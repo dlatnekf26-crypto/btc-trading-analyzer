@@ -43,7 +43,7 @@ def test_four_assets_switch_complete_dashboard_forecast_and_back_without_cross_a
     app = AppTest.from_file(Path(__file__).resolve().parents[1] / "web_app.py", default_timeout=45).run()
     anchors = {}
     for code in ("BTC", "ETH", "SOL", "XRP", "BTC"):
-        next(x for x in app.get("button_group") if x.label == "분석할 코인").set_value(code)
+        next(x for x in app.get("button_group") if x.label == "분석할 시장").set_value(code)
         app.session_state["dashboard_tab"] = "시장 개요"
         app.run()
         assert not app.exception and not app.error
@@ -57,7 +57,7 @@ def test_four_assets_switch_complete_dashboard_forecast_and_back_without_cross_a
         assert len(app.get("iframe")) == 1
         assert any(f'data-symbol="{ASSETS[code].stream_symbol}"' in item.value for item in app.markdown)
         assert any(f"{ASSETS[code].name} 월별 등락" in item.value for item in app.markdown)
-        for tab in ("기술 지표", "다중 시간대", "미래 예측"):
+        for tab in ("미래 예측",):
             app.session_state["dashboard_tab"] = tab
             app.run()
             assert not app.exception and not app.error

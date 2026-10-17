@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 from btc_analyzer.config import IndicatorConfig
-from btc_analyzer.candles import candle_close
+from btc_analyzer.market_clock import gap_groups
 
 
 def ema(series: pd.Series, length: int) -> pd.Series:
@@ -171,8 +171,7 @@ def indicators(
     if df.empty:
         raise ValueError("No closed candles to analyze")
     tf = timeframe or df.attrs.get("timeframe", "1h")
-    previous_close = candle_close(df.index.to_series().shift(), tf)
-    groups = (df.index.to_series() != previous_close).cumsum()
+    groups = gap_groups(df, tf)
     out = pd.concat([_segment(group, cfg) for _, group in df.groupby(groups)], axis=0)
     out.attrs = dict(df.attrs)
     out.attrs["ichimoku_displacement"] = cfg.ichimoku_displacement

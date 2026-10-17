@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 import plotly.graph_objects as go
-from btc_analyzer.assets import ASSETS
+from btc_analyzer.assets import MARKETS
 
 
 from plotly.subplots import make_subplots
@@ -28,7 +28,7 @@ READ_CHART_CONFIG = {
 
 def bind_asset(spec, asset_code):
     """Carry asset identity through browser updates and preserve XRP decimals."""
-    asset = ASSETS[asset_code]
+    asset = MARKETS[asset_code]
     spec["layout"]["meta"]["btcLive"]["symbol"] = asset.stream_symbol
     if asset.decimals > 2:
         spec["layout"]["yaxis"].update(tickformat=",.4f", hoverformat=",.4f")

@@ -7,9 +7,9 @@ import pandas as pd
 
 from btc_analyzer.analysis.historical_similarity import SimilarityReport, prepare_history
 from btc_analyzer.analysis.technical_matching import IndicatorFamily
-from btc_analyzer.candles import candle_close
 from btc_analyzer.config import TIMEFRAMES
 from btc_analyzer.data.base_provider import utc
+from btc_analyzer.market_clock import bar_closes
 
 MODEL_VERSION = "analogue-v3-technical-gate"
 MIN_MATCHES = 3
@@ -32,7 +32,11 @@ def horizon_days(origin, horizon: str) -> int:
     return int((target - origin).days)
 
 
-def forecast_dates(origin, timeframe, count):
+def forecast_dates(origin, timeframe, count, market="crypto"):
+    if market == "NQ":
+        from btc_analyzer.data.nasdaq import trading_dates
+
+        return trading_dates(origin, timeframe, count)
     frequency = pd.offsets.MonthBegin() if timeframe == "1M" else pd.Timedelta(seconds=TIMEFRAMES[timeframe])
     return tuple(pd.date_range(origin, periods=count, freq=frequency))
 
@@ -154,7 +158,9 @@ def forecast_path(report: SimilarityReport, errors=(), *, include_dates=True) ->
     center[0] = lower[0] = upper[0] = 0
     prices = report.anchor_price * np.exp(np.stack([center, lower, upper]))
     return PriceForecast(
-        forecast_dates(report.query_end, report.timeframe, report.forward + 1) if include_dates else (),
+        forecast_dates(report.query_end, report.timeframe, report.forward + 1, report.market)
+        if include_dates
+        else (),
         tuple(prices[0]),
         tuple(prices[1]),
         tuple(prices[2]),
@@ -226,7 +232,7 @@ def predict_history(
         cases.append(
             ValidationCase(
                 historical.query_end,
-                candle_close(frame.index[origin + forward], timeframe),
+                bar_closes(frame, frame.index[origin + forward], timeframe),
                 float(predicted_path[-1] - 1),
                 float(actual_path[-1] - 1),
                 float(prediction.lower[-1] / historical.anchor_price - 1),

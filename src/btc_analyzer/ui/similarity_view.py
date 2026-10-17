@@ -26,7 +26,8 @@ def comparison_chart(report, timezone: str, selected: int = 0, all_matches: bool
     for number in chosen:
         match = report.matches[number]
         dates = pd.DatetimeIndex(
-            forecast_dates(candle_close(match.start, report.timeframe), report.timeframe, len(match.path))
+            match.dates
+            or forecast_dates(candle_close(match.start, report.timeframe), report.timeframe, len(match.path))
         )
         actual_dates = dates.tz_convert(timezone).strftime("%Y.%m.%d %H:%M").tolist()
         label = f"과거 {number + 1} · {match.start.tz_convert(timezone):%Y.%m.%d}"
@@ -73,7 +74,8 @@ def comparison_chart(report, timezone: str, selected: int = 0, all_matches: bool
                 col=1,
             )
     dates = pd.DatetimeIndex(
-        forecast_dates(candle_close(report.query_start, report.timeframe), report.timeframe, report.window)
+        report.current_dates
+        or forecast_dates(candle_close(report.query_start, report.timeframe), report.timeframe, report.window)
     )
     fig.add_trace(
         go.Scatter(

@@ -5,7 +5,6 @@ Use --app-url against an already running Live dashboard to also check embedding.
 """
 
 import argparse
-import ast
 import json
 from pathlib import Path
 
@@ -13,35 +12,13 @@ from playwright.sync_api import sync_playwright
 
 
 def widget_html():
-    path = Path(__file__).resolve().parents[1] / "src/btc_analyzer/ui/live_prices.py"
-    module = ast.parse(path.read_text())
-    template = next(
-        ast.literal_eval(node.value)
-        for node in module.body
-        if isinstance(node, ast.Assign)
-        and any(isinstance(target, ast.Name) and target.id == "LIVE_PRICES_HTML" for target in node.targets)
-    )
-    bridge_module = ast.parse(path.with_name("live_analysis.py").read_text())
-    bridge = next(
-        ast.literal_eval(node.value)
-        for node in bridge_module.body
-        if isinstance(node, ast.Assign)
-        and any(isinstance(target, ast.Name) and target.id == "LIVE_ANALYSIS_JS" for target in node.targets)
-    )
-    template = template.replace("/* LIVE_ANALYSIS_BRIDGE */", bridge)
-    for filename, constant, marker in (
-        ("chart_reader.py", "CHART_READER_JS", "CHART_READER_BRIDGE"),
-        ("pwa.py", "PWA_JS", "PWA_BRIDGE"),
-    ):
-        module = ast.parse(path.with_name(filename).read_text())
-        value = next(
-            ast.literal_eval(n.value)
-            for n in module.body
-            if isinstance(n, ast.Assign)
-            and any(isinstance(t, ast.Name) and t.id == constant for t in n.targets)
-        )
-        template = template.replace(f"/* {marker} */", value)
-    return template
+    import importlib.util
+
+    path = Path(__file__).resolve().parents[1] / "src/btc_analyzer/ui/browser_assets.py"
+    spec = importlib.util.spec_from_file_location("browser_assets", path)
+    assets = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(assets)
+    return assets.quotes_document()
 
 
 def install_quote_transport(page):
@@ -322,11 +299,11 @@ def verify(browser, width, app_url=None, event_log=None):
         assert page.get_by_text("데이터 모드", exact=True).count() == 0
         assert page.get_by_text("거래소", exact=True).count() == 0
         widget.evaluate("window.__quoteProbe='same-iframe'")
-        page.get_by_role("tab", name="기술 지표", exact=True).click()
-        page.get_by_text("기술지표 한눈에 보기", exact=True).wait_for()
+        page.get_by_role("tab", name="미래 예측", exact=True).click()
+        page.get_by_text("기간별 가격 전망", exact=True).wait_for()
         assert widget.evaluate("window.__quoteProbe") == "same-iframe"
         page.get_by_role("tab", name="시장 개요", exact=True).click()
-        page.get_by_text("차트로 확인하기", exact=True).wait_for()
+        page.locator("#btc-chart-reader").wait_for()
     assert widget.evaluate("document.querySelector('.note').getBoundingClientRect().bottom <= innerHeight")
     assert widget.evaluate("document.documentElement.scrollWidth<=innerWidth")
     assert page.evaluate("document.documentElement.scrollWidth<=innerWidth")

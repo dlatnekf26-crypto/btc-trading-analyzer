@@ -14,8 +14,8 @@ from btc_analyzer.data.market_context import MarketContextService, UTC
 def etf_service(source_version):
     return MarketContextService(
         fetcher=fetch_etf,
-        keys=("etf_BTC", "etf_ETH"),
-        refresh_intervals={"etf_BTC": 600, "etf_ETH": 600},
+        keys=tuple("etf_" + code for code in ETF_URLS),
+        refresh_intervals={"etf_" + code: 600 for code in ETF_URLS},
         workers=2,
     )
 
@@ -83,10 +83,11 @@ def render_etf_flows():
         "<style>.btc-etf-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.btc-etf-card{background:#fff;border:1px solid #e7ecf3;border-radius:18px;padding:16px;min-width:0}.btc-etf-card>span{font-weight:650;font-size:13px}.btc-etf-card strong{display:block;font-size:26px;margin:8px 0;font-variant-numeric:tabular-nums}.btc-etf-card small{font-size:11px;font-weight:400}.btc-etf-card p,.btc-etf-card a{font-size:11px;color:#66758b;line-height:1.55;overflow-wrap:anywhere}.btc-etf-card svg{display:block;width:100%;height:64px}@media(max-width:600px){.btc-etf-card{padding:12px}.btc-etf-card strong{font-size:22px}}</style><strong>ETF 자금 흐름</strong>",
         unsafe_allow_html=True,
     )
-    st.caption("미국 BTC·ETH 현물 ETF · 일별 발표 · 10분마다 확인 · 실시간 가격과 발표 시각은 다릅니다")
+    st.caption("미국 BTC·ETH·SOL 현물 ETF · 일별 발표 · 10분마다 확인 · XRP는 확인 가능한 자료원 연결 대기")
     st.markdown(
         '<div class="btc-etf-grid">'
         + "".join(etf_card(code, context.feed("etf_" + code), now) for code in ETF_URLS)
+        + '<article class="btc-etf-card" data-asset="XRP"><span>XRP · 미국 현물 ETF</span><strong>—</strong><p>집계 자료 미연결 · 확인된 유입·유출 자료 없음</p><p>검증된 일별 집계 자료가 아직 연결되지 않았습니다.</p></article>'
         + "</div>",
         unsafe_allow_html=True,
     )

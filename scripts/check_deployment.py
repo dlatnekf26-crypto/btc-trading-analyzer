@@ -35,7 +35,7 @@ def main() -> None:
         assert hasattr(candle_module, "candle_boundary")
         if legacy is not None:
             assert candle_module is not legacy
-        assert len(app.tabs) == 4
+        assert len(app.tabs) == 2
         assert not any(item.label in ("거래소", "데이터 모드") for item in app.selectbox)
         assert any("BTC/USDT" in item.value for item in app.caption)
         assert not app.warning
@@ -85,14 +85,10 @@ def main() -> None:
         control.set_value("1M").run(timeout=45)
         assert not app.exception and not app.error
         assert any(item.value.startswith("월봉 · ") for item in app.caption)
-        for tab in ("기술 지표", "다중 시간대"):
-            app.session_state["dashboard_tab"] = tab
-            app.run(timeout=45)
-            assert not app.exception and not app.error
         assert sys.modules["btc_analyzer.candles"] is candle_module
         assert not (Path(directory) / "sessions").exists()
         print(
-            "PASS: public checkout startup, 4 lightweight tabs, Binance BTC/USDT, Ichimoku/detail/monthly charts, medium/long-term signals, forecast/uncertainty/validation and historical analogues; no account storage"
+            "PASS: public checkout startup, 2 focused tabs, Binance BTC/USDT, Ichimoku/detail/monthly charts, medium/long-term signals, forecast/uncertainty/validation and historical analogues; no account storage"
         )
         if legacy is not None:
             print("PASS: retained legacy candles recovered; ordinary reruns preserve module identity")

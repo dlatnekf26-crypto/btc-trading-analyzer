@@ -2,7 +2,6 @@
 
 from html import escape
 
-import pandas as pd
 import streamlit as st
 
 from btc_analyzer.analysis.session_patterns import session_patterns
@@ -45,14 +44,3 @@ def pattern_cards(result):
         )
         + "</div>"
     )
-
-
-def render_session_patterns(frame, cutoff):
-    result = cached_patterns(frame, pd.Timestamp(cutoff).floor("h"))
-    st.markdown("**최근 횡보 흐름**")
-    st.markdown(CSS + pattern_cards(result), unsafe_allow_html=True)
-    if result["start"] is not None:
-        start, end = (result[key].tz_convert("Asia/Seoul") for key in ("start", "end"))
-        st.caption(
-            f"관측 {start:%m.%d %H:%M} ~ {end:%m.%d %H:%M} KST · 확정 1시간봉 {result['bars']}개. 최근 횡보 종가의 관측 요약이에요."
-        )

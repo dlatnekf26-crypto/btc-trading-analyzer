@@ -12,7 +12,7 @@ from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
 import json
-from urllib.parse import unquote, urlsplit
+from urllib.parse import unquote, urlsplit, parse_qs
 from xml.sax.saxutils import escape
 
 import ccxt
@@ -94,7 +94,13 @@ def offline_context_data():
         host = urlsplit(url).hostname
         now = datetime.now(timezone.utc)
         if host == "farside.co.uk":
-            funds = ("IBIT", "FBTC") if "bitcoin" in url else ("ETHA", "FETH")
+            funds = (
+                ("IBIT", "FBTC")
+                if "bitcoin" in url
+                else ("BSOL", "VSOL")
+                if "/sol/" in url
+                else ("ETHA", "FETH")
+            )
             rows = []
             for i in reversed(range(10)):
                 at = (now - timedelta(days=i)).strftime("%d %b %Y")
@@ -144,6 +150,42 @@ def offline_context_data():
             return Response(json.dumps(events).encode())
         if host == "query1.finance.yahoo.com":
             symbol = unquote(urlsplit(url).path.rsplit("/", 1)[-1])
+            interval = parse_qs(urlsplit(url).query).get("interval", ["1m"])[0]
+            if symbol == "NQ=F" and interval in ("1d", "1h"):
+                import numpy as np
+                from btc_analyzer.data.nasdaq import calendar_bars
+
+                starts, ends = calendar_bars(
+                    2000 if interval == "1d" else now.year - 1, now.year + 1, interval
+                )
+                starts = starts[ends <= now][-6600 if interval == "1d" else -3500 :]
+                x = np.arange(len(starts))
+                close = np.exp(0.00007 * x + 0.045 * np.sin(x / 43) + 0.015 * np.cos(x / 11))
+                close *= 22345.5 / close[-1]
+                candles = {
+                    "open": (close * 0.999).tolist(),
+                    "high": (close * 1.008).tolist(),
+                    "low": (close * 0.992).tolist(),
+                    "close": close.tolist(),
+                    "volume": (100000 + 10000 * np.cos(x / 5)).tolist(),
+                }
+                body = {
+                    "chart": {
+                        "result": [
+                            {
+                                "meta": {
+                                    "symbol": "NQ=F",
+                                    "currency": "USD",
+                                    "exchangeTimezoneName": "America/New_York",
+                                    "dataGranularity": interval,
+                                },
+                                "timestamp": (starts.asi8 // 1_000_000_000).tolist(),
+                                "indicators": {"quote": [candles]},
+                            }
+                        ]
+                    }
+                }
+                return Response(json.dumps(body).encode())
             price = {"NQ=F": 22345.50, "CL=F": 87.42, "^TNX": 4.25, "^TYX": 4.80, "KRW=X": 1345.5}[symbol]
             stamp = int(
                 (now - timedelta(seconds=2) if symbol == "KRW=X" else now - timedelta(minutes=15)).timestamp()

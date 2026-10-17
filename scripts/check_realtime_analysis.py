@@ -217,7 +217,7 @@ def verify(browser, width, url, event_log):
     frozen = plot.evaluate("p=>JSON.stringify(p.data)")
     page.wait_for_timeout(1200)
     assert plot.evaluate("p=>JSON.stringify(p.data)") == frozen, "Live redraw interrupted finger inspection"
-    assert any(c.isdigit() for c in plot.locator(".hoverlayer").text_content())
+    assert any(c.isdigit() for c in plot.locator(".btc-crosshair").text_content())
     touch(cdp, "touchEnd")
     crypto.evaluate("window.__livePaused=true")
     # Let the last coalesced tick finish after releasing the live inspection.

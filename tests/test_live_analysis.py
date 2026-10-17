@@ -203,3 +203,29 @@ def test_forecast_live_layer_preserves_model_and_shares():
     assert all(all(y is None for y in trace.y) for trace in fig.data[6:])
     assert meta["center"][0] == meta["anchor"]
     assert "run_every=60" in (Path(__file__).resolve().parents[1] / "app.py").read_text()
+
+
+def test_encoded_chart_array_survives_plotly_input_array_and_json_snapshot():
+    result = javascript(
+        """
+const numbers=[1.15321,72000.012345,0.0000123];
+const data={dtype:'f8',bdata:Buffer.from(new Float64Array(numbers).buffer).toString('base64'),_inputArray:new Float64Array(numbers)};
+const clone=JSON.parse(JSON.stringify(data));
+console.log(JSON.stringify([Array.from(PlotData.values(data)),Array.from(PlotData.values(clone))]));
+"""
+    )
+    for decoded in result:
+        assert decoded == pytest.approx([1.15321, 72000.012345, 0.0000123], rel=1e-12)
+
+
+def test_reused_plot_objects_redecode_replaced_wire_data_and_axis_dates():
+    actual = javascript(
+        """
+const wire=xs=>Buffer.from(new Float64Array(xs).buffer).toString('base64');
+const data={dtype:'f8',bdata:wire([1.1532,72000.0123])};
+const first=Array.from(PlotData.values(data));data.bdata=wire([1.1632,73000.0123]);
+const xs=[1,2],axis={d2c:x=>x};const a=PlotData.times(xs,axis);xs[0]=3;xs[1]=4;
+console.log(JSON.stringify([first,Array.from(PlotData.values(data)),a,PlotData.times(xs,axis)]));
+"""
+    )
+    assert actual == [[1.1532, 72000.0123], [1.1632, 73000.0123], [1, 2], [3, 4]]

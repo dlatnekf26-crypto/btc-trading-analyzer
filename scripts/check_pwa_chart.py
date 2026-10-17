@@ -66,6 +66,9 @@ def verify(browser, width, url, event_log):
     page = context.new_page()
     errors = []
     page.on("pageerror", lambda error: errors.append(str(error)))
+    page.add_init_script(
+        """window.__gestureLog=[];for(const kind of ['touchstart','touchmove','touchend','touchcancel','mousemove'])document.addEventListener(kind,e=>{window.__gestureLog.push({kind,t:performance.now(),target:e.target.getAttribute('class'),x:e.touches?.[0]?.clientX,y:e.touches?.[0]?.clientY,mouse:e.sourceCapabilities?.firesTouchEvents});window.__gestureLog=window.__gestureLog.slice(-25);},{capture:true,passive:true});"""
+    )
     install_quote_transport(page)
     MarketFixture(page)
     page.goto(url)
@@ -74,31 +77,87 @@ def verify(browser, width, url, event_log):
     crypto.locator('#binance[data-history="ready"]').wait_for()
     crypto.evaluate("window.__pwaToken=Math.random()")
     token = crypto.evaluate("window.__pwaToken")
+    crypto.evaluate("""window.__pwaFeed=setInterval(()=>{
+      const now=Date.now();window.__quoteSockets.find(s=>s.url.includes('data-stream.binance') && s.readyState===1)?.emit(JSON.stringify({data:{s:'BTCUSDT',c:'100000',P:'2.34',E:now}}));
+      window.__quoteSockets.find(s=>s.url.includes('api.upbit.com') && s.readyState===1)?.emit(JSON.stringify({code:'KRW-BTC',trade_price:130000000,signed_change_rate:.01,timestamp:now}),true);
+    },1000);""")
     cdp = context.new_cdp_session(page)
     results = []
     for tf, label in (("1h", "1시간"), ("4h", "4시간"), ("1d", "일봉"), ("1w", "주봉"), ("1M", "월봉")):
         page.get_by_role("radio", name=label, exact=True).tap()
         page.wait_for_function(
-            "tf=>document.querySelector('#btc-chart-reader')?.dataset.timeframe===tf && [...document.querySelectorAll('.js-plotly-plot')].some(p=>p.layout?.meta?.btcLive?.timeframe===tf)",
+            "tf=>document.querySelector('#btc-chart-reader')?.dataset.timeframe===tf && [...document.querySelectorAll('.js-plotly-plot')].some(p=>p._fullLayout?.meta?.btcLive?.timeframe===tf)",
             arg=tf,
         )
         plot = page.locator(".js-plotly-plot:visible").first
         region = plot.locator(".nsewdrag").first
         region.scroll_into_view_if_needed()
+        page.wait_for_timeout(200)
+        region.evaluate("e=>e.scrollIntoView({block:'center',behavior:'instant'})")
         box = region.bounding_box()
         x, y = box["x"] + box["width"] * 0.2, box["y"] + box["height"] * 0.4
+        assert 0 < x < width and 0 < y < page.viewport_size["height"], (tf, box)
         baseline = event_log.read_text() if event_log else None
         original = ranges(plot)
         touch(cdp, "touchStart", [(x, y)])
-        page.wait_for_timeout(80)
+        page.wait_for_timeout(400)
         first = page.locator("#btc-chart-reader").get_attribute("data-index")
         for step in range(1, 6):
             touch(cdp, "touchMove", [(x + box["width"] * 0.12 * step, y)])
             page.wait_for_timeout(40)
         second = page.locator("#btc-chart-reader").get_attribute("data-index")
-        assert first != second, (tf, first, second)
+        assert first != second, (
+            tf,
+            first,
+            second,
+            plot.evaluate(
+                "p=>({input:p.layout.meta,drawn:p._fullLayout.meta,range:p._fullLayout.xaxis.range,x:[p.data[0].x[0],p.data[0].x.at(-1)]})"
+            ),
+            page.evaluate("window.__gestureLog"),
+        )
         touch(cdp, "touchEnd")
         assert ranges(plot) == original
+        cursor = plot.evaluate("p=>Number(p.dataset.cursorPrice)")
+        read = page.locator('#btc-chart-reader [data-field="cursor"]').text_content()
+        assert abs(float(read.replace(",", "")) - cursor) < 0.0051
+        # Rendering/scroll anchoring can move the chart after a gesture. Obtain
+        # new device coordinates for each gesture, as a person would visually.
+        region.scroll_into_view_if_needed()
+        region.evaluate("e=>e.scrollIntoView({block:'center',behavior:'instant'})")
+        box = region.bounding_box()
+        x, y = box["x"] + box["width"] * 0.2, box["y"] + box["height"] * 0.4
+        # Move vertically while inspecting: the cursor price is independent of OHLC.
+        touch(cdp, "touchStart", [(x, y)])
+        page.wait_for_timeout(400)
+        cursor = plot.evaluate("p=>Number(p.dataset.cursorPrice)")
+        touch(cdp, "touchMove", [(x, y + box["height"] * 0.12)])
+        page.wait_for_timeout(80)
+        assert abs(plot.evaluate("p=>Number(p.dataset.cursorPrice)") - cursor) > 0.01, (
+            tf,
+            cursor,
+            plot.evaluate("p=>p.dataset.cursorPrice"),
+            box,
+            region.bounding_box(),
+            page.evaluate("window.__gestureLog"),
+        )
+        touch(cdp, "touchEnd")
+        assert ranges(plot) == original
+        # A horizontal/diagonal drag pans locally in both price and time.
+        region.scroll_into_view_if_needed()
+        region.evaluate("e=>e.scrollIntoView({block:'center',behavior:'instant'})")
+        box = region.bounding_box()
+        x, y = box["x"] + box["width"] * 0.2, box["y"] + box["height"] * 0.4
+        touch(cdp, "touchStart", [(x, y)])
+        touch(cdp, "touchMove", [(x + box["width"] * 0.2, y + box["height"] * 0.1)])
+        page.wait_for_timeout(120)
+        touch(cdp, "touchEnd")
+        page.wait_for_timeout(100)
+        moved = ranges(plot)
+        assert moved["xaxis"] != original["xaxis"] and moved["yaxis"] != original["yaxis"], (
+            tf,
+            moved,
+            original,
+        )
         # Compare every displayed value against that exact candle/indicator,
         # including absent long moving-average history on the monthly chart.
         mismatches = plot.evaluate("""p=>{
@@ -129,6 +188,7 @@ def verify(browser, width, url, event_log):
             and crypto.evaluate("window.__quoteSockets.length") == 3
         )
         assert page.evaluate("document.documentElement.scrollWidth<=innerWidth")
+        print(json.dumps({"width": width, "timeframe": tf, "free_cursor_pan": True}), flush=True)
         results.append(
             {"timeframe": tf, "finger_tracking": True, "ohlc_ema_bands": True, "local_navigation": True}
         )
@@ -141,6 +201,7 @@ def verify(browser, width, url, event_log):
     page.locator('[data-testid="stMain"]').evaluate("e=>e.scrollTop=0")
     page.screenshot(path=f"/tmp/btc-pwa-top-{width}.png")
     assert not errors, errors
+    crypto.evaluate("clearInterval(window.__pwaFeed)")
     cleanup(page, crypto)
     context.close()
     return {"width": width, "checks": results, "js_errors": errors}

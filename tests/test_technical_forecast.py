@@ -199,3 +199,18 @@ def test_price_reasons_use_actual_displayed_price_gate_errors_groups_and_escape_
 def test_legacy_research_and_full_technical_modes_cannot_be_silently_combined():
     with pytest.raises(ValueError, match="한 방식씩"):
         forecast(market(), use_context=True)
+
+
+def test_small_price_paths_and_price_reasons_keep_subcent_precision():
+    from btc_analyzer.assets import price_text
+    from btc_analyzer.ui.forecast_chart import prediction_chart
+
+    frame = market()
+    frame[["open", "high", "low", "close"]] /= 100
+    result = forecast(frame)
+    figure = prediction_chart(result, "UTC", "USDT")
+    assert list(figure.data[3].y) == np.round(result.prediction.center, 4).tolist()
+    assert any(n != round(n, 2) for n in figure.data[3].y)
+    reason = explain_price(result, result.prediction, "1주", "USDT")
+    assert price_text(result.history.anchor_price) in reason.reasons[0].text
+    assert price_text(result.prediction.center[-1]) in reason.reasons[0].text

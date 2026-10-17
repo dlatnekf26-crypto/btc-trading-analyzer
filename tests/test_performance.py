@@ -153,7 +153,8 @@ def test_ui_only_runs_active_tab_and_live_refresh_reuses_data(monkeypatch, tmp_p
     assert calls == {"bundle": 1, "quote": 0, "features": 5}
     app.session_state["dashboard_tab"] = "다중 시간대"
     app.run()
-    assert len(app.get("plotly_chart")) == 0 and len(app.dataframe) == 3
+    assert app.session_state["dashboard_tab"] == "시장 개요"
+    assert len(app.get("plotly_chart")) == 1 and not app.dataframe
     assert calls == {"bundle": 1, "quote": 0, "features": 5}
     next(x for x in app.button if x.label == "새로고침").click().run()
     assert calls["bundle"] == 2 and calls["quote"] == 0

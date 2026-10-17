@@ -8,7 +8,7 @@ def _source_signature() -> str:
     """Record the source generation when the package is actually imported."""
     package = _Path(__file__).resolve().parent
     digest = _hashlib.sha256()
-    for path in sorted(package.rglob("*.py")):
+    for path in sorted(p for p in package.rglob("*") if p.suffix in {".py", ".js", ".css", ".html"}):
         digest.update(path.relative_to(package).as_posix().encode())
         digest.update(b"\0")
         digest.update(path.read_bytes())

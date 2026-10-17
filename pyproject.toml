@@ -9,7 +9,8 @@ description = "Causal BTC analysis, backtesting and paper trading dashboard"
 requires-python = ">=3.11"
 dependencies = [
   "pandas>=2.2,<3", "numpy>=2,<2.4", "scipy>=1.14,<1.17", "ccxt>=4.4,<5",
-  "requests>=2.32,<3", "python-dotenv>=1,<2", "plotly>=5.24,<7", "streamlit>=1.65,<2"
+  "requests>=2.32,<3", "python-dotenv>=1,<2", "plotly>=5.24,<7", "streamlit>=1.65,<2",
+  "pandas-market-calendars>=5.1,<6"
 ]
 
 [project.optional-dependencies]
@@ -17,6 +18,9 @@ dev = ["pytest>=8,<9", "ruff>=0.9,<1"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"btc_analyzer.ui" = ["browser/*.js", "browser/*.css", "browser/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

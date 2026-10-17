@@ -163,3 +163,27 @@ assert capital() == 20000
 """,
         tmp_path,
     )
+
+
+def test_browser_asset_change_with_identical_size_and_mtime_reloads_cached_resource(tmp_path):
+    run(
+        """
+import os, shutil
+from checkout_bootstrap import ensure_checkout
+copy = Path(sys.argv[2])/'assets'
+shutil.copytree(root/'src', copy/'src')
+before = ensure_checkout(copy)
+from btc_analyzer.ui.browser_assets import browser_asset
+old = browser_asset('chart-reader.js')
+path = copy/'src/btc_analyzer/ui/browser/chart-reader.js'
+stat = path.stat()
+new = old.replace('350', '360')
+assert old != new and len(old) == len(new)
+path.write_text(new)
+os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+assert ensure_checkout(copy) != before
+from btc_analyzer.ui.browser_assets import browser_asset as new_asset
+assert new_asset is not browser_asset and new_asset('chart-reader.js') == new
+""",
+        tmp_path,
+    )

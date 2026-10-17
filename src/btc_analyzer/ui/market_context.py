@@ -53,7 +53,7 @@ def sparkline(points):
     return f'<svg viewBox="0 0 240 42" preserveAspectRatio="none" role="img" aria-label="최근 거래 가격 그래프"><polyline points="{path}" fill="none" stroke="#3182f6" stroke-width="2" stroke-linejoin="round"/></svg>'
 
 
-def macro_cards(context, now):
+def macro_cards(context, now, keys=("nq", "oil", "tnx", "tyx")):
     cards = []
     for key, title, unit, link, source in (
         ("nq", "나스닥100 선물", "pt · NQ=F", "https://finance.yahoo.com/quote/NQ%3DF/", "CME NQ"),
@@ -61,6 +61,8 @@ def macro_cards(context, now):
         ("tnx", "미국채 10년물", "% · 수익률 지표", "https://finance.yahoo.com/quote/%5ETNX/", "CBOE ^TNX"),
         ("tyx", "미국채 30년물", "% · 수익률 지표", "https://finance.yahoo.com/quote/%5ETYX/", "CBOE ^TYX"),
     ):
+        if key not in keys:
+            continue
         feed = context.feed(key)
         value = feed.value
         if isinstance(value, MacroQuote) and timedelta(0) <= now - value.as_of <= timedelta(days=7):
@@ -100,7 +102,7 @@ def macro_cards(context, now):
     fx = context.feed("fx").value
     bridge = (
         f'<span hidden id="macro-fx-reference" data-symbol="KRW=X" data-price="{fx.price}" data-asof="{int(fx.as_of.timestamp() * 1000)}" data-fetched="{int(fx.fetched_at.timestamp() * 1000)}"></span>'
-        if isinstance(fx, MacroQuote)
+        if isinstance(fx, MacroQuote) and "nq" in keys
         else ""
     )
     return '<div class="btc-macro-grid" aria-label="대외 시장 시세">' + "".join(cards) + "</div>" + bridge
@@ -123,10 +125,10 @@ def news_card(item):
 
 
 @st.fragment(run_every=2)
-def render_macro_quotes():
+def render_macro_quotes(keys=("nq", "oil", "tnx", "tyx")):
     now = datetime.now(UTC)
     context = current_context()
-    st.markdown(CONTEXT_CSS + macro_cards(context, now), unsafe_allow_html=True)
+    st.markdown(CONTEXT_CSS + macro_cards(context, now, keys), unsafe_allow_html=True)
 
 
 @st.fragment(run_every=10)

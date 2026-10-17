@@ -122,3 +122,16 @@ def test_ethereum_source_blank_date_heading_and_correct_asset_funds():
     assert value.latest.net == 50 and value.latest.funds[0][0] == "ETHA"
     with pytest.raises(ValueError):
         parse_etf_flows(body, "BTC", NOW)
+
+
+def test_solana_split_heading_and_missing_flow_do_not_mix_asset_or_zero():
+    body = b"""<table><tr><th></th><th></th><th></th><th>Total</th></tr>
+    <tr><th></th><th>BSOL</th><th>VSOL</th><th></th></tr>
+    <tr><td>13 Oct 2026</td><td>10.0</td><td>(2.0)</td><td>8.0</td></tr>
+    <tr><td>14 Oct 2026</td><td>-</td><td>0.0</td><td></td></tr></table>"""
+    value = parse_etf_flows(body, "SOL", NOW)
+    assert value.latest.net == 8 and value.latest.funds == (("BSOL", 10.0), ("VSOL", -2.0))
+    assert value.days[-1].net is None and value.days[-1].funds[0][1] is None
+    for asset in ("BTC", "ETH"):
+        with pytest.raises(ValueError):
+            parse_etf_flows(body, asset, NOW)

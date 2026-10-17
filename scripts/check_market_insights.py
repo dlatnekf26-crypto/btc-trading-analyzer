@@ -35,7 +35,7 @@ def verify(browser, width, url, event_log):
     releases.wait_for()
     assert "0.3%" in releases.inner_text() and "150K" in releases.inner_text()
     assert "시장 예상" in releases.inner_text() and "이전 발표" in releases.inner_text()
-    assert page.locator(".btc-pattern-card").count() == 1
+    assert page.locator(".btc-pattern-card").count() == 0
     assert "자주 움직인 시간" not in page.locator('[data-testid="stMain"]').inner_text()
     assert "1분마다 최신 값 확인" in fear.inner_text()
     plot = page.locator(".js-plotly-plot:visible").first

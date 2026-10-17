@@ -12,7 +12,7 @@ _LOCK = RLock()
 def source_signature(package: Path) -> str:
     """Match btc_analyzer's import-time signature, independent of mtimes/pyc."""
     digest = hashlib.sha256()
-    for path in sorted(package.rglob("*.py")):
+    for path in sorted(p for p in package.rglob("*") if p.suffix in {".py", ".js", ".css", ".html"}):
         digest.update(path.relative_to(package).as_posix().encode())
         digest.update(b"\0")
         digest.update(path.read_bytes())

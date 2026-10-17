@@ -18,13 +18,12 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from btc_analyzer.config import AppConfig
-from btc_analyzer.assets import ASSETS
+from btc_analyzer.assets import MARKETS
 from btc_analyzer.candles import candle_boundary
 from btc_analyzer.data.service import DataService
 from btc_analyzer.data.base_provider import DataError
-from btc_analyzer.strategy.composite import FRAME_LABELS, FRAME_WEIGHTS
 from btc_analyzer.ui.analysis_cache import market_snapshot
-from btc_analyzer.ui.presentation import BRAND, CSS, LABELS, korean, composite_cards, decision_panel
+from btc_analyzer.ui.presentation import BRAND, CSS, decision_panel
 from btc_analyzer.ui.live_prices import render_live_prices
 from btc_analyzer.ui.market_context import render_macro_quotes, render_coin_news
 from btc_analyzer.ui.pwa import INSTALL_CONTROL
@@ -61,8 +60,8 @@ with st.container(key="market_controls"):
     with market_control:
         asset_code = (
             st.segmented_control(
-                "분석할 코인",
-                list(ASSETS),
+                "분석할 시장",
+                list(MARKETS),
                 default="BTC",
                 required=True,
                 key="analysis_asset",
@@ -72,7 +71,7 @@ with st.container(key="market_controls"):
         )
     with refresh_control:
         st.button("새로고침", on_click=request_market_refresh, width="stretch")
-asset = ASSETS[asset_code]
+asset = MARKETS[asset_code]
 symbol = asset.symbol
 # Render before any server-side candle request. Quote ticks never rerun Python.
 render_live_prices(asset_code)
@@ -109,13 +108,7 @@ def dashboard() -> None:
 
     from btc_analyzer.ui.live_analysis import render_live_analysis
 
-    if st.session_state.get("dashboard_tab") not in (
-        None,
-        "시장 개요",
-        "기술 지표",
-        "다중 시간대",
-        "미래 예측",
-    ):
+    if st.session_state.get("dashboard_tab") not in (None, "시장 개요", "미래 예측"):
         st.session_state["dashboard_tab"] = "시장 개요"
     prediction_active = st.session_state.get("dashboard_tab") == "미래 예측"
 
@@ -130,7 +123,7 @@ def dashboard() -> None:
                 st.button("미래 예측 보기 →", type="primary", on_click=open_history_comparison)
 
     tabs = st.tabs(
-        ["시장 개요", "기술 지표", "다중 시간대", "미래 예측"],
+        ["시장 개요", "미래 예측"],
         key="dashboard_tab",
         on_change="rerun",
     )
@@ -148,91 +141,14 @@ def dashboard() -> None:
                 asset_code=asset_code,
             )
             render_current_analysis()
-            from btc_analyzer.ui.session_patterns import render_session_patterns
             from btc_analyzer.ui.market_insights import render_market_insights
 
             render_market_insights(bundle.get("1M"), cutoff, asset_code)
-            render_session_patterns(bundle.get("1h"), cutoff)
             with st.expander("종합 판단의 전체 근거"):
                 for reason in combined.reasons:
                     st.write(f"• {reason}")
     if tabs[1].open:
         with tabs[1]:
-            from btc_analyzer.ui.indicators_view import render_indicators
-
-            render_indicators(enriched, cfg.indicators, display_timezone)
-    if tabs[2].open:
-        with tabs[2]:
-            st.subheader("다섯 시간대 통합 분석")
-            st.markdown(composite_cards(combined), unsafe_allow_html=True)
-            rows = [
-                {
-                    "시간대": FRAME_LABELS[tf],
-                    "상승 우위": round(frame.score, 1) if frame.ready else None,
-                    "반영 비중": f"{FRAME_WEIGHTS[tf]:.0%}",
-                    "연속 확정 봉": frame.bars,
-                    "지표 충족": f"{frame.coverage:.0%}",
-                    "상태": "반영" if frame.ready else "대기 / 미반영",
-                    "시장 흐름": korean(frame.regime),
-                    "변동성": korean(frame.volatility),
-                    "확정 시각": str(pd.Timestamp(frame.confirmed_at).tz_convert(display_timezone))
-                    if frame.confirmed_at
-                    else "없음",
-                }
-                for tf, frame in combined.frames.items()
-            ]
-            st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
-            st.subheader("시간대별 전체 지표")
-            indicator_rows = [
-                {"시간대": FRAME_LABELS[tf], **frame.indicators} for tf, frame in combined.frames.items()
-            ]
-            st.dataframe(
-                pd.DataFrame(indicator_rows).set_index("시간대").T.rename(index=LABELS),
-                width="stretch",
-            )
-            st.caption(
-                "빈칸은 이력이 부족해 계산할 수 없는 지표입니다. 월봉 EMA200·SMA200 등은 임의로 채우지 않습니다."
-            )
-            st.subheader("시간대별 지표 그룹 점수")
-            st.dataframe(
-                pd.DataFrame(
-                    [
-                        {
-                            "시간대": FRAME_LABELS[tf],
-                            **{
-                                korean(k): round(v, 1) if frame.ready else None
-                                for k, v in frame.categories.items()
-                            },
-                        }
-                        for tf, frame in combined.frames.items()
-                    ]
-                ),
-                hide_index=True,
-                width="stretch",
-            )
-            for tf, frame in combined.frames.items():
-                if frame.notes:
-                    with st.expander(f"{FRAME_LABELS[tf]} · 데이터 상태"):
-                        for note in frame.notes:
-                            st.write(note)
-            st.caption(
-                "주봉은 월요일 UTC 00:00, 월봉은 다음 달 1일 UTC 00:00에 확정됩니다. 미완성 봉은 제외합니다."
-            )
-            with st.expander("종합 신호 조건"):
-                st.write(
-                    "수주~수개월 관점: 1시간 5% · 4시간 10% · 일봉 40% · 주봉 30% · 월봉 15%. 단기 봉 상승은 매수의 필수 조건이 아니에요."
-                )
-                st.write(
-                    "눌림목 매수: 중기 기준 대비 할인·고점 대비 조정·지지 접근과 하락 압력 둔화를 확인하고, 주봉·월봉 방향 및 일봉 비용 후 RR이 지지하면 분할매수를 검토해요."
-                )
-                st.write(
-                    "매도: 일봉·주봉 하락이 함께 확인되면 현물 보유분 축소, 일봉 RSI와 가격 이격이 과열되면 분할 이익 실현 신호를 표시해요. 신규 숏 주문은 만들지 않아요."
-                )
-                st.write(
-                    "급락·지지 이탈·거래량 부족은 신규 매수를 보류해요. 다섯 시간대의 핵심 지표가 부족하면 판단을 보류해요. 가격 매력은 기술적 상대 위치이며 적정 가치나 수익 확률이 아니에요."
-                )
-    if tabs[3].open:
-        with tabs[3]:
             from btc_analyzer.ui.history_view import render_history_view
 
             render_history_view(
@@ -251,9 +167,17 @@ def dashboard() -> None:
         render_current_analysis()
 
 
-dashboard()
+if asset_code == "NQ":
+    from btc_analyzer.ui.nasdaq_view import render_nasdaq
+
+    with st.container(key="selected_future"):
+        render_macro_quotes(("nq",))
+    render_nasdaq()
+else:
+    dashboard()
 with st.expander("대외 시장 · 나스닥·유가·국채", expanded=False):
-    render_macro_quotes()
+    render_macro_quotes(("oil", "tnx", "tyx") if asset_code == "NQ" else ("nq", "oil", "tnx", "tyx"))
 # News remains an independent fragment and keeps the live alert bridge current
 # on every tab, without pushing the price/forecast chart below a long news feed.
-render_coin_news(asset_code)
+if asset_code != "NQ":
+    render_coin_news(asset_code)

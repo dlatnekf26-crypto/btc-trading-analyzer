@@ -52,6 +52,8 @@ colorama==0.4.6 ; sys_platform == 'win32'
     # via pytest
 cryptography==50.0.2
     # via ccxt
+exchange-calendars==4.13.2
+    # via pandas-market-calendars
 frozenlist==1.8.0
     # via
     #   aiohttp
@@ -79,6 +81,8 @@ jsonschema==4.26.0
     # via altair
 jsonschema-specifications==2025.9.1
     # via jsonschema
+korean-lunar-calendar==0.4.0
+    # via exchange-calendars
 markupsafe==3.0.4
     # via jinja2
 multidict==6.7.1
@@ -93,6 +97,7 @@ narwhals==2.26.0
 numpy==2.3.5
     # via
     #   btc-trading-analyzer
+    #   exchange-calendars
     #   pandas
     #   pydeck
     #   scipy
@@ -108,7 +113,11 @@ packaging==26.3
 pandas==2.3.3
     # via
     #   btc-trading-analyzer
+    #   exchange-calendars
+    #   pandas-market-calendars
     #   streamlit
+pandas-market-calendars==5.5.0
+    # via btc-trading-analyzer
 pillow==12.3.0
     # via streamlit
 plotly==6.9.0
@@ -132,6 +141,8 @@ pydeck==0.9.3
     # via streamlit
 pygments==2.21.0
     # via pytest
+pyluach==2.3.0
+    # via exchange-calendars
 pytest==8.4.2
     # via btc-trading-analyzer
 python-dateutil==2.9.0.post0
@@ -167,6 +178,8 @@ streamlit==1.65.0
     # via btc-trading-analyzer
 toml==0.10.2
     # via streamlit
+toolz==1.2.0
+    # via exchange-calendars
 typing-extensions==4.16.0
     # via
     #   aiohttp
@@ -178,7 +191,9 @@ typing-extensions==4.16.0
     #   starlette
     #   streamlit
 tzdata==2026.5
-    # via pandas
+    # via
+    #   exchange-calendars
+    #   pandas
 urllib3==2.8.0
     # via
     #   ccxt
