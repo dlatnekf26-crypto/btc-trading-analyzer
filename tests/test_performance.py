@@ -149,7 +149,7 @@ def test_ui_only_runs_active_tab_and_live_refresh_reuses_data(monkeypatch, tmp_p
     assert not app.exception and not app.error
     assert len(app.get("plotly_chart")) == 1 and len(app.dataframe) <= 1
     assert calls == {"bundle": 1, "quote": 0, "features": 5}
-    next(x for x in app.get("button_group") if x.label == "차트 보기").set_value("상세").run()
+    next(x for x in app.get("button_group") if x.label == "차트 시간대").set_value("4h").run()
     assert calls == {"bundle": 1, "quote": 0, "features": 5}
     app.session_state["dashboard_tab"] = "다중 시간대"
     app.run()

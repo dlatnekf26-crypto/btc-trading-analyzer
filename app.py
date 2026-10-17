@@ -49,7 +49,8 @@ def request_market_refresh() -> None:
 
 def open_history_comparison() -> None:
     st.session_state["dashboard_tab"] = "미래 예측"
-    st.session_state["similarity_timeframe"] = st.session_state.get("price_chart_timeframe", "1d")
+    selected = st.session_state.get("price_chart_timeframe", "1d")
+    st.session_state["similarity_timeframe"] = selected if selected not in ("5m", "15m") else "1d"
     st.session_state["forecast_horizon"] = (
         "1mo" if st.session_state["similarity_timeframe"] == "1d" else "custom"
     )
@@ -139,6 +140,7 @@ def dashboard() -> None:
                 average_lines=average_lines,
                 quote_currency=quote_currency,
                 asset_code=asset_code,
+                cache_path=str(cache_path),
             )
             render_current_analysis()
             from btc_analyzer.ui.market_insights import render_market_insights
@@ -175,6 +177,10 @@ if asset_code == "NQ":
     render_nasdaq()
 else:
     dashboard()
+from btc_analyzer.ui.ai_view import settings as ai_settings, render_ai_panel
+
+if ai_settings()[0]:
+    render_ai_panel()
 with st.expander("대외 시장 · 나스닥·유가·국채", expanded=False):
     render_macro_quotes(("oil", "tnx", "tyx") if asset_code == "NQ" else ("nq", "oil", "tnx", "tyx"))
 # News remains an independent fragment and keeps the live alert bridge current

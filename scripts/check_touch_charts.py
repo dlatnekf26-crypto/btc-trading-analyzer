@@ -10,8 +10,6 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-from check_live_widget import MarketFixture, cleanup, install_quote_transport
-
 
 def ranges(plot):
     return plot.evaluate(
@@ -52,16 +50,7 @@ def inspect(page, cdp, plot, event_log, label, subplot=0):
     assert after and before != after, f"{label}: tooltip did not follow the finger"
     touch(cdp, "touchEnd")
     assert ranges(plot) == original, (label, original, ranges(plot))
-    # Double tapping cannot reset/zoom the axes.
-    for _ in range(2):
-        touch(cdp, "touchStart", [(x, y)])
-        touch(cdp, "touchEnd")
-        page.wait_for_timeout(80)
-    # Two fingers do not create a zoom box or a pinch-scaled chart.
-    touch(cdp, "touchStart", [(x, y), (x + 40, y + 30)])
-    touch(cdp, "touchMove", [(x - 15, y - 15), (x + 70, y + 45)])
-    touch(cdp, "touchEnd")
-    assert ranges(plot) == original, (label, original, ranges(plot))
+    # Pinch is exercised by check_chart_gestures; inspection alone keeps the axes.
     scroller = page.locator('[data-testid="stMain"]')
     before_scroll = scroller.evaluate("e=>e.scrollTop")
     remaining = scroller.evaluate("e=>e.scrollHeight-e.clientHeight-e.scrollTop")
@@ -86,81 +75,9 @@ def inspect(page, cdp, plot, event_log, label, subplot=0):
 
 
 def verify(browser, width, url, event_log):
-    context = browser.new_context(
-        viewport={"width": width, "height": 1000}, has_touch=True, is_mobile=width < 1000
-    )
-    page = context.new_page()
-    install_quote_transport(page)
-    MarketFixture(page)
-    page.goto(url)
-    page.get_by_role("tab", name="시장 개요", exact=True).wait_for(timeout=45000)
-    page.frame_locator("iframe").first.locator("#binance").wait_for()
-    crypto = next(f for f in page.frames if f.locator("#binance").count())
-    # This suite compares static axis ranges, so pause the injected quote feed.
-    # A fresh REST timestamp legitimately advances the live forecast endpoint;
-    # that is not a touch zoom. check_realtime_analysis exercises live updates,
-    # finger holds and release with all five candle streams still running.
-    crypto.evaluate(
-        "Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'))"
-    )
-    cdp = context.new_cdp_session(page)
-    if width == 1440:
-        plot = page.locator(".js-plotly-plot:visible").first
-        plot.scroll_into_view_if_needed()
-        rect = plot.locator(".nsewdrag").first.bounding_box()
-        page.mouse.move(rect["x"] + rect["width"] * 0.4, rect["y"] + rect["height"] * 0.5)
-        page.wait_for_timeout(150)
-        assert any(char.isdigit() for char in plot.locator(".btc-crosshair").text_content())
-    inspect(page, cdp, page.locator(".js-plotly-plot:visible").first, event_log, "market")
-    # A control still receives a touch after swiping on the chart.
-    page.get_by_role("button", name="지표", exact=True).tap()
-    page.get_by_role("radio", name="상세", exact=True).tap()
-    page.get_by_text("표시할 봉 수", exact=True).wait_for()
-    page.keyboard.press("Escape")
-    inspect(page, cdp, page.locator(".js-plotly-plot:visible").first, event_log, "detailed market")
-    page.get_by_role("tab", name="미래 예측", exact=True).tap()
-    page.get_by_text("기간별 가격 전망", exact=True).wait_for()
-    page.wait_for_function(
-        "()=>[...document.querySelectorAll('.js-plotly-plot')].some(p=>p.getClientRects().length && p.layout?.meta?.btcLive?.kind==='forecast')"
-    )
-    plot = page.locator(".js-plotly-plot:visible").first
-    plot.wait_for()
-    inspect(page, cdp, plot, event_log, "forecast")
-    page.screenshot(path=f"/tmp/btc-touch-forecast-{width}.png")
-    page.get_by_role("radio", name="과거 비교", exact=True).tap()
-    page.get_by_text("비슷했던 시기", exact=True).wait_for()
-    # Streamlit renders the section heading before Plotly replaces the previous
-    # forecast. Inspect the actual comparison, never that still-visible chart.
-    page.wait_for_function(
-        "()=>[...document.querySelectorAll('.js-plotly-plot')].some(p=>p.getClientRects().length && p._fullData?.some(t=>t.name==='지금 흐름'))"
-    )
-    plot = page.locator(".js-plotly-plot:visible").first
-    for subplot in range(plot.locator(".nsewdrag").count()):
-        inspect(page, cdp, plot, event_log, f"comparison {subplot + 1}", subplot)
-    page.get_by_role("radio", name="예측 경로", exact=True).tap()
-    page.get_by_role("radio", name="모델·과거 경로", exact=True).tap()
-    page.get_by_text("함께 볼 과거 경로 · 유사도 순", exact=True).wait_for()
-    page.get_by_role("radio", name="2위", exact=True).tap()
-    page.get_by_text("당시에는", exact=False).first.wait_for()
-    removed = ("과거 예측 성적", "세부 유사도", "CSV", "다운로드")
-    labels = page.locator(
-        '[data-testid="stExpander"] summary, [data-testid="stDownloadButton"]'
-    ).all_text_contents()
-    assert not any(term in label for label in labels for term in removed)
-    assert page.evaluate("document.documentElement.scrollWidth<=innerWidth")
-    assert not page.locator('[data-testid="stException"]').count()
-    cleanup(page, crypto)
-    context.close()
-    return {
-        "width": width,
-        "touch_hover": "passed",
-        "follow_finger": "passed",
-        "zoom_disabled": "passed",
-        "page_scroll": "passed",
-        "controls_after_swipe": "passed",
-        "removed_footers": "passed",
-        "parent_analysis_checked": event_log is not None,
-    }
+    from check_chart_gestures import verify as current_verify
+
+    return current_verify(browser, width, url, event_log)
 
 
 if __name__ == "__main__":

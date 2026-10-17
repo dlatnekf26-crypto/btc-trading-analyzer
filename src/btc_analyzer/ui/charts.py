@@ -13,7 +13,7 @@ from plotly.subplots import make_subplots
 
 if TYPE_CHECKING:
     from btc_analyzer.strategy.signal_engine import Analysis
-from btc_analyzer.candles import candle_shift
+from btc_analyzer.market_clock import shift_bars
 
 READ_CHART_CONFIG = {
     "displaylogo": False,
@@ -30,6 +30,7 @@ def bind_asset(spec, asset_code):
     """Carry asset identity through browser updates and preserve XRP decimals."""
     asset = MARKETS[asset_code]
     spec["layout"]["meta"]["btcLive"]["symbol"] = asset.stream_symbol
+    spec["layout"]["uirevision"] = f"{asset.stream_symbol}-{spec['layout'].get('uirevision', 'chart')}"
     if asset.decimals > 2:
         spec["layout"]["yaxis"].update(tickformat=",.4f", hoverformat=",.4f")
         for trace in spec["data"]:
@@ -70,7 +71,7 @@ def add_ichimoku(fig: go.Figure, df: pd.DataFrame, frame: pd.DataFrame, timezone
     displacement = int(df.attrs.get("ichimoku_displacement", 26))
     timeframe = df.attrs.get("timeframe", "1h")
     recent = df.tail(min(displacement, int(df.bars_since_gap.iloc[-1])))
-    projected = candle_shift(recent.index, timeframe, displacement)
+    projected = shift_bars(df, recent.index, timeframe, displacement)
     future = projected > frame.index[-1]
     cloud = pd.DataFrame({"a": frame.ichimoku_cloud_a, "b": frame.ichimoku_cloud_b})
     ahead = pd.DataFrame(
@@ -83,42 +84,35 @@ def add_ichimoku(fig: go.Figure, df: pd.DataFrame, frame: pd.DataFrame, timezone
     for bullish in (True, False):
         mask = valid & ((cloud.a >= cloud.b) == bullish)
         groups = mask.ne(mask.shift()).cumsum()
+        xs, upper, lower = [], [], []
         for _, selected in mask[mask].groupby(groups).groups.items():
             part = cloud.loc[selected]
-            x = part.index.tz_convert(timezone)
-            color = "rgba(16,168,119,0.15)" if bullish else "rgba(233,75,101,0.13)"
-            edge = "rgba(16,168,119,0.45)" if bullish else "rgba(233,75,101,0.4)"
+            xs.extend([*part.index.tz_convert(timezone), None])
+            upper.extend([*part.a, None])
+            lower.extend([*part.b, None])
+        if not xs:
+            continue
+        color = "rgba(16,168,119,0.15)" if bullish else "rgba(233,75,101,0.13)"
+        edge = "rgba(16,168,119,0.45)" if bullish else "rgba(233,75,101,0.4)"
+        for values, fill in ((upper, False), (lower, True)):
             fig.add_trace(
                 go.Scatter(
-                    x=x,
-                    y=part.a,
+                    x=xs,
+                    y=values,
                     name="일목 구름",
                     mode="lines",
                     legendgroup="ichimoku-cloud",
-                    showlegend=show_legend,
+                    showlegend=show_legend and not fill,
+                    connectgaps=False,
                     line={"color": edge, "width": 1},
-                    hoverinfo="skip",
-                ),
-                row=1,
-                col=1,
-            )
-            fig.add_trace(
-                go.Scatter(
-                    x=x,
-                    y=part.b,
-                    name="일목 구름",
-                    mode="lines",
-                    legendgroup="ichimoku-cloud",
-                    showlegend=False,
-                    fill="tonexty",
+                    fill="tonexty" if fill else None,
                     fillcolor=color,
-                    line={"color": edge, "width": 1},
                     hoverinfo="skip",
                 ),
                 row=1,
                 col=1,
             )
-            show_legend = False
+        show_legend = False
     if detail:
         for key, label, color in (
             ("ichimoku_tenkan", "전환선", "#3182f6"),
@@ -134,7 +128,7 @@ def add_ichimoku(fig: go.Figure, df: pd.DataFrame, frame: pd.DataFrame, timezone
                 row=1,
                 col=1,
             )
-        lag_x = candle_shift(df.index, timeframe, -displacement)
+        lag_x = shift_bars(df, df.index, timeframe, -displacement)
         visible = lag_x >= frame.index[0]
         fig.add_trace(
             go.Scatter(

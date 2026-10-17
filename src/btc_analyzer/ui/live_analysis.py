@@ -10,7 +10,7 @@ from btc_analyzer.ui.browser_assets import browser_asset, live_analysis_js
 import streamlit as st
 
 from btc_analyzer.candles import candle_close
-from btc_analyzer.config import COMPOSITE_TIMEFRAMES
+from btc_analyzer.config import COMPOSITE_TIMEFRAMES, CHART_TIMEFRAMES
 from btc_analyzer.indicators.core import wilder
 from btc_analyzer.ui.cache_keys import MARKET_HASH_FUNCS
 
@@ -24,7 +24,7 @@ def live_seed_json(enriched, cfg):
     The caller supplies already closed, gap-aware feature frames.
     """
     frames = {}
-    for tf in COMPOSITE_TIMEFRAMES:
+    for tf in CHART_TIMEFRAMES:
         frame = enriched.get(tf)
         if frame is None or frame.empty:
             continue
@@ -96,6 +96,16 @@ def render_live_analysis(enriched, cfg, symbol="BTCUSDT"):
         )
         + '</div><p class="btc-live-note">진행 중 봉의 EMA·RSI·MACD·변동성·일목을 갱신해요. '
         "봉 마감 전 값은 바뀌며, 종합 매수·매도와 과거 검증은 확정 봉 기준이에요.</p></section>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_chart_seed(frame, timeframe, cfg, symbol):
+    """Only the selected chart supplements the five composite seeds."""
+    selected = frame[["open", "high", "low", "close", "volume", "bars_since_gap", "atr"]]
+    payload = escape(live_seed_json({timeframe: selected}, cfg), quote=True)
+    st.markdown(
+        f'<span id="btc-chart-seed" data-symbol="{escape(symbol, quote=True)}" data-seeds="{payload}" hidden></span>',
         unsafe_allow_html=True,
     )
 

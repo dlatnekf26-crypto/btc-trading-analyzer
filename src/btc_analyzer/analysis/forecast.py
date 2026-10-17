@@ -17,16 +17,16 @@ MIN_CALIBRATION = 12
 MAX_VALIDATION = 24
 
 
-HORIZON_LABELS = {"1w": "1주", "1mo": "1개월", "3mo": "3개월", "6mo": "6개월"}
+HORIZON_LABELS = {"1w": "1주", "2w": "2주", "1mo": "1개월", "2mo": "2개월", "3mo": "3개월", "6mo": "6개월"}
 
 
 def horizon_days(origin, horizon: str) -> int:
     """Daily-candle horizon ending on the actual UTC calendar anniversary."""
     origin = utc(origin).normalize()
-    if horizon == "1w":
-        target = origin + pd.Timedelta(days=7)
-    elif horizon in ("1mo", "3mo", "6mo"):
-        target = origin + pd.DateOffset(months={"1mo": 1, "3mo": 3, "6mo": 6}[horizon])
+    if horizon in ("1w", "2w"):
+        target = origin + pd.Timedelta(weeks={"1w": 1, "2w": 2}[horizon])
+    elif horizon in ("1mo", "2mo", "3mo", "6mo"):
+        target = origin + pd.DateOffset(months={"1mo": 1, "2mo": 2, "3mo": 3, "6mo": 6}[horizon])
     else:
         raise ValueError("지원하지 않는 예측 기간입니다.")
     return int((target - origin).days)

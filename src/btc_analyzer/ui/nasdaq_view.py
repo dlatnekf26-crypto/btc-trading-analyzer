@@ -4,7 +4,7 @@ import pandas as pd
 import requests
 import streamlit as st
 
-from btc_analyzer.config import AppConfig, COMPOSITE_TIMEFRAMES
+from btc_analyzer.config import AppConfig, CHART_TIMEFRAMES
 from btc_analyzer.data.nasdaq import fetch_history, aggregate
 from btc_analyzer.indicators.core import indicators
 from btc_analyzer.market_clock import bar_closes
@@ -59,7 +59,7 @@ def render_nasdaq():
                 tf = (
                     st.segmented_control(
                         "차트 시간대",
-                        COMPOSITE_TIMEFRAMES,
+                        CHART_TIMEFRAMES,
                         default="1d",
                         required=True,
                         format_func=FRAME_LABELS.get,
@@ -76,14 +76,14 @@ def render_nasdaq():
                     unsafe_allow_html=True,
                 )
                 spec = market_chart_spec(
-                    features.tail(420),
+                    features.tail(600),
                     "Asia/Seoul",
                     ("ema_20", "ema_50", "ema_200"),
                     True,
                     "pt",
-                    False,
-                    False,
-                    120,
+                    True,
+                    True,
+                    min(600, len(features)),
                     tf,
                     AppConfig().indicators.ichimoku_displacement,
                 )
@@ -111,7 +111,7 @@ def render_nasdaq():
                     else "지표에 필요한 연속 이력이 부족합니다."
                 )
                 st.caption(
-                    "좌우로 밀어 이동 · 길게 눌러 가격 확인. 일봉은 미국 정규 거래일 기준(단축장 제외), 주·월봉은 이 일봉을 합산해요. 휴장일은 가짜 봉으로 채우지 않아요."
+                    "드래그 이동 · 두 손가락으로 봉 수 조절 · 길게 눌러 가격 · 오토 가격축. 일봉은 미국 정규 거래일 기준(단축장 제외), 주·월봉은 이 일봉을 합산해요. 휴장일은 가짜 봉으로 채우지 않아요."
                 )
         if tabs[1].open:
             with tabs[1]:

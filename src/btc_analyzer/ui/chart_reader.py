@@ -18,6 +18,8 @@ FIELDS = {
     "bb_upper": "볼린저 상단",
     "bb_middle": "볼린저 중심",
     "bb_lower": "볼린저 하단",
+    "ichimoku_tenkan": "일목 전환선",
+    "ichimoku_kijun": "일목 기준선",
 }
 
 
@@ -25,6 +27,8 @@ def reader_html(frame, timeframe, asset_code, averages, bands):
     keys = ["open", "high", "low", "close", *averages]
     if bands:
         keys.extend(("bb_upper", "bb_middle", "bb_lower"))
+    if "ichimoku_tenkan" in frame:
+        keys.extend(("ichimoku_tenkan", "ichimoku_kijun"))
     row = frame.iloc[-1]
 
     def value(key):
@@ -40,15 +44,12 @@ def reader_html(frame, timeframe, asset_code, averages, bands):
         f'<section id="btc-chart-reader" class="btc-chart-reader" data-symbol="{MARKETS[asset_code].stream_symbol}" '
         f'data-timeframe="{escape(timeframe)}" data-decimals="{MARKETS[asset_code].decimals}" data-mode="latest" '
         'aria-label="가리킨 봉의 가격과 지표">'
-        '<div class="btc-cursor-reading">가리킨 가격 <b data-field="cursor">—</b><small> USDT</small></div>'
-        f'<div class="btc-reader-heading"><span data-reader-time>{at} KST · 마지막 확정 봉</span><span>USDT</span></div>'
+        '<div class="btc-chart-toolbar"><div class="btc-cursor-reading">가리킨 가격 <b data-field="cursor">—</b><small> USDT</small></div>'
+        '<button type="button" class="btc-chart-auto" data-chart-action="auto" aria-pressed="true" title="현재 보이는 캔들에 가격축을 맞춰요">오토</button></div>'
+        f'<div class="btc-reader-heading"><span data-reader-time>{at} KST · 마지막 확정 봉</span><span data-visible-bars></span></div>'
         f'<div class="btc-reader-values">{cells}</div>'
-        '<div class="btc-chart-nav" aria-label="차트 구간 이동">'
-        '<button type="button" data-chart-action="previous" aria-label="이전 차트 구간">← 이전 구간</button>'
-        '<button type="button" data-chart-action="latest">최신 봉</button>'
-        '<button type="button" data-chart-action="next" aria-label="다음 차트 구간">다음 구간 →</button></div>'
         "</section>"
     )
 
 
-CHART_READER_JS = browser_asset("chart-reader.js")
+CHART_READER_JS = browser_asset("chart-viewport.js") + browser_asset("chart-reader.js")

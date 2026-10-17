@@ -1,19 +1,19 @@
 // Pure UTC/protocol/indicator functions are also exercised against Python's
 // gap-aware full-history indicators. No SDK, extra socket or Python tick event.
 const LiveCandles = (()=>{
-  const frames=['1h','4h','1d','1w','1M'];
+  const analysisFrames=['1h','4h','1d','1w','1M'],frames=['5m','15m',...analysisFrames];
   const finite=n=>typeof n==='number' && Number.isFinite(n);
   function boundary(time,tf) {
     const d=new Date(time);
     if(tf==='1M') return Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),1);
     if(tf==='1w') return Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-(d.getUTCDay()+6)%7);
-    const span={'1h':3600000,'4h':14400000,'1d':86400000}[tf];
+    const span={'5m':300000,'15m':900000,'1h':3600000,'4h':14400000,'1d':86400000}[tf];
     return Math.floor(time/span)*span;
   }
   function end(time,tf) {
     const d=new Date(time);
     return tf==='1M' ? Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,1) :
-      time+({'1h':3600000,'4h':14400000,'1d':86400000,'1w':604800000}[tf]);
+      time+({'5m':300000,'15m':900000,'1h':3600000,'4h':14400000,'1d':86400000,'1w':604800000}[tf]);
   }
   function parse(packet,now,symbol='BTCUSDT') {
     const k=packet?.k, tf=k?.i;
@@ -59,5 +59,5 @@ const LiveCandles = (()=>{
     for(const [length,value] of Object.entries(ema)) features['ema_'+length]=n>=Number(length) ? value : null;
     return {at:k.at,end:k.end,count:n,rows,ema,gain,loss,signal,atr,features};
   }
-  return {frames,finite,boundary,end,parse,advance};
+  return {frames,analysisFrames,finite,boundary,end,parse,advance};
 })();

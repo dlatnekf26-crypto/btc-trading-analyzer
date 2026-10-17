@@ -74,7 +74,7 @@ def render_prediction(
     )
     comparison = outlook if mode == "comparison" else None
     show_range = st.toggle("예상 변동 범위 함께 보기", value=True, key="forecast_show_range")
-    show_indicators = st.toggle("예상 이평선·볼린저밴드", value=True, key="forecast_indicators")
+    show_indicators = True
     if st.session_state.get("forecast_analogue", 0) not in range(len(report.matches)):
         st.session_state["forecast_analogue"] = 0
     selected = st.session_state.get("forecast_analogue", 0)
@@ -240,7 +240,7 @@ def render_prediction(
             else ""
         )
         st.markdown(
-            f'<section id="btc-forecast-reader" class="btc-chart-reader" data-symbol="{asset.stream_symbol}" data-decimals="{asset.decimals}"><div class="btc-cursor-reading">가리킨 가격 <b data-field="cursor">—</b><small> {escape(quote)}</small></div><div class="btc-reader-heading"><span data-reader-time>길게 눌러 움직이면 예상 지표도 확인해요</span></div><div class="btc-reader-values">{cells}</div></section>',
+            f'<section id="btc-forecast-reader" class="btc-chart-reader" data-symbol="{asset.stream_symbol}" data-decimals="{asset.decimals}"><div class="btc-chart-toolbar"><div class="btc-cursor-reading">가리킨 가격 <b data-field="cursor">—</b><small> {escape(quote)}</small></div><button type="button" class="btc-chart-auto" data-chart-action="auto" aria-pressed="true" title="보이는 가격 경로에 가격축 맞춤">오토</button></div><div class="btc-reader-heading"><span data-reader-time>길게 눌러 움직이면 예상 지표도 확인해요</span></div><div class="btc-reader-values">{cells}</div></section>',
             unsafe_allow_html=True,
         )
         st.plotly_chart(
@@ -301,3 +301,7 @@ def render_prediction(
         st.caption(
             "변동 범위는 유사 사례의 분산과 현재 변동성으로 추정했습니다. 과거 오차 보정에 필요한 12회 검증이 아직 부족합니다."
         )
+
+    from btc_analyzer.ui.ai_view import render_ai_analysis
+
+    render_ai_analysis(result, quote, period, asset_code, context_values)

@@ -35,10 +35,18 @@ def verify(browser, width, url, event_log):
     page.wait_for_function("()=>document.querySelector('#btc-chart-reader')?.dataset.symbol==='NQ=F'")
     crypto.wait_for_function("()=>document.body.dataset.asset==='NQ=F'")
     assert not crypto.locator('.crypto[data-selected="true"]').count()
-    assert page.locator("#macro-nq").count() == 1
+    page.wait_for_function("()=>document.querySelectorAll('#macro-nq').length===1")
     assert page.get_by_text("공개 지연 자료", exact=False).is_visible()
     cdp = context.new_cdp_session(page)
-    for tf, label in (("1h", "1시간"), ("4h", "4시간"), ("1d", "일봉"), ("1w", "주봉"), ("1M", "월봉")):
+    for tf, label in (
+        ("5m", "5분"),
+        ("15m", "15분"),
+        ("1h", "1시간"),
+        ("4h", "4시간"),
+        ("1d", "일봉"),
+        ("1w", "주봉"),
+        ("1M", "월봉"),
+    ):
         page.get_by_role("radio", name=label, exact=True).tap()
         page.wait_for_function(
             "tf=>[...document.querySelectorAll('.js-plotly-plot')].some(p=>p.layout?.meta?.btcLive?.symbol==='NQ=F' && p.layout.meta.btcLive.timeframe===tf)",
@@ -46,7 +54,14 @@ def verify(browser, width, url, event_log):
         )
     inspect(page, cdp, page.locator(".js-plotly-plot:visible").first, event_log, "NQ monthly")
     page.get_by_role("tab", name="미래 예측", exact=True).tap()
-    for label, bounds in (("1주", (0, 10)), ("1개월", (10, 30)), ("3개월", (40, 80)), ("6개월", (90, 150))):
+    for label, bounds in (
+        ("1주", (0, 10)),
+        ("2주", (5, 15)),
+        ("1개월", (10, 30)),
+        ("2개월", (30, 60)),
+        ("3개월", (40, 80)),
+        ("6개월", (90, 150)),
+    ):
         page.get_by_role("radio", name=label, exact=True).tap()
         page.wait_for_function(
             "bounds=>[...document.querySelectorAll('.js-plotly-plot')].some(p=>p.layout?.meta?.btcLive?.symbol==='NQ=F' && p.layout.meta.btcLive.kind==='forecast' && Object.keys(p.layout.meta.btcLive.indicatorOverlays ?? {}).length===6 && p.data[3].x.length>bounds[0] && p.data[3].x.length<bounds[1])",
@@ -55,8 +70,10 @@ def verify(browser, width, url, event_log):
         plot = page.locator(".js-plotly-plot:visible").first
         assert not page.locator("#btc-live-forecast").count()
         # Every predicted close is a US regular trading date, never a weekend.
-        assert plot.evaluate(
-            "p=>p.data[3].x.every(x=>![0,6].includes(new Date(new Date(x).getTime()-9*3600000).getUTCDay()))"
+        assert page.evaluate(
+            """()=>[...document.querySelectorAll('.js-plotly-plot')]
+              .find(p=>p.getClientRects().length && p.layout?.meta?.btcLive?.kind==='forecast')
+              .data[3].x.every(x=>![0,6].includes(new Date(new Date(x).getTime()-9*3600000).getUTCDay()))"""
         )
     inspect(page, cdp, plot, event_log, "NQ forecast")
     assert "pt" in page.locator("#btc-forecast-reader").inner_text()
@@ -77,7 +94,7 @@ def verify(browser, width, url, event_log):
     context.close()
     return {
         "width": width,
-        "NQ_five_frames_four_horizons": True,
+        "NQ_seven_frames_six_horizons": True,
         "crypto_isolation_and_return": True,
         "js_errors": errors,
     }

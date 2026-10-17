@@ -103,3 +103,25 @@ def test_selected_nq_has_own_chart_forecast_and_returns_to_crypto(tmp_path, monk
         assert not app.exception and not app.error
         spec = json.loads(app.get("plotly_chart")[0].proto.spec)
         assert spec["layout"]["meta"]["btcLive"]["symbol"] == "ETHUSDT"
+
+
+@pytest.mark.parametrize("tf", ["5m", "15m"])
+def test_short_nq_sessions_stay_bounded_and_ichimoku_skips_weekend(tf):
+    from btc_analyzer.market_clock import shift_bars
+
+    starts, ends = calendar_bars("2026-10-01", "2026-10-30", tf)
+    index = starts[ends <= NOW][-600:]
+    frame = pd.DataFrame(
+        {"open": 20000.0, "high": 20010.0, "low": 19990.0, "close": 20000.0, "volume": 100.0}, index=index
+    )
+    frame.attrs = {
+        "market": "NQ",
+        "bar_starts": tuple(map(int, starts.asi8)),
+        "bar_ends": tuple(map(int, ends.asi8)),
+        "timeframe": tf,
+    }
+    feature = indicators(frame, timeframe=tf)
+    assert feature.bars_since_gap.iloc[-1] == 600 and pd.notna(feature.ema_200.iloc[-1])
+    shifted = shift_bars(frame, frame.index[-1:], tf, 26)
+    assert shifted[0].weekday() == 0
+    assert len(starts) < 7000

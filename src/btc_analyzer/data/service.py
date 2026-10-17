@@ -88,7 +88,7 @@ class DataService:
         Forced refresh and expired same-boundary data perform a full request.
         Missing latest candles or provider failures never pass as fresh history.
         """
-        if exchange not in ("Binance", "Upbit") or timeframe not in COMPOSITE_TIMEFRAMES:
+        if exchange not in ("Binance", "Upbit") or timeframe not in TIMEFRAMES:
             raise ValueError("Unsupported historical market")
         if not isinstance(bars, int) or not 1 <= bars <= 3000:
             raise ValueError("History must contain 1–3000 candles")

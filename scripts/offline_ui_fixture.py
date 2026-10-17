@@ -41,6 +41,20 @@ def fixture_rows(checkout: str, end: str):
     }
 
 
+@lru_cache(maxsize=8)
+def short_fixture_rows(timeframe, boundary):
+    import numpy as np
+
+    span = pd.Timedelta(minutes=5 if timeframe == "5m" else 15)
+    index = pd.date_range(end=pd.Timestamp(boundary) - span, periods=800, freq=span)
+    x = np.arange(len(index))
+    close = 90000 * np.exp(0.012 * np.sin(x / 17) + 0.005 * np.cos(x / 7))
+    return [
+        [int(t.timestamp() * 1000), float(c * 0.999), float(c * 1.003), float(c * 0.997), float(c), 1000.0]
+        for t, c in zip(index, close)
+    ]
+
+
 @contextmanager
 def offline_market_data(checkout: Path):
     end = pd.Timestamp.now(tz="UTC").floor("h").isoformat()
@@ -52,9 +66,17 @@ def offline_market_data(checkout: Path):
             if symbol not in scales:
                 raise AssertionError(f"Unexpected analysis market: {symbol}")
             scale = scales[symbol]
+            selected_rows = (
+                rows[timeframe]
+                if timeframe not in ("5m", "15m")
+                else short_fixture_rows(
+                    timeframe,
+                    pd.Timestamp.now(tz="UTC").floor("5min" if timeframe == "5m" else "15min").isoformat(),
+                )
+            )
             return [
                 [row[0], *[value * scale for value in row[1:5]], row[5]]
-                for row in rows[timeframe]
+                for row in selected_rows
                 if row[0] >= since
             ][:limit]
 
@@ -151,12 +173,18 @@ def offline_context_data():
         if host == "query1.finance.yahoo.com":
             symbol = unquote(urlsplit(url).path.rsplit("/", 1)[-1])
             interval = parse_qs(urlsplit(url).query).get("interval", ["1m"])[0]
-            if symbol == "NQ=F" and interval in ("1d", "1h"):
+            if symbol == "NQ=F" and interval in ("5m", "15m", "1d", "1h"):
                 import numpy as np
                 from btc_analyzer.data.nasdaq import calendar_bars
 
                 starts, ends = calendar_bars(
-                    2000 if interval == "1d" else now.year - 1, now.year + 1, interval
+                    str((now - timedelta(days=14)).date())
+                    if interval in ("5m", "15m")
+                    else 2000
+                    if interval == "1d"
+                    else now.year - 1,
+                    str((now + timedelta(days=1)).date()) if interval in ("5m", "15m") else now.year + 1,
+                    interval,
                 )
                 starts = starts[ends <= now][-6600 if interval == "1d" else -3500 :]
                 x = np.arange(len(starts))

@@ -17,13 +17,18 @@ YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/NQ%3DF"
 def calendar_bars(start_year, end_year, timeframe):
     import pandas_market_calendars as calendars
 
-    schedule = calendars.get_calendar("CME_Equity").schedule(f"{start_year}-01-01", f"{end_year}-12-31")
-    if timeframe in ("1h", "4h"):
+    start = f"{start_year}-01-01" if isinstance(start_year, int) else str(start_year)
+    end = f"{end_year}-12-31" if isinstance(end_year, int) else str(end_year)
+    schedule = calendars.get_calendar("CME_Equity").schedule(start, end)
+    if timeframe in ("5m", "15m", "1h", "4h"):
         starts, ends = [], []
         for row in schedule.itertuples():
-            hours = pd.date_range(row.market_open, row.market_close, freq="1h", inclusive="left")
+            span = pd.Timedelta(minutes={"5m": 5, "15m": 15, "1h": 60, "4h": 60}[timeframe])
+            hours = pd.date_range(row.market_open, row.market_close, freq=span, inclusive="left")
+            if pd.notna(row.break_start) and row.break_start < row.break_end:
+                hours = hours[(hours < row.break_start) | (hours >= row.break_end)]
             starts.extend(hours)
-            ends.extend(min(t + pd.Timedelta(hours=1), row.market_close) for t in hours)
+            ends.extend(min(t + span, row.market_close) for t in hours)
         bars = pd.DataFrame({"start": starts, "end": ends})
         if timeframe == "4h":
             bars = bars.groupby(bars.start.dt.floor("4h")).agg(start=("start", "min"), end=("end", "max"))
@@ -31,7 +36,7 @@ def calendar_bars(start_year, end_year, timeframe):
     else:
         # Yahoo's daily NQ series publishes US equity trading dates, omitting
         # full equity holidays even when Globex trades a shortened session.
-        publication = calendars.get_calendar("NYSE").schedule(f"{start_year}-01-01", f"{end_year}-12-31")
+        publication = calendars.get_calendar("NYSE").schedule(start, end)
         published = publication.index[
             publication.market_close.dt.tz_convert("America/New_York").dt.hour == 16
         ]
@@ -60,15 +65,15 @@ def trading_dates(origin, timeframe, count):
 def horizon_bars(origin, horizon):
     origin = pd.Timestamp(origin)
     target = origin + (
-        pd.Timedelta(weeks=1)
-        if horizon == "1w"
-        else pd.DateOffset(months={"1mo": 1, "3mo": 3, "6mo": 6}[horizon])
+        pd.Timedelta(weeks={"1w": 1, "2w": 2}[horizon])
+        if horizon in ("1w", "2w")
+        else pd.DateOffset(months={"1mo": 1, "2mo": 2, "3mo": 3, "6mo": 6}[horizon])
     )
     return sum(origin < at <= target for at in trading_dates(origin, "1d", 150))
 
 
 def parse_history(payload, timeframe, now):
-    if timeframe not in ("1h", "1d"):
+    if timeframe not in ("5m", "15m", "1h", "1d"):
         raise ValueError("선물 원자료는 1시간/일봉으로 수집합니다.")
     result = payload.get("chart", {}).get("result")
     if not isinstance(result, list) or len(result) != 1:
@@ -100,12 +105,22 @@ def parse_history(payload, timeframe, now):
     valid &= frame.high >= frame[["open", "low", "close"]].max(axis=1)
     valid &= frame.low <= frame[["open", "high", "close"]].min(axis=1)
     frame = frame.loc[valid]
-    if timeframe != "1h":
+    if timeframe == "1d":
         local = frame.index.tz_convert("America/New_York")
         frame = frame.loc[(local.hour == 0) & (local.minute == 0) & (local.second == 0)]
     if frame.empty:
         raise ValueError("유효한 NQ 봉이 없습니다.")
-    starts, ends = calendar_bars(frame.index[0].year, pd.Timestamp(now).year + 1, timeframe)
+    calendar_start = (
+        str((frame.index[0] - pd.Timedelta(days=2)).date())
+        if timeframe in ("5m", "15m")
+        else frame.index[0].year
+    )
+    calendar_end = (
+        str((pd.Timestamp(now) + pd.Timedelta(days=14)).date())
+        if timeframe in ("5m", "15m")
+        else pd.Timestamp(now).year + 1
+    )
+    starts, ends = calendar_bars(calendar_start, calendar_end, timeframe)
     expected = starts[ends <= now]
     frame = frame.loc[frame.index.isin(expected)]
     frame.index.name = "timestamp"
@@ -120,7 +135,7 @@ def parse_history(payload, timeframe, now):
 
 
 def fetch_history(timeframe, now):
-    params = {"interval": timeframe, "range": "6mo"}
+    params = {"interval": timeframe, "range": "1mo" if timeframe in ("5m", "15m") else "6mo"}
     if timeframe == "1d":
         params = {
             "interval": "1d",

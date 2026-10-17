@@ -3,6 +3,7 @@
   let ACTIVE_SYMBOL = 'BTCUSDT';
   /* LIVE_ANALYSIS_BRIDGE */
   /* CHART_READER_BRIDGE */
+  /* AI_FORECAST_BRIDGE */
   /* PWA_BRIDGE */
   const MAX_POINTS = 61, STALE_MS = 15000, DRAW_MS = 50;
   const MARKET_ASSETS = [['BTC','binance','비트코인',2],['ETH','ethereum','이더리움',2],['SOL','solana','솔라나',2],['XRP','ripple','리플',4]];
@@ -32,7 +33,7 @@
   configs.push({id:'upbit',market:'upbit',symbol:'KRW-BTC',decimals:0,changeLabel:'전일 대비',restGap:11000,
     socket:'wss://api.upbit.com/websocket/v1',ticker:'https://api.upbit.com/v1/ticker?markets=KRW-BTC',history:null});
   const streams=configs.filter(c=>c.market==='binance').flatMap(c=>[c.symbol.toLowerCase()+'@aggTrade',c.symbol.toLowerCase()+'@ticker']);
-  const klineStreams=symbol=>symbol==='NQ=F'?[]:['1h','4h','1d','1w','1M'].map(tf=>symbol.toLowerCase()+'@kline_'+tf);
+  const klineStreams=symbol=>symbol==='NQ=F'?[]:LiveCandles.frames.map(tf=>symbol.toLowerCase()+'@kline_'+tf);
   let subscribedSymbol=null,subscriptionId=0,lastSubscriptionAt=0,selectionTimer=null;
   let disposed = false, paintTimer = null;
   const states = configs.map(config => ({...config, el:document.getElementById(config.id), points:[],
@@ -129,6 +130,7 @@
       paintMoves();
       const selected=states.find(s=>s.symbol===ACTIVE_SYMBOL);
       if(selected) liveAnalysis.paint({symbol:ACTIVE_SYMBOL,price:selected.price,event:selected.lastEvent,fresh:fresh(selected)});
+      try{for(const plot of window.parent.document.querySelectorAll('.js-plotly-plot'))if(plot.isConnected&&plot.getClientRects().length){chartReader.refresh(plot);if(!chartReader.isInteracting(plot))aiForecast.paint(plot);}}catch(_){}
     }, DRAW_MS);
   }
   function addPoint(s, time, price) {

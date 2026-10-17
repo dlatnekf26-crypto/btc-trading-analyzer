@@ -203,13 +203,9 @@ button:focus-visible { outline: 3px solid #3182f666; outline-offset: 3px; }
 .st-key-chart_controls [role="radio"]{padding:9px 10px;min-height:44px}
 .btc-chart-reader{border-top:1px solid #f0f2f5;padding-top:12px;min-width:0;font-variant-numeric:tabular-nums}
 .btc-reader-heading{display:flex;justify-content:space-between;gap:8px;color:#6b7684;font-size:11px;margin-bottom:10px}
-.btc-reader-values{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:9px 14px;min-height:82px}
+.btc-reader-values{display:flex;overflow-x:auto;gap:18px;min-height:0;padding-bottom:7px;scrollbar-width:thin;touch-action:pan-x pan-y}
 .btc-reader-values>div{min-width:0;grid-column:span 2}.btc-reader-values>div:nth-child(-n+4){grid-column:span 3}.btc-reader-values span{display:block;font-size:11px;color:#8b95a1}.btc-reader-values b{display:block;font-size:14px;font-weight:600;color:#333d4b;white-space:nowrap}
-.btc-read-open,.btc-read-high,.btc-read-low,.btc-read-close{grid-row:1}
 .btc-read-ema_20 span{color:#b67e1e}.btc-read-ema_50 span{color:#3182f6}.btc-read-ema_200 span{color:#8c65da}
-.btc-chart-nav{display:flex;align-items:center;justify-content:space-between;gap:5px;margin-top:11px}
-.btc-chart-nav button{border:0;border-radius:10px;background:#f7f9fc;color:#6b7684;min-height:44px;padding:9px 12px;font:inherit;font-size:12px;cursor:pointer;touch-action:manipulation}
-.btc-chart-nav button[data-chart-action="latest"]{color:#3182f6;background:#eef5ff;font-weight:600}
 [data-testid="stTabs"] [role="tablist"]{border:0;border-bottom:1px solid #edf0f4;background:#fff;border-radius:0;padding:0;gap:15px}
 [data-testid="stTabs"] [role="tab"]{border-radius:0;padding:12px 3px;color:#8b95a1}
 [data-testid="stTabs"] [role="tab"][aria-selected="true"]{background:#fff;color:#191f28;box-shadow:inset 0 -2px #191f28}
@@ -226,3 +222,13 @@ button:focus-visible { outline: 3px solid #3182f666; outline-offset: 3px; }
 .btc-cursor-reading{color:#6b7684;font-size:12px;margin:0 0 12px}.btc-cursor-reading b{font-size:21px;color:#191f28;margin-left:8px;font-variant-numeric:tabular-nums}.btc-cursor-reading small{font-size:10px}
 .btc-crosshair{position:absolute;inset:0;pointer-events:none;z-index:4;font-variant-numeric:tabular-nums}.btc-crosshair[hidden]{display:none}.btc-crosshair i,.btc-crosshair b,.btc-crosshair span{position:absolute;display:block}.btc-crosshair-x{border-left:1px dashed #758195}.btc-crosshair-y{border-top:1px dashed #758195}.btc-crosshair-price,.btc-crosshair-time{background:#333d4b;color:white;border-radius:4px;padding:3px 5px;font-size:11px;white-space:nowrap;line-height:16px}.btc-crosshair-time{font-size:10px}
 .st-key-selected_future .btc-macro-grid{grid-template-columns:1fr}.st-key-selected_future .btc-macro-card{border:0;padding:4px 2px 12px}.st-key-selected_future .btc-macro-value{font-size:38px}.st-key-selected_future .btc-macro-graph{max-width:220px}.st-key-selected_future .btc-macro-card p{margin:3px 0}.st-key-selected_future .btc-macro-status{min-height:0}
+
+/* Charts keep their controls local; the surrounding page still scrolls. */
+.btc-chart-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.btc-chart-auto{border:0;border-radius:10px;padding:9px 14px;min-height:40px;background:#f2f4f6;color:#6b7684;font:inherit;font-size:12px;font-weight:700;cursor:pointer;touch-action:manipulation}
+.btc-chart-auto[aria-pressed="true"]{background:#eaf2ff;color:#216bdd}
+.btc-reader-values>div{flex:0 0 auto;min-width:72px}.btc-reader-values b{font-size:12px}
+.st-key-chart_controls [data-testid="stButtonGroup"]>div{flex-wrap:nowrap;overflow-x:auto;max-width:100%;scrollbar-width:none}
+[data-testid="stPlotlyChart"] .main-svg{-webkit-touch-callout:none;user-select:none}
+
+.btc-ai-card{border:1px solid #e6def5;border-radius:18px;background:#fbf9ff;padding:18px 20px;margin:12px 0}.btc-ai-card>span{font-size:12px;color:#7c57bd}.btc-ai-card strong{display:block;font-size:27px;color:#573c88;margin:8px 0}.btc-ai-card p{color:#53647b;font-size:13px;margin:5px 0}.btc-ai-reasons{font-size:13px;color:#53647b;padding-left:20px}

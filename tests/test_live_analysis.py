@@ -28,7 +28,7 @@ def javascript(body, payload=None):
     return json.loads(result.stdout)
 
 
-@pytest.mark.parametrize("tf", ["1h", "4h", "1d", "1w", "1M"])
+@pytest.mark.parametrize("tf", ["5m", "15m", "1h", "4h", "1d", "1w", "1M"])
 @pytest.mark.parametrize("bars", [14, 25, 33, 79, 300])
 def test_live_recursive_and_rolling_values_match_full_history(tf, bars):
     cfg = IndicatorConfig()

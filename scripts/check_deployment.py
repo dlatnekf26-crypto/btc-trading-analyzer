@@ -77,10 +77,8 @@ def main() -> None:
         assert any("주황색" in item.value for item in app.caption)
         app.session_state["dashboard_tab"] = "시장 개요"
         app.run(timeout=45)
-        next(item for item in app.get("button_group") if item.label == "차트 보기").set_value("상세").run(
-            timeout=45
-        )
-        assert not app.exception and not app.error
+        assert not any(item.label == "차트 보기" for item in app.get("button_group"))
+        assert any('data-chart-action="auto"' in item.value for item in app.markdown)
         control = next(item for item in app.get("button_group") if item.label == "차트 시간대")
         control.set_value("1M").run(timeout=45)
         assert not app.exception and not app.error
@@ -88,7 +86,7 @@ def main() -> None:
         assert sys.modules["btc_analyzer.candles"] is candle_module
         assert not (Path(directory) / "sessions").exists()
         print(
-            "PASS: public checkout startup, 2 focused tabs, Binance BTC/USDT, Ichimoku/detail/monthly charts, medium/long-term signals, forecast/uncertainty/validation and historical analogues; no account storage"
+            "PASS: public checkout startup, 2 focused tabs, Binance BTC/USDT, always-on Ichimoku/EMA/bands and monthly charts, medium/long-term signals, forecast/uncertainty/validation and historical analogues; no account storage"
         )
         if legacy is not None:
             print("PASS: retained legacy candles recovered; ordinary reruns preserve module identity")

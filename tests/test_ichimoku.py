@@ -103,9 +103,9 @@ def test_monthly_cloud_projection_is_calendar_geometry_only(bars):
     assert pd.Timestamp(candle.x[-1]).tz_convert("UTC") == features.index[-1]
     cloud = [trace for trace in figure.data if trace.legendgroup == "ichimoku-cloud"]
     assert cloud
-    plotted_end = max(pd.Timestamp(t).tz_convert("UTC") for trace in cloud for t in trace.x)
+    plotted_end = max(pd.Timestamp(t).tz_convert("UTC") for trace in cloud for t in trace.x if t is not None)
     assert plotted_end == candle_shift(features.index[-1], "1M", 26)
-    assert all(pd.Timestamp(t).day == 1 for trace in cloud for t in trace.x)
+    assert all(pd.Timestamp(t).day == 1 for trace in cloud for t in trace.x if t is not None)
     lag = next(trace for trace in figure.data if trace.name == "후행스팬")
     assert pd.Timestamp(lag.x[-1]).tz_convert("UTC") == candle_shift(features.index[-1], "1M", -26)
     assert lag.y[-1] == features.close.iloc[-1]

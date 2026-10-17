@@ -2,6 +2,7 @@
 
 from html import escape
 from btc_analyzer.assets import price_text
+from btc_analyzer.analysis.ai_forecast import forecast_key
 
 import numpy as np
 import pandas as pd
@@ -319,6 +320,7 @@ def prediction_chart(
         meta={
             "btcLive": {
                 "kind": "forecast",
+                "aiBasis": forecast_key(result),
                 "timezone": timezone,
                 "anchor": report.anchor_price,
                 "baseAt": int(prediction.dates[0].timestamp() * 1000),

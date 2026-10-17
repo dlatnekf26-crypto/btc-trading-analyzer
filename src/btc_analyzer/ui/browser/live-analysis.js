@@ -12,22 +12,27 @@ function makeLiveAnalysis(root) {
     return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}`;
   }
   function load() {
-    const node=doc.getElementById('btc-live-analysis'),raw=node?.dataset.seeds;
-    if(node!==host) {host=node;dirty=true;}
-    if(node?.dataset.symbol && node.dataset.symbol!==symbol) {symbol=node.dataset.symbol;books={};payload=null;latestQuote=null;}
-    if(!raw || raw===payload) return;
-    try {
-      const parsed=JSON.parse(raw); cfg=parsed.cfg;
-      for(const tf of LiveCandles.frames) {
-        const seed=parsed.frames[tf],book=books[tf];
-        if(seed && (!book || seed.at>book.seed.at)) {
-          const candle=book?.candle;
-          books[tf]={seed,candle:candle?.at===seed.end ? candle : null,features:null};
-          if(books[tf].candle) books[tf].features=LiveCandles.advance(seed,candle,cfg)?.features ?? null;
+    const node=doc.getElementById('btc-live-analysis'),chart=doc.getElementById('btc-chart-seed');
+    const selected=node?.dataset.symbol ?? chart?.dataset.symbol;
+    const sources=[node,chart].filter(n=>n&&n.dataset.symbol===selected&&n.dataset.seeds);
+    const raw=sources.map(n=>n.dataset.seeds).join('|');
+    if(node!==host){host=node;dirty=true;}
+    if(selected&&selected!==symbol){symbol=selected;books={};payload=null;latestQuote=null;}
+    if(!raw||raw===payload)return;
+    try{
+      for(const source of sources){
+        const parsed=JSON.parse(source.dataset.seeds);cfg=parsed.cfg;
+        for(const [tf,seed] of Object.entries(parsed.frames)){
+          const book=books[tf];
+          if(seed&&(!book||seed.at>book.seed.at)){
+            const candle=book?.candle;
+            books[tf]={seed,candle:candle?.at===seed.end?candle:null,features:null};
+            if(books[tf].candle)books[tf].features=LiveCandles.advance(seed,candle,cfg)?.features??null;
+          }
         }
       }
       payload=raw;dirty=true;
-    } catch(_) { /* Incomplete DOM replacement is retried on the next heartbeat. */ }
+    }catch(_){/* Retry incomplete DOM replacement on the next heartbeat. */}
   }
   function accept(packet) {
     load(); const k=LiveCandles.parse(packet,Date.now(),symbol);
@@ -112,7 +117,7 @@ function makeLiveAnalysis(root) {
     const card=doc.getElementById('btc-live-forecast');
     const live=quote?.fresh && LiveCandles.finite(quote.price) && quote.price>0 && quote.event>=meta.baseAt &&
       quote.event<=now+3000 && now-quote.event<=15000;
-    const active=LiveCandles.frames.filter(tf=>current(books[tf],now));
+    const active=LiveCandles.analysisFrames.filter(tf=>current(books[tf],now));
     text(card?.querySelector('.btc-live-status'),live ? `현재가 출발 · ${clock.format(new Date(quote.event))} KST · 잠정 지표 ${active.length}/5` : '시세 수신 대기/지연 · 조건부 경로 갱신 보류');
     if(!live) return;
     const ratio=quote.price/meta.anchor, center=meta.center.map(y=>y*ratio), lower=meta.lower.map(y=>y*ratio), upper=meta.upper.map(y=>y*ratio);
@@ -175,7 +180,7 @@ function makeLiveAnalysis(root) {
     load();if(quote?.symbol && quote.symbol!==symbol) return;
     const now=Date.now();lastPaint=now;watchDistance(quote,now);
     if(host) {
-      const active=LiveCandles.frames.filter(tf=>current(books[tf],now));
+      const active=LiveCandles.analysisFrames.filter(tf=>current(books[tf],now));
       text(host.querySelector('.btc-live-status'),active.length ? `실시간 ${active.length}/5 · ${clock.format(new Date(Math.max(...active.map(tf=>books[tf].candle.event))))} KST` : '봉 수신 대기/지연');
       for(const tf of LiveCandles.frames) {
         const b=books[tf],node=host.querySelector(`[data-tf="${tf}"]`);

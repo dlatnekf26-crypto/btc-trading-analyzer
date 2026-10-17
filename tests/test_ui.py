@@ -1,5 +1,6 @@
 """Exercise the actual Streamlit script and important interactive workflows."""
 
+import json
 from pathlib import Path
 from streamlit.testing.v1 import AppTest
 import pytest
@@ -103,7 +104,7 @@ def test_optional_monthly_failure_keeps_dashboard_but_vetoes_signal(monkeypatch,
     assert any("Monthly endpoint" in item.value for item in app.markdown)
     next(x for x in app.get("button_group") if x.label == "차트 시간대").set_value("1M").run()
     assert not app.exception and not app.error
-    assert any("월봉 데이터를 받지 못했습니다" in item.value for item in app.info)
+    assert any("선택한 시간대의 자료" in item.value for item in app.info)
 
 
 def test_ichimoku_view_and_overlay_controls_preserve_signal(monkeypatch, tmp_path):
@@ -114,21 +115,13 @@ def test_ichimoku_view_and_overlay_controls_preserve_signal(monkeypatch, tmp_pat
     assert not any("일목균형표, 이렇게 읽어요" in item.value for item in app.subheader)
     reader = next(item.value for item in app.markdown if 'id="btc-chart-reader"' in item.value)
     assert all(key in reader for key in ("ema_20", "ema_50", "ema_200", "bb_upper", "bb_lower"))
-    next(item for item in app.get("button_group") if item.label == "차트 보기").set_value("상세").run()
-    assert not app.exception and not app.error
-    assert any(item.label == "표시할 봉 수" for item in app.select_slider)
-    assert all(
-        "가격 영역" not in option.content
-        for item in app.get("button_group")
-        if item.label == "겹쳐 볼 지표"
-        for option in item.proto.options
-    )
-    next(item for item in app.get("button_group") if item.label == "겹쳐 볼 지표").set_value(
-        ["일목균형표", "이동평균선", "볼린저밴드"]
-    ).run()
-    assert not app.exception and not app.error
-    assert any("일목 구름은 확정 봉의 이동 표시" in item.value for item in app.caption)
-    assert any("현재 봉의 구름 위치" in item.value for item in app.caption)
-    next(item for item in app.get("button_group") if item.label == "겹쳐 볼 지표").set_value([]).run()
+    assert not any(item.label in ("차트 보기", "겹쳐 볼 지표") for item in app.get("button_group"))
+    assert not any(item.label == "표시할 봉 수" for item in app.select_slider)
+    figure = json.loads(app.get("plotly_chart")[0].proto.spec)
+    names = {trace["name"] for trace in figure["data"]}
+    assert {"일목 구름", "전환선", "기준선", "후행스팬", "EMA 20", "볼린저 밴드"} <= names
+    assert sum(trace["name"] == "일목 구름" for trace in figure["data"]) <= 4
+    assert 'data-chart-action="previous"' not in reader and 'data-chart-action="auto"' in reader
+    next(x for x in app.get("button_group") if x.label == "차트 시간대").set_value("15m").run()
     assert not app.exception and not app.error
     assert next(item.value for item in app.markdown if 'aria-label="종합 신호 근거"' in item.value) == summary
