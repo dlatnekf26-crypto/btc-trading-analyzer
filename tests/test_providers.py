@@ -198,3 +198,42 @@ def test_binance_ticker_rejects_invalid_values(ticker):
 
     with pytest.raises(DataError, match="현재가 응답"):
         BinanceProvider(Client()).quote("BTC/USDT")
+
+
+def test_public_klines_skips_exchange_catalogue_and_preserves_rows():
+    import ccxt
+
+    client = ccxt.binance()
+    calls = []
+    start = pd.Timestamp("2025-01-01T00:00Z")
+    ms = int(start.timestamp() * 1000)
+    rows = [[ms + i * 3600000, "10", "12", "9", "11", "100", ms, "0", 1, "0", "0", "0"] for i in range(2)]
+
+    def request(path, api, method, params, *args, **kwargs):
+        calls.append((path, api, method, params))
+        return rows
+
+    def catalogue(*args, **kwargs):
+        pytest.fail("Public candle retrieval must not download all exchange markets")
+
+    client.request, client.load_markets = request, catalogue
+    result = BinanceProvider(client).fetch("BTC/USDT", "1h", start, start + pd.Timedelta(hours=2))
+    assert len(calls) == 1
+    assert calls[0] == (
+        "klines",
+        "public",
+        "GET",
+        {"symbol": "BTCUSDT", "interval": "1h", "startTime": ms, "limit": 1000},
+    )
+    expected = normalize([row[:6] for row in rows], "1h")
+    pd.testing.assert_frame_equal(result, expected)
+
+
+@pytest.mark.parametrize("rows", [{"code": -1}, [[1, 2, 3]], [None]])
+def test_public_klines_rejects_malformed_shape(rows):
+    class Client:
+        def publicGetKlines(self, params):
+            return rows
+
+    with pytest.raises(DataError, match="Malformed"):
+        BinanceProvider(Client()).fetch("BTC/USDT", "1h", "2025-01-01", "2025-01-02")

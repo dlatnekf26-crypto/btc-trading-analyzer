@@ -2,6 +2,7 @@
 
 import ccxt
 import math
+import re
 import pandas as pd
 from typing import Callable
 from btc_analyzer.config import TIMEFRAMES
@@ -30,6 +31,25 @@ class BinanceProvider(BaseExchangeProvider):
         )
 
     def _fetch_page(self, symbol: str, timeframe: str, cursor: int) -> list:
+        public = getattr(self.client, "publicGetKlines", None)
+        if callable(public):
+            if not re.fullmatch(r"[A-Z0-9]+/[A-Z0-9]+", symbol):
+                raise DataError("Binance spot symbol must use BASE/QUOTE.")
+            # Public spot klines need no full exchangeInfo/market catalogue.
+            # Keep CCXT's TLS, proxy, rate limiting and normalized failures.
+            rows = self._public_call(
+                lambda: public(
+                    {
+                        "symbol": symbol.replace("/", ""),
+                        "interval": timeframe,
+                        "startTime": cursor,
+                        "limit": 1000,
+                    }
+                )
+            )
+            if not isinstance(rows, list) or any(not isinstance(r, list) or len(r) < 6 for r in rows):
+                raise DataError("Malformed Binance public klines response")
+            return [row[:6] for row in rows]
         return self._public_call(lambda: self.client.fetch_ohlcv(symbol, timeframe, since=cursor, limit=1000))
 
     def _public_call(self, call: Callable) -> object:

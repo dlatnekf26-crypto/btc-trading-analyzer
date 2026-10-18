@@ -25,7 +25,12 @@ def quotes_document():
     for marker, value in (
         ("AI_FORECAST_BRIDGE", browser_asset("ai-forecast.js")),
         ("LIVE_ANALYSIS_BRIDGE", live_analysis_js()),
-        ("CHART_READER_BRIDGE", browser_asset("chart-viewport.js") + browser_asset("chart-reader.js")),
+        (
+            "CHART_READER_BRIDGE",
+            browser_asset("chart-viewport.js")
+            + browser_asset("chart-preview.js")
+            + browser_asset("chart-reader.js"),
+        ),
         ("PWA_BRIDGE", browser_asset("install.js")),
         ("RATES_BRIDGE", browser_asset("rates.js")),
         ("MACRO_BRIDGE", browser_asset("macro-quotes.js")),

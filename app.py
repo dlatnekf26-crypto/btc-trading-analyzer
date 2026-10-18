@@ -20,7 +20,6 @@ from dotenv import load_dotenv
 from btc_analyzer.config import AppConfig
 from btc_analyzer.assets import MARKETS
 from btc_analyzer.candles import candle_boundary
-from btc_analyzer.data.service import DataService
 from btc_analyzer.data.base_provider import DataError
 from btc_analyzer.ui.analysis_cache import market_snapshot
 from btc_analyzer.ui.presentation import BRAND, CSS, decision_panel
@@ -80,6 +79,8 @@ render_live_prices(asset_code)
 
 @st.cache_data(ttl=60, max_entries=12, show_spinner=False)
 def get_live_bundle(cache: str, market: str, pair: str, tf: str, start, end, _refresh=False) -> dict:
+    from btc_analyzer.data.service import DataService
+
     return DataService(cache).bundle(market, pair, tf, start, end, include_macro=True, refresh=_refresh)
 
 

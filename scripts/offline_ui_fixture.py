@@ -61,6 +61,15 @@ def offline_market_data(checkout: Path):
     rows = fixture_rows(str(checkout.resolve()), end)
 
     class Client:
+        def publicGetKlines(self, params):
+            rows = self.fetch_ohlcv(
+                params["symbol"].removesuffix("USDT") + "/USDT",
+                params["interval"],
+                params["startTime"],
+                params["limit"],
+            )
+            return [[*row, row[0], "0", 1, "0", "0", "0"] for row in rows]
+
         def fetch_ohlcv(self, symbol, timeframe, since, limit):
             scales = {"BTC/USDT": 1, "ETH/USDT": 0.03, "SOL/USDT": 0.0015, "XRP/USDT": 0.000012}
             if symbol not in scales:

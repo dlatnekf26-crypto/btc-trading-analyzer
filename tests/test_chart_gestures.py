@@ -122,3 +122,24 @@ console.log(JSON.stringify({
     data = json.loads(result.stdout)
     assert data["above"] == [108, 118] and data["below"] == [92, 102]
     assert data["inside"] == [99, 105] and data["flat"] == [100, 110]
+
+
+def test_svg_preview_maps_data_coordinates_and_restores_original_styles():
+    source = Path(__file__).resolve().parents[1] / "src/btc_analyzer/ui/browser/chart-preview.js"
+    script = (
+        source.read_text()
+        + """
+const node={style:{transform:'',transformOrigin:''}},x={range:[10,20],r2c:n=>n,_length:100},y={range:[100,200],_length:100};
+const plot={_fullLayout:{_plots:{xy:{xaxis:x,yaxis:y}},yaxis:y},querySelector:()=>({children:[node]})};
+const preview=ChartPreview.create(plot);
+preview.show([12,17],{'yaxis.range':[150,250]});
+const during={...node.style};preview.clear();
+console.log(JSON.stringify({during,after:node.style,x:ChartPreview.matrix([10,20],[12,17],100),y:ChartPreview.matrix([100,200],[150,250],100,true)}));
+"""
+    )
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True)
+    data = json.loads(result.stdout)
+    assert data["x"] == {"scale": 2, "offset": -40}
+    assert data["y"] == {"scale": 1, "offset": 50}
+    assert data["during"]["transform"] == "matrix(2,0,0,1,-40,50)"
+    assert data["after"] == {"transform": "", "transformOrigin": ""}

@@ -117,7 +117,7 @@ const chartReader = (() => {
   function apply(plot,range,yRange) {
     range=view.limit(range,bounds(plot));
     const s=state(plot);s.next={range,yRange};
-    if(s.busy)return;
+    if(s.busy)return s.promise;
     const next=s.next;s.next=null;s.busy=true;
     const xaxis=plot._fullLayout.xaxis;
     const updates={'xaxis.range':next.range.map(n=>xaxis.c2d(n)),'yaxis.autorange':false};
@@ -132,27 +132,43 @@ const chartReader = (() => {
       }else if(key==='yaxis.autorange'&&plot._fullLayout.yaxis.autorange===false)delete updates[key];
     }
     if(!Object.keys(updates).length){s.busy=false;return;}
-    root.Plotly.relayout(plot,updates).catch(()=>{}).finally(()=>{
+    s.promise=root.Plotly.relayout(plot,updates).catch(()=>{}).then(()=>{
       s.busy=false;
-      if(s.next&&!disposed&&plot.isConnected&&states.get(plot)===s&&plot.layout?.uirevision===s.revision){const queued=s.next;apply(plot,queued.range,queued.yRange);}
+      if(s.next&&!disposed&&plot.isConnected&&states.get(plot)===s&&plot.layout?.uirevision===s.revision){const queued=s.next;return apply(plot,queued.range,queued.yRange);}
     });
+    return s.promise;
+  }
+  function preview(g,range,yRange){
+    const s=g.state,updates=s.auto?autoRange(g.plot,range):yRange?autoRange(g.plot,range,yRange):{};
+    if(!s.preview)s.preview={drawing:ChartPreview.create(g.plot)};
+    s.preview.range=range;s.preview.yRange=updates['yaxis.range']??g.yRange;
+    if(!s.preview.drawing.supported){apply(g.plot,range,yRange);return;}
+    s.preview.drawing.show(range,updates);g.plot.dataset.gesturePreview='true';
   }
   function queue(work){pending=work;if(raf===null)raf=root.requestAnimationFrame(()=>{raf=null;const work=pending;pending=null;work?.();});}
-  function cancel(){if(pressTimer!==null)root.clearTimeout(pressTimer);pressTimer=null;if(raf!==null)root.cancelAnimationFrame(raf);raf=null;pending=null;if(active)liveAnalysis.hold(active.plot,false);active=null;}
+  function cancel(keepPreview=false,commit=false){
+    if(pressTimer!==null)root.clearTimeout(pressTimer);pressTimer=null;if(raf!==null)root.cancelAnimationFrame(raf);raf=null;pending=null;
+    const g=active;active=null;if(!g)return;
+    const view=g.state.preview;
+    if(!keepPreview){view?.drawing.clear();g.state.preview=null;delete g.plot.dataset.gesturePreview;}
+    const release=()=>{if(active?.plot!==g.plot)liveAnalysis.hold(g.plot,false);};
+    if(commit&&view&&currentGesture(g))Promise.resolve(apply(g.plot,view.range,view.yRange)).finally(release);else release();
+  }
   const point=t=>({x:t.clientX,y:t.clientY});
-  function begin(part,points,mode) {
+  function begin(part,points,mode,view) {
     const box=part.rect.getBoundingClientRect(),first=points[0],last=points.at(-1);
     const mid={x:(first.x+last.x)/2,y:(first.y+last.y)/2};
-    active={...part,revision:part.plot.layout?.uirevision,mode,x:mid.x,y:mid.y,box,range:part.axis.range.map(n=>part.axis.r2c(n)),yRange:part.yaxis.range.map(Number),bounds:bounds(part.plot),distance:Math.max(10,Math.hypot(last.x-first.x,last.y-first.y))};
+    active={...part,state:state(part.plot),data:part.plot.data,revision:part.plot.layout?.uirevision,mode,x:mid.x,y:mid.y,box,range:view?.range??part.axis.range.map(n=>part.axis.r2c(n)),yRange:view?.yRange??part.yaxis.range.map(Number),bounds:bounds(part.plot),distance:Math.max(10,Math.hypot(last.x-first.x,last.y-first.y))};
     liveAnalysis.hold(part.plot,true);
   }
   function start(event) {
-    const part=geometry(event.target);cancel();clearCursor();if(!part)return;
+    const part=geometry(event.target),view=part&&active?.plot===part.plot?active.state.preview:null;
+    cancel(Boolean(view));clearCursor();if(!part)return;
     event.stopPropagation();
-    if(event.touches.length===2){event.preventDefault();begin(part,Array.from(event.touches,point),'pinch');return;}
+    if(event.touches.length===2){event.preventDefault();begin(part,Array.from(event.touches,point),'pinch',view);return;}
     if(event.touches.length!==1)return;
     if(!state(part.plot).auto)event.preventDefault();
-    begin(part,[point(event.touches[0])],'pending');show(active);
+    begin(part,[point(event.touches[0])],'pending',view);show(active);
     pressTimer=root.setTimeout(()=>{pressTimer=null;if(active)active.mode='inspect';},350);
   }
   function pan(p,g=active) {
@@ -160,7 +176,7 @@ const chartReader = (() => {
     const dx=(p.x-g.x)/g.box.width*(g.range[1]-g.range[0]),dy=(p.y-g.y)/g.box.height*(g.yRange[1]-g.yRange[0]);
     const range=view.limit(g.range.map(n=>n-dx),g.bounds);
     state(g.plot).follow=range[1]>=g.bounds.xs.at(-1);
-    clearCursor();apply(g.plot,range,g.primary?g.yRange.map(n=>n+dy):null);
+    clearCursor();preview(g,range,g.primary?g.yRange.map(n=>n+dy):null);
   }
   function move(event) {
     if(!active)return;
@@ -170,7 +186,7 @@ const chartReader = (() => {
       event.stopPropagation();event.preventDefault();const g=active,points=Array.from(event.touches,point);
       const mid={x:(points[0].x+points[1].x)/2,y:(points[0].y+points[1].y)/2},scale=Math.hypot(points[1].x-points[0].x,points[1].y-points[0].y)/g.distance;
       queue(()=>{if(!currentGesture(g))return;const range=view.limit(view.pinch(g.range,g.x-g.box.left,mid.x-g.box.left,g.box.width,scale),g.bounds);
-        const y=view.pinch(g.yRange,g.box.bottom-g.y,g.box.bottom-mid.y,g.box.height,scale);clearCursor();apply(g.plot,range,g.primary?y:null);state(g.plot).follow=range[1]>=g.bounds.xs.at(-1);});return;
+        const y=view.pinch(g.yRange,g.box.bottom-g.y,g.box.bottom-mid.y,g.box.height,scale);clearCursor();preview(g,range,g.primary?y:null);state(g.plot).follow=range[1]>=g.bounds.xs.at(-1);});return;
     }
     if(event.touches.length!==1||active.mode==='pinch'){cancel();return;}
     const p=point(event.touches[0]),dx=p.x-active.x,dy=p.y-active.y;
@@ -181,14 +197,13 @@ const chartReader = (() => {
     event.stopPropagation();if(active.mode!=='pending'&&event.cancelable)event.preventDefault();
     const g=active;queue(()=>g.mode==='pan'?pan(p,g):show({...g,...p}));
   }
-  function currentGesture(g){return g.plot.isConnected&&reader(g.plot)&&g.plot.layout?.uirevision===g.revision;}
+  function currentGesture(g){return g.plot.isConnected&&g.plot.data===g.data&&reader(g.plot)&&g.plot.layout?.uirevision===g.revision;}
   function end(event){
     const previous=active;
     if(previous){event.stopPropagation();if(pending){const work=pending;pending=null;work();}}
-    cancel();
-    if(previous?.mode==='pinch'&&event.touches?.length===1&&previous.plot.isConnected){
-      const part=geometry(event.target);if(part)begin(part,[point(event.touches[0])],'pan');
-    }
+    const continuing=previous?.mode==='pinch'&&event.touches?.length===1&&currentGesture(previous);
+    const view=previous?.state.preview;cancel(Boolean(continuing),!continuing);
+    if(continuing){const part=geometry(event.target);if(part)begin(part,[point(event.touches[0])],'pan',view);}
   }
   function mouse(event){
     if(event.sourceCapabilities?.firesTouchEvents)return;
@@ -217,7 +232,7 @@ const chartReader = (() => {
   function abort(){cancel();clearCursor();}
   function hidden(){if(doc.hidden)abort();}
   function context(event){if(geometry(event.target))event.preventDefault();}
-  const listeners=[['visibilitychange',hidden,{}],['touchstart',start,{capture:true,passive:false}],['touchmove',move,{capture:true,passive:false}],['touchend',end,{capture:true,passive:true}],['touchcancel',abort,{capture:true,passive:true}],['mousemove',mouse,{capture:true,passive:true}],['mousedown',mouseStart,{capture:true,passive:false}],['mouseup',cancel,{capture:true,passive:true}],['contextmenu',context,{capture:true}],['click',controls,{}]];
+  const listeners=[['visibilitychange',hidden,{}],['touchstart',start,{capture:true,passive:false}],['touchmove',move,{capture:true,passive:false}],['touchend',end,{capture:true,passive:true}],['touchcancel',abort,{capture:true,passive:true}],['mousemove',mouse,{capture:true,passive:true}],['mousedown',mouseStart,{capture:true,passive:false}],['mouseup',end,{capture:true,passive:true}],['contextmenu',context,{capture:true}],['click',controls,{}]];
   for(const [name,handler,options] of listeners)doc.addEventListener(name,handler,options);
   return {inspect,refresh,isInteracting:plot=>active?.plot===plot,dispose(){disposed=true;abort();for(const [name,handler,options] of listeners)doc.removeEventListener(name,handler,options);doc.querySelectorAll('.btc-crosshair').forEach(n=>n.remove());}};
 })();
