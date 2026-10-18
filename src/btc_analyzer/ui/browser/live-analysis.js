@@ -6,9 +6,10 @@ function makeLiveAnalysis(root) {
   const array=PlotData.values;
   const clock=new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
   function text(node,value) {if(node && node.textContent!==value) node.textContent=value;}
-  function displayDate(time,zone='Asia/Seoul') {
+  function displayDate(time,zone='Asia/Seoul',numeric=false) {
     if(!formatters.has(zone)) formatters.set(zone,new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}));
     const p=Object.fromEntries(formatters.get(zone).formatToParts(new Date(time)).map(p=>[p.type,p.value]));
+    if(numeric)return Date.UTC(+p.year,+p.month-1,+p.day,+p.hour,+p.minute,+p.second);
     return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}`;
   }
   function load() {
@@ -77,11 +78,19 @@ function makeLiveAnalysis(root) {
       // Include a closed candle observed since the server snapshot, then the
       // current candle. A missing intervening candle stops updates above.
       const extra=b.seed.rows.filter(r=>r[0]>=meta.closedEnd).concat(k.closed ? [] : [k.row]);
+      const extraX=extra.map(r=>displayDate(r[0],meta.timezone,true));
+      // Plotly restyle re-infers matched axes from numeric timestamps. Update
+      // dates and explicit axis types together, retaining the user's viewport.
+      const dateAxes={};
+      for(const name of ['xaxis','xaxis2'])if(plot._fullLayout[name]){
+        dateAxes[`${name}.type`]='date';dateAxes[`${name}.autorange`]=false;
+        dateAxes[`${name}.range`]=plot._fullLayout[name].range.slice();
+      }
       const lines={x:[],y:[],'marker.color':[]},lineIndices=[];
       for(let i=0;i<state.base.length;i++) {
         const trace=state.base[i];
         if(trace.type!=='candlestick' && trace.type!=='bar') continue;
-        const xs=[...array(trace.x),...extra.map(r=>displayDate(r[0],meta.timezone))].slice(-meta.bars);
+        const xs=[...array(trace.x),...extraX].slice(-meta.bars);
         const updates={x:[xs]};
         for(const [field,column] of [['open',1],['high',2],['low',3],['close',4]])
           if(trace.type==='candlestick') updates[field]=[[...array(trace[field]),...extra.map(r=>r[column])].slice(-meta.bars)];
@@ -90,7 +99,7 @@ function makeLiveAnalysis(root) {
           lines.y.push([...array(trace.y),...extra.map(r=>r[5])].slice(-meta.bars));
           lines['marker.color'].push([...array(trace.marker.color),...extra.map(r=>r[4]>=r[1] ? '#34d399' : '#fb7185')].slice(-meta.bars));
         } else {
-          if(extra.length) await root.Plotly.restyle(plot,updates,[i]);
+          if(extra.length) await root.Plotly.update(plot,updates,dateAxes,[i]);
         }
       }
       if(!extra.length) return;
@@ -98,10 +107,10 @@ function makeLiveAnalysis(root) {
         const trace=state.base[index];
         const ys=extra.map(r=>r[0]===k.at ? b.features[column] : r[0]===b.seed.at ? b.seed.features?.[column] ?? null : null);
         lineIndices.push(Number(index));
-        lines.x.push([...array(trace.x),...extra.map(r=>displayDate(r[0],meta.timezone))].slice(-meta.bars));
+        lines.x.push([...array(trace.x),...extraX].slice(-meta.bars));
         lines.y.push([...array(trace.y),...ys].slice(-meta.bars));lines['marker.color'].push(null);
       }
-      await root.Plotly.restyle(plot,lines,lineIndices);
+      await root.Plotly.update(plot,lines,dateAxes,lineIndices);
       if(doc.getElementById('btc-chart-reader')?.dataset.mode==='latest')
         chartReader.inspect(plot,Infinity,'latest');
       // Overlays from the server remain explicitly closed-candle geometry.

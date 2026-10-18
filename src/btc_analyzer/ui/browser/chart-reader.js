@@ -93,12 +93,12 @@ const chartReader = (() => {
     const d=plot.layout.meta?.btcLive?.displacement??2;
     return {xs,step,count:xs.length,min:xs[0]-step*2,max:xs.at(-1)+step*Math.max(2,d)};
   }
-  function autoRange(plot,range) {
+  function autoRange(plot,range,manualY) {
     const axis=plot._fullLayout.xaxis,candle=plot.data.find(t=>t.type==='candlestick');
     const updates={};
     if(candle){
       const xs=times(candle.x,axis),fit=view.extent(xs,values(candle.low),values(candle.high),range);
-      if(fit)updates['yaxis.range']=fit.range;
+      if(fit)updates['yaxis.range']=manualY?view.priceLimit(manualY,fit.prices):fit.range;
       const volume=plot.data.find(t=>t.type==='bar');
       if(fit&&volume){const ys=values(volume.y);let max=1;for(let i=fit.begin;i<fit.end;i++)if(Number.isFinite(ys[i]))max=Math.max(max,ys[i]);updates['yaxis2.range']=[0,max*1.12];}
       write(reader(plot)?.querySelector('[data-visible-bars]'),fit?`${fit.end-fit.begin}봉 보기`:'');
@@ -110,18 +110,19 @@ const chartReader = (() => {
         const xs=times(trace.x,axis),ys=values(trace.y),fit=view.extent(xs,ys,ys,range);
         if(fit){low=Math.min(low,fit.range[0]);high=Math.max(high,fit.range[1]);}
       }
-      if(Number.isFinite(low)&&Number.isFinite(high))updates['yaxis.range']=[low,high];
+      if(Number.isFinite(low)&&Number.isFinite(high))updates['yaxis.range']=manualY?view.priceLimit(manualY,[low,high]):[low,high];
     }
     return updates;
   }
   function apply(plot,range,yRange) {
+    range=view.limit(range,bounds(plot));
     const s=state(plot);s.next={range,yRange};
     if(s.busy)return;
     const next=s.next;s.next=null;s.busy=true;
     const xaxis=plot._fullLayout.xaxis;
     const updates={'xaxis.range':next.range.map(n=>xaxis.c2d(n)),'yaxis.autorange':false};
     if(plot._fullLayout.xaxis2)updates['xaxis2.range']=updates['xaxis.range'];
-    Object.assign(updates,s.auto?autoRange(plot,next.range):next.yRange?{'yaxis.range':next.yRange}:{});
+    Object.assign(updates,s.auto?autoRange(plot,next.range):next.yRange?autoRange(plot,next.range,next.yRange):{});
     plot.dataset.autoScale=String(s.auto);
     for(const key of Object.keys(updates)){
       if(key.endsWith('.range')){
@@ -133,7 +134,7 @@ const chartReader = (() => {
     if(!Object.keys(updates).length){s.busy=false;return;}
     root.Plotly.relayout(plot,updates).catch(()=>{}).finally(()=>{
       s.busy=false;
-      if(s.next&&!disposed&&plot.isConnected&&states.get(plot)===s){const queued=s.next;apply(plot,queued.range,queued.yRange);}
+      if(s.next&&!disposed&&plot.isConnected&&states.get(plot)===s&&plot.layout?.uirevision===s.revision){const queued=s.next;apply(plot,queued.range,queued.yRange);}
     });
   }
   function queue(work){pending=work;if(raf===null)raf=root.requestAnimationFrame(()=>{raf=null;const work=pending;pending=null;work?.();});}
@@ -142,7 +143,7 @@ const chartReader = (() => {
   function begin(part,points,mode) {
     const box=part.rect.getBoundingClientRect(),first=points[0],last=points.at(-1);
     const mid={x:(first.x+last.x)/2,y:(first.y+last.y)/2};
-    active={...part,mode,x:mid.x,y:mid.y,box,range:part.axis.range.map(n=>part.axis.r2c(n)),yRange:part.yaxis.range.map(Number),bounds:bounds(part.plot),distance:Math.max(10,Math.hypot(last.x-first.x,last.y-first.y))};
+    active={...part,revision:part.plot.layout?.uirevision,mode,x:mid.x,y:mid.y,box,range:part.axis.range.map(n=>part.axis.r2c(n)),yRange:part.yaxis.range.map(Number),bounds:bounds(part.plot),distance:Math.max(10,Math.hypot(last.x-first.x,last.y-first.y))};
     liveAnalysis.hold(part.plot,true);
   }
   function start(event) {
@@ -155,6 +156,7 @@ const chartReader = (() => {
     pressTimer=root.setTimeout(()=>{pressTimer=null;if(active)active.mode='inspect';},350);
   }
   function pan(p,g=active) {
+    if(!currentGesture(g))return;
     const dx=(p.x-g.x)/g.box.width*(g.range[1]-g.range[0]),dy=(p.y-g.y)/g.box.height*(g.yRange[1]-g.yRange[0]);
     const range=view.limit(g.range.map(n=>n-dx),g.bounds);
     state(g.plot).follow=range[1]>=g.bounds.xs.at(-1);
@@ -162,11 +164,12 @@ const chartReader = (() => {
   }
   function move(event) {
     if(!active)return;
+    if(!currentGesture(active)){cancel();clearCursor();return;}
     if(event.touches.length===2){
       if(active.mode!=='pinch'){cancel();return;}
       event.stopPropagation();event.preventDefault();const g=active,points=Array.from(event.touches,point);
       const mid={x:(points[0].x+points[1].x)/2,y:(points[0].y+points[1].y)/2},scale=Math.hypot(points[1].x-points[0].x,points[1].y-points[0].y)/g.distance;
-      queue(()=>{const range=view.limit(view.pinch(g.range,g.x-g.box.left,mid.x-g.box.left,g.box.width,scale),g.bounds);
+      queue(()=>{if(!currentGesture(g))return;const range=view.limit(view.pinch(g.range,g.x-g.box.left,mid.x-g.box.left,g.box.width,scale),g.bounds);
         const y=view.pinch(g.yRange,g.box.bottom-g.y,g.box.bottom-mid.y,g.box.height,scale);clearCursor();apply(g.plot,range,g.primary?y:null);state(g.plot).follow=range[1]>=g.bounds.xs.at(-1);});return;
     }
     if(event.touches.length!==1||active.mode==='pinch'){cancel();return;}
@@ -178,6 +181,7 @@ const chartReader = (() => {
     event.stopPropagation();if(active.mode!=='pending'&&event.cancelable)event.preventDefault();
     const g=active;queue(()=>g.mode==='pan'?pan(p,g):show({...g,...p}));
   }
+  function currentGesture(g){return g.plot.isConnected&&reader(g.plot)&&g.plot.layout?.uirevision===g.revision;}
   function end(event){
     const previous=active;
     if(previous){event.stopPropagation();if(pending){const work=pending;pending=null;work();}}

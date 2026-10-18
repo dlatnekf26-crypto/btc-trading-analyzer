@@ -74,3 +74,51 @@ def test_short_charts_and_six_periods_share_existing_analysis(tmp_path, monkeypa
         target = origin + (pd.Timedelta(weeks=2) if horizon == "2w" else pd.DateOffset(months=2))
         assert pd.Timestamp(spec["data"][3]["x"][-1]) == target
     assert any("OpenAI 연결 대기" in item.value for item in app.info)
+
+
+def test_pan_keeps_real_candles_at_edges_and_across_exchange_gaps():
+    source = Path(__file__).resolve().parents[1] / "src/btc_analyzer/ui/browser/chart-viewport.js"
+    script = (
+        source.read_text()
+        + """
+const failures=[];
+// Continuous crypto, a weekend/session gap, and sparse/single-bar histories.
+for(const xs of [Array.from({length:600},(_,i)=>i*300000),
+  [...Array.from({length:20},(_,i)=>i*300000),...Array.from({length:20},(_,i)=>(i+800)*300000)],
+  [0,300000], [0]]){
+  const bounds={xs,count:xs.length,step:300000,min:xs[0]-600000,max:xs.at(-1)+26*300000};
+  for(const span of [1,3600000,18000000,1e14]){
+    for(let i=-10;i<850;i++){
+      const range=ChartViewport.limit([i*300000,i*300000+span],bounds);
+      if(!range.every(Number.isFinite)||range[0]>=range[1]||!xs.some(x=>range[0]<=x&&x<=range[1]))failures.push({xs:xs.length,span,i,range});
+    }
+  }
+}
+const xs=Array.from({length:600},(_,i)=>i*300000),bounds={xs,count:600,step:300000,min:-600000,max:xs.at(-1)+26*300000};
+const tail=ChartViewport.limit([1e14,1e14+3600000],bounds);
+console.log(JSON.stringify({failures,tailCount:xs.filter(x=>tail[0]<=x&&x<=tail[1]).length}));
+"""
+    )
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True)
+    data = json.loads(result.stdout)
+    assert not data["failures"], data["failures"][:3]
+    assert data["tailCount"] >= 3
+
+
+def test_manual_price_pan_keeps_candles_visible_without_resetting_zoom():
+    source = Path(__file__).resolve().parents[1] / "src/btc_analyzer/ui/browser/chart-viewport.js"
+    script = (
+        source.read_text()
+        + """
+console.log(JSON.stringify({
+  above:ChartViewport.priceLimit([1000,1010],[100,110]),
+  below:ChartViewport.priceLimit([0,10],[100,110]),
+  inside:ChartViewport.priceLimit([99,105],[100,110]),
+  flat:ChartViewport.priceLimit([1000,1010],[100,100])
+}));
+"""
+    )
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True)
+    data = json.loads(result.stdout)
+    assert data["above"] == [108, 118] and data["below"] == [92, 102]
+    assert data["inside"] == [99, 105] and data["flat"] == [100, 110]
