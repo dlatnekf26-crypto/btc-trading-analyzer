@@ -129,6 +129,11 @@
       paintMacro();
       paintMoves();
       const selected=states.find(s=>s.symbol===ACTIVE_SYMBOL);
+      if(selected){
+        const current=selected.transport!=='history'&&selected.price!==null;
+        chartReader.currentQuote(ACTIVE_SYMBOL,current?selected.price:NaN,current?
+          `${fresh(selected)?(selected.transport==='ws'?'실시간':'조회 시세'):'수신 지연 · 마지막 가격'} · ${clock(selected.lastEvent)} KST`:'현재가 연결 중');
+      }
       if(selected) liveAnalysis.paint({symbol:ACTIVE_SYMBOL,price:selected.price,event:selected.lastEvent,fresh:fresh(selected)});
       try{for(const plot of window.parent.document.querySelectorAll('.js-plotly-plot'))if(plot.isConnected&&plot.getClientRects().length){chartReader.refresh(plot);if(!chartReader.isInteracting(plot))aiForecast.paint(plot);}}catch(_){}
     }, DRAW_MS);

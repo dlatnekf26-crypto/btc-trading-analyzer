@@ -1,7 +1,7 @@
 /* Local pan/pinch, visible-candle auto scale and a free price cursor. */
 const chartReader = (() => {
   let root,doc;
-  try {root=window.parent;doc=root.document;}catch(_){return {inspect(){},refresh(){},dispose(){}};}
+  try {root=window.parent;doc=root.document;}catch(_){return {inspect(){},refresh(){},currentQuote(){},dispose(){}};}
   const {values,times,nearest}=PlotData, view=ChartViewport;
   const states=new WeakMap(),cards=new WeakMap();
   const money=Object.fromEntries([2,4].map(n=>[n,new Intl.NumberFormat('en-US',{minimumFractionDigits:n,maximumFractionDigits:n})]));
@@ -21,9 +21,15 @@ const chartReader = (() => {
   function number(node,key,n) {
     let cache=cards.get(node);if(!cache){cache={};cards.set(node,cache);}
     const text=Number.isFinite(n)?money[node.dataset.decimals||2].format(n):'—';
-    if(cache[key]!==text){cache[key]=text;write(node.querySelector(`[data-field="${key}"]`),text);}
+    const field=node.querySelector(`[data-field="${key}"]`);
+    if(cache[key]!==text||field?.textContent!==text){cache[key]=text;write(field,text);}
   }
-  function inspect(plot,x,mode='inspect',price) {
+  function currentQuote(symbol,price,status){
+    for(const node of doc.querySelectorAll('.btc-chart-reader'))if(node.dataset.symbol===symbol){
+      number(node,'current',price);write(node.querySelector('[data-current-status]'),status);
+    }
+  }
+  function inspect(plot,x,mode='inspect') {
     const node=reader(plot),meta=plot?.layout?.meta?.btcLive,axis=plot?._fullLayout?.xaxis;
     if(!node||!axis)return;
     const candle=plot.data.find(t=>t.type==='candlestick');
@@ -36,7 +42,6 @@ const chartReader = (() => {
       }
       write(node.querySelector('[data-reader-time]'),`${view.label(ts[i])} KST · ${mode==='latest'?'최근 봉':'선택한 봉'}`);
       node.dataset.index=String(i);node.dataset.at=String(ts[i]);
-      if(mode==='latest')price=values(candle.close)[i];
     }else if(meta.kind==='forecast'){
       for(const [index,key] of Object.entries(meta.indicatorOverlays??{})){
         const trace=plot.data[index],tx=times(trace.x,axis),i=nearest(tx,x);
@@ -44,7 +49,6 @@ const chartReader = (() => {
       }
       write(node.querySelector('[data-reader-time]'),`${view.label(x)} KST · 경로 가정의 지표`);
     }
-    if(Number.isFinite(price))number(node,'cursor',price);
     node.dataset.mode=mode;
   }
   function clearCursor(){if(last){last.hidden=true;last=null;}}
@@ -81,7 +85,7 @@ const chartReader = (() => {
     Object.assign(t.style,{top:top+bounds.height-19+'px',left:Math.max(left,Math.min(left+bounds.width-128,left+px-64))+'px'});
     write(t,view.label(x));
     point.plot.dataset.cursorPrice=String(price);point.plot.dataset.cursorX=String(x);
-    inspect(point.plot,x,'inspect',price);
+    inspect(point.plot,x,'inspect');
   }
   function bounds(plot) {
     const axis=plot._fullLayout.xaxis,candle=plot.data.find(t=>t.type==='candlestick');
@@ -234,5 +238,5 @@ const chartReader = (() => {
   function context(event){if(geometry(event.target))event.preventDefault();}
   const listeners=[['visibilitychange',hidden,{}],['touchstart',start,{capture:true,passive:false}],['touchmove',move,{capture:true,passive:false}],['touchend',end,{capture:true,passive:true}],['touchcancel',abort,{capture:true,passive:true}],['mousemove',mouse,{capture:true,passive:true}],['mousedown',mouseStart,{capture:true,passive:false}],['mouseup',end,{capture:true,passive:true}],['contextmenu',context,{capture:true}],['click',controls,{}]];
   for(const [name,handler,options] of listeners)doc.addEventListener(name,handler,options);
-  return {inspect,refresh,isInteracting:plot=>active?.plot===plot,dispose(){disposed=true;abort();for(const [name,handler,options] of listeners)doc.removeEventListener(name,handler,options);doc.querySelectorAll('.btc-crosshair').forEach(n=>n.remove());}};
+  return {inspect,refresh,currentQuote,isInteracting:plot=>active?.plot===plot,dispose(){disposed=true;abort();for(const [name,handler,options] of listeners)doc.removeEventListener(name,handler,options);doc.querySelectorAll('.btc-crosshair').forEach(n=>n.remove());}};
 })();

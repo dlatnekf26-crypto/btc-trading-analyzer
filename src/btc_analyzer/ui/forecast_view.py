@@ -240,7 +240,7 @@ def render_prediction(
             else ""
         )
         st.markdown(
-            f'<section id="btc-forecast-reader" class="btc-chart-reader" data-symbol="{asset.stream_symbol}" data-decimals="{asset.decimals}"><div class="btc-chart-toolbar"><div class="btc-cursor-reading">가리킨 가격 <b data-field="cursor">—</b><small> {escape(quote)}</small></div><button type="button" class="btc-chart-auto" data-chart-action="auto" aria-pressed="true" title="보이는 가격 경로에 가격축 맞춤">오토</button></div><div class="btc-reader-heading"><span data-reader-time>길게 눌러 움직이면 예상 지표도 확인해요</span></div><div class="btc-reader-values">{cells}</div></section>',
+            f'<section id="btc-forecast-reader" class="btc-chart-reader" data-symbol="{asset.stream_symbol}" data-decimals="{asset.decimals}"><div class="btc-chart-toolbar"><div class="btc-cursor-reading">현재 가격 <b data-field="current">—</b><small> {escape(quote)}</small><span class="btc-current-status" data-current-status>현재가 연결 중</span></div><button type="button" class="btc-chart-auto" data-chart-action="auto" aria-pressed="true" title="보이는 가격 경로에 가격축 맞춤">오토</button></div><div class="btc-reader-heading"><span data-reader-time>길게 눌러 움직이면 예상 지표도 확인해요</span></div><div class="btc-reader-values">{cells}</div></section>',
             unsafe_allow_html=True,
         )
         st.plotly_chart(

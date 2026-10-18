@@ -93,7 +93,11 @@
         s.points=[...el.dataset.points.split(',').map(Number).filter(p=>validNumber(p)&&p>0),...s.points].slice(-60);
         s.graphDirty=true;
       }
-      if (!s.stream || s.price===null) continue;
+      if (!s.stream || s.price===null) {
+        if(symbol==='NQ=F')chartReader.currentQuote(symbol,s.price,
+          s.price===null?'현재가 연결 중':`${el.dataset.status==='stale'?'조회 지연 · 마지막 가격':'공개 지연 시세'} · ${clock(s.asOf)} KST`);
+        continue;
+      }
       const rebound=s.node!==el || Object.values(s.nodes || {}).some(node=>node && !node.isConnected);
       if (rebound) {
         s.node=el;
@@ -124,6 +128,8 @@
       }
       if (el.dataset.status!==s.tone) el.dataset.status=s.tone;
       write(s.nodes.status,s.statusText);write(s.nodes.badge,s.badgeText);
+      if(symbol==='NQ=F')chartReader.currentQuote(symbol,s.price,
+        `${s.tone==='stale'?'수신 지연 · 마지막 가격':s.delay===0?'공개 스트림':'공개 지연 시세'} · ${clock(s.asOf)} KST`);
       const graph=s.nodes.graph;
       if (graph && (s.graphDirty || graph.firstElementChild!==s.svgNode)) {
         if (s.points.length>1) {
