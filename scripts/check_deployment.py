@@ -6,11 +6,10 @@ import sys
 from tempfile import TemporaryDirectory
 from types import ModuleType
 
-from streamlit.testing.v1 import AppTest
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from offline_ui_fixture import offline_market_data  # noqa: E402
+from offline_ui_fixture import offline_market_data, analysis_app  # noqa: E402
 
 
 def main() -> None:
@@ -28,7 +27,7 @@ def main() -> None:
             legacy = ModuleType("btc_analyzer.candles")
             legacy.__file__ = str(entry.parent / "src/btc_analyzer/candles.py")
             sys.modules[legacy.__name__] = legacy
-        app = AppTest.from_file(entry, default_timeout=45).run()
+        app = analysis_app(entry, default_timeout=45).run()
         assert not app.exception, [item.message for item in app.exception]
         assert not app.error, [item.value for item in app.error]
         candle_module = sys.modules["btc_analyzer.candles"]
@@ -41,7 +40,7 @@ def main() -> None:
         assert not app.warning
         widget = app.get("iframe")[0].proto.srcdoc
         assert "tradingview" not in widget.lower()
-        assert any('id="macro-nq"' in item.value and 'id="macro-tnx"' in item.value for item in app.markdown)
+        assert all(any(f'id="macro-{key}"' in item.value for item in app.markdown) for key in ("nq", "tnx"))
         assert not any('aria-label="다섯 시간대 방향"' in item.value for item in app.markdown)
         assert "_btc_private_storage" not in app.session_state
         assert not app.sidebar.selectbox and not app.number_input

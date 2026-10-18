@@ -6,7 +6,7 @@ import subprocess
 
 import pandas as pd
 import pytest
-from streamlit.testing.v1 import AppTest
+from scripts.offline_ui_fixture import analysis_app
 
 from btc_analyzer.analysis.forecast import horizon_days
 from btc_analyzer.data.nasdaq import horizon_bars, trading_dates
@@ -53,7 +53,7 @@ def test_nq_added_horizons_count_actual_trading_closes():
 def test_short_charts_and_six_periods_share_existing_analysis(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[1]
     monkeypatch.setenv("BTC_WEB_DATA_DIR", str(tmp_path))
-    app = AppTest.from_file(root / "web_app.py", default_timeout=60).run()
+    app = analysis_app(root / "web_app.py", default_timeout=60).run()
     assert not app.exception and not app.error
     for tf in ("5m", "15m"):
         next(x for x in app.get("button_group") if x.label == "차트 시간대").set_value(tf).run()

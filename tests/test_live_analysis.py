@@ -202,7 +202,10 @@ def test_forecast_live_layer_preserves_model_and_shares():
         assert trace.meta["share"] == scenario.share
     assert all(all(y is None for y in trace.y) for trace in fig.data[6:])
     assert meta["center"][0] == meta["anchor"]
-    assert "run_every=60" in (Path(__file__).resolve().parents[1] / "app.py").read_text()
+    assert (
+        "run_every=60"
+        in (Path(__file__).resolve().parents[1] / "src/btc_analyzer/ui/analysis_view.py").read_text()
+    )
 
 
 def test_encoded_chart_array_survives_plotly_input_array_and_json_snapshot():

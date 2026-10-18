@@ -151,6 +151,12 @@ class MarketFixture:
                     "lastPrice": {"ETHUSDT": "3000.25", "SOLUSDT": "150.25", "XRPUSDT": "1.1532"}.get(
                         symbol, "100000"
                     ),
+                    "highPrice": {"ETHUSDT": "3100", "SOLUSDT": "155", "XRPUSDT": "1.20"}.get(
+                        symbol, "103000"
+                    ),
+                    "lowPrice": {"ETHUSDT": "2800", "SOLUSDT": "140", "XRPUSDT": "1.05"}.get(symbol, "97000"),
+                    "volume": "12345.67",
+                    "quoteVolume": "123456789.01",
                     "priceChangePercent": "2.34",
                     "closeTime": now,
                 }

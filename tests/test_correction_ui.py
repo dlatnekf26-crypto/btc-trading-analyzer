@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
-from streamlit.testing.v1 import AppTest
+from scripts.offline_ui_fixture import analysis_app
 
 from btc_analyzer.data.market_context import FeedState, MarketContext
 
@@ -22,7 +22,7 @@ def plot(app):
 
 
 def test_calendar_controls_change_only_conditional_path_and_reset_on_event_change():
-    app = AppTest.from_file(ROOT / "web_app.py", default_timeout=30).run()
+    app = analysis_app(ROOT / "web_app.py", default_timeout=30).run()
     rerun(app)
     # The calendar fetch deliberately never blocks the initial render.
     for _ in range(3):
@@ -65,7 +65,7 @@ def test_calendar_failure_preserves_forecast_and_does_not_invent_consensus(monke
 
     with monkeypatch.context() as patcher:
         patcher.setattr(correction_view, "calendar_service", lambda version: Failed())
-        app = AppTest.from_file(ROOT / "web_app.py", default_timeout=30).run()
+        app = analysis_app(ROOT / "web_app.py", default_timeout=30).run()
         rerun(app)
         assert not app.exception and not app.error
         assert any("경제 일정·시장 예상치 연결" in item.value for item in app.info)

@@ -51,7 +51,11 @@ def inspect(page, cdp, plot, event_log, label, subplot=0):
     touch(cdp, "touchEnd")
     assert ranges(plot) == original, (label, original, ranges(plot))
     # Pinch is exercised by check_chart_gestures; inspection alone keeps the axes.
-    scroller = page.locator('[data-testid="stMain"]')
+    scroller = (
+        page.get_by_role("dialog")
+        if page.get_by_role("dialog").count()
+        else page.locator('[data-testid="stMain"]')
+    )
     before_scroll = scroller.evaluate("e=>e.scrollTop")
     remaining = scroller.evaluate("e=>e.scrollHeight-e.clientHeight-e.scrollTop")
     # A short comparison page may already be at its bottom. Swipe toward the

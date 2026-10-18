@@ -9,7 +9,7 @@ import sys
 import sysconfig
 
 import pytest
-from streamlit.testing.v1 import AppTest
+from scripts.offline_ui_fixture import analysis_app
 
 from btc_analyzer.data.service import DataService, demo_bundle
 from btc_analyzer.storage.database import Database
@@ -130,7 +130,7 @@ def test_public_default_live_binance_and_usdt_quote(monkeypatch, tmp_path, entry
         "btc_analyzer.data.binance_provider.BinanceProvider.quote",
         lambda self, symbol: {"price": 123456.78, "change_24h": 2.15, "observed_at": "2026-10-04T00:00:00Z"},
     )
-    app = AppTest.from_file(Path(__file__).resolve().parents[1] / entry, default_timeout=30).run()
+    app = analysis_app(Path(__file__).resolve().parents[1] / entry, default_timeout=30).run()
     assert not app.exception
     assert not app.error
     assert len(app.tabs) == 2
@@ -144,7 +144,7 @@ def test_public_default_live_binance_and_usdt_quote(monkeypatch, tmp_path, entry
     assert 'id="upbit"' not in widget
     assert 'id="forex"' in widget and 'id="premium"' in widget
     assert "tradingview" not in widget.lower()
-    assert any('id="macro-nq"' in item.value and 'id="macro-tnx"' in item.value for item in app.markdown)
+    assert all(any(f'id="macro-{key}"' in item.value for item in app.markdown) for key in ("nq", "tnx"))
     assert not any(item.label in ("거래소", "데이터 모드") for item in app.selectbox)
     assert captured["cache"] == tmp_path / "web" / "market-cache.sqlite3"
     assert "_btc_private_storage" not in app.session_state
@@ -163,7 +163,7 @@ def test_public_visitors_never_read_or_write_existing_private_records(
     monkeypatch.setenv("BTC_DB_PATH", str(private_path))
     entry = Path(__file__).resolve().parents[1] / "web_app.py"
     for _ in range(2):
-        app = AppTest.from_file(entry, default_timeout=30).run()
+        app = analysis_app(entry, default_timeout=30).run()
         assert not app.exception and not app.error
         assert "_btc_private_storage" not in app.session_state
         assert "backtest_result" not in app.session_state
@@ -188,11 +188,11 @@ def test_live_analysis_failure_keeps_independent_quote_widget(monkeypatch, tmp_p
 
     monkeypatch.setattr(DataService, "bundle", unavailable)
     monkeypatch.setattr("btc_analyzer.data.binance_provider.BinanceProvider.quote", no_server_quote)
-    app = AppTest.from_file(Path(__file__).resolve().parents[1] / "web_app.py", default_timeout=30).run()
+    app = analysis_app(Path(__file__).resolve().parents[1] / "web_app.py", default_timeout=30).run()
     assert not app.exception
     assert any("Candle API unavailable" in item.value for item in app.error)
     assert len(app.get("iframe")) == 1
-    assert "상단 실시간 시세 연결은 독립적으로" in app.info[0].value
+    assert "시세 카드의 실시간 연결은 독립적으로" in app.info[0].value
     assert not app.get("plotly_chart")
     assert not app.warning
 

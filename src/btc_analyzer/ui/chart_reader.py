@@ -48,6 +48,21 @@ def reader_html(frame, timeframe, asset_code, averages, bands):
         f'<div class="btc-read-{key}"><span>{FIELDS[key]}</span><b data-field="{key}">{value(key)}</b></div>'
         for key in keys
     )
+    colors = {
+        "ema_20": "#dd9b24",
+        "ema_50": "#3182f6",
+        "ema_200": "#8c65da",
+        "bb_middle": "#819bbd",
+        "ichimoku_tenkan": "#3182f6",
+        "ichimoku_kijun": "#dd9b24",
+    }
+    legend = "".join(
+        f'<span><i style="--key-color:{colors[key]}"></i>{FIELDS[key]}</span>'
+        for key in keys
+        if key in colors
+    )
+    if "ichimoku_tenkan" in keys:
+        legend += '<span><i class="btc-cloud-key"></i>일목 구름</span>'
     at = frame.index[-1].tz_convert("Asia/Seoul").strftime("%m.%d %H:%M")
     return (
         f'<section id="btc-chart-reader" class="btc-chart-reader" data-symbol="{MARKETS[asset_code].stream_symbol}" '
@@ -57,6 +72,7 @@ def reader_html(frame, timeframe, asset_code, averages, bands):
         '<button type="button" class="btc-chart-auto" data-chart-action="auto" aria-pressed="true" title="현재 보이는 캔들에 가격축을 맞춰요">오토</button></div>'
         f'<div class="btc-reader-heading"><span data-reader-time>{at} KST · 마지막 확정 봉</span><span data-visible-bars></span></div>'
         f'<div class="btc-reader-values">{cells}</div>'
+        f'<div class="btc-chart-key" aria-label="차트 선 색상">{legend}</div>'
         "</section>"
     )
 

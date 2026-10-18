@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import streamlit as st
-from streamlit.testing.v1 import AppTest
+from scripts.offline_ui_fixture import analysis_app
 
 from btc_analyzer.analysis.historical_similarity import HISTORY_BARS, find_similar_history
 from btc_analyzer.candles import candle_boundary, candle_close, history_start
@@ -87,7 +87,7 @@ def test_live_tab_collects_only_when_open_and_controls_and_refresh_reuse_work(
         return flat_history(tf, end)
 
     monkeypatch.setattr(DataService, "fetch", fetched)
-    app = AppTest.from_file(ROOT / "web_app.py", default_timeout=45).run()
+    app = analysis_app(ROOT / "web_app.py", default_timeout=45).run()
     assert not app.exception and not app.error and not calls
     decision = next(item.value for item in app.markdown if 'aria-label="종합 신호 근거"' in item.value)
     choose_history(app)
@@ -147,7 +147,7 @@ def test_live_history_failure_is_cached_and_never_replaced_with_demo(
         raise DataError("HTTP 451: Market data unavailable")
 
     monkeypatch.setattr(DataService, "fetch", failure)
-    app = AppTest.from_file(ROOT / "web_app.py", default_timeout=45).run()
+    app = analysis_app(ROOT / "web_app.py", default_timeout=45).run()
     choose_history(app)
     assert not app.exception and len(calls) == 1
     assert any("과거 비교 자료" in item.value and "451" in item.value for item in app.error)
@@ -166,7 +166,7 @@ def test_live_comparison_uses_public_history_and_five_timeframes(monkeypatch, tm
     st.cache_data.clear()
     monkeypatch.setenv("BTC_DB_PATH", str(tmp_path / "demo.sqlite"))
     monkeypatch.setenv("BTC_DEFAULT_SOURCE", "demo")
-    app = AppTest.from_file(ROOT / "app.py", default_timeout=45).run()
+    app = analysis_app(ROOT / "app.py", default_timeout=45).run()
     next(item for item in app.get("button_group") if item.label == "차트 시간대").set_value("4h").run()
     next(item for item in app.button if item.label == "미래 예측 보기 →").click()
     choose_history(app)
@@ -206,7 +206,7 @@ def test_removed_forecast_footers_never_build_tables_or_downloads_and_keep_decis
     st.cache_data.clear()
     monkeypatch.setenv("BTC_DB_PATH", str(tmp_path / "demo.sqlite"))
     monkeypatch.setenv("BTC_DEFAULT_SOURCE", "demo")
-    app = AppTest.from_file(ROOT / "app.py", default_timeout=45).run()
+    app = analysis_app(ROOT / "app.py", default_timeout=45).run()
     decision = next(item.value for item in app.markdown if 'aria-label="종합 신호 근거"' in item.value)
     next(item for item in app.button if item.label == "미래 예측 보기 →").click()
     choose_history(app)
@@ -254,7 +254,7 @@ def test_quick_horizons_have_exact_end_dates_and_a_focused_case_comparison(
     st.cache_data.clear()
     monkeypatch.setenv("BTC_DEFAULT_SOURCE", "demo")
     monkeypatch.setenv("BTC_DB_PATH", str(tmp_path / "quick.sqlite"))
-    app = AppTest.from_file(ROOT / "app.py", default_timeout=45).run()
+    app = analysis_app(ROOT / "app.py", default_timeout=45).run()
     choose_history(app)
     origin = pd.Timestamp.now(tz="UTC").normalize().tz_convert("Asia/Seoul").tz_localize(None)
     for horizon in ("1w", "1mo", "6mo", "3mo"):
@@ -293,7 +293,7 @@ def test_previous_year_selection_migrates_to_three_months(monkeypatch, tmp_path,
     st.cache_data.clear()
     monkeypatch.setenv("BTC_DEFAULT_SOURCE", "demo")
     monkeypatch.setenv("BTC_DB_PATH", str(tmp_path / "migrate.sqlite"))
-    app = AppTest.from_file(ROOT / "app.py", default_timeout=45)
+    app = analysis_app(ROOT / "app.py", default_timeout=45)
     app.session_state["dashboard_tab"] = "미래 예측"
     app.session_state["forecast_horizon"] = "1y"
     app.run()

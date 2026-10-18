@@ -35,6 +35,7 @@ def quotes_document():
         ("RATES_BRIDGE", browser_asset("rates.js")),
         ("MACRO_BRIDGE", browser_asset("macro-quotes.js")),
         ("ALERTS_BRIDGE", browser_asset("move-alerts.js")),
+        ("BOARD_BRIDGE", browser_asset("board-quotes.js")),
     ):
         code = code.replace(f"/* {marker} */", value)
     return (

@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from streamlit.testing.v1 import AppTest
+from scripts.offline_ui_fixture import analysis_app
 import pytest
 
 pytestmark = pytest.mark.usefixtures("offline_dashboard")
@@ -18,7 +18,7 @@ def test_dashboard_only_has_requested_views_and_never_opens_account_db(monkeypat
         raise AssertionError("The lightweight dashboard must not initialize an account database")
 
     monkeypatch.setattr(Database, "__init__", forbidden)
-    app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
+    app = analysis_app(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
     assert not app.exception and not app.error
     assert [tab.label for tab in app.tabs] == ["시장 개요", "미래 예측"]
     assert any('aria-label="종합 신호 근거"' in item.value for item in app.markdown)
@@ -41,13 +41,13 @@ def test_live_invalid_binance_symbol_shows_error(monkeypatch, tmp_path):
 
     monkeypatch.setenv("BTC_DB_PATH", str(tmp_path / "invalid-market.sqlite"))
     monkeypatch.setattr("btc_analyzer.data.binance_provider.ccxt.binance", lambda options: Client())
-    app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
+    app = analysis_app(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
     assert not app.exception
     assert any("INVALID/USDT" in x.value for x in app.error)
 
 
 def test_removed_views_are_absent_and_the_main_chart_keeps_indicators():
-    app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
+    app = analysis_app(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
     assert [tab.label for tab in app.tabs] == ["시장 개요", "미래 예측"]
     assert not any("최근 횡보" in item.value for item in app.markdown)
     assert not app.dataframe
@@ -60,7 +60,7 @@ def test_removed_tab_state_recovers_and_existing_database_is_untouched(monkeypat
     original = b"do not open or replace an existing research database in Live"
     path.write_bytes(original)
     monkeypatch.setenv("BTC_DB_PATH", str(path))
-    app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
+    app = analysis_app(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
     app.session_state["dashboard_tab"] = "모의거래"
     app.run()
     assert not app.exception and not app.error
@@ -70,7 +70,7 @@ def test_removed_tab_state_recovers_and_existing_database_is_untouched(monkeypat
 
 def test_five_horizon_chart_switch_keeps_composite_decision(monkeypatch, tmp_path):
     monkeypatch.setenv("BTC_DB_PATH", str(tmp_path / "five-horizon.sqlite"))
-    app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
+    app = analysis_app(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
     assert not app.exception and not app.error
     original = next(x.value for x in app.markdown if 'aria-label="종합 신호 근거"' in x.value)
     for timeframe, label in (("4h", "4시간"), ("1d", "일봉"), ("1w", "주봉"), ("1M", "월봉")):
@@ -98,7 +98,7 @@ def test_optional_monthly_failure_keeps_dashboard_but_vetoes_signal(monkeypatch,
         "btc_analyzer.data.binance_provider.BinanceProvider.quote",
         lambda self, symbol: {"price": 90000, "change_24h": 0, "observed_at": "2026-10-04T12:00Z"},
     )
-    app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
+    app = analysis_app(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
     assert not app.exception and not app.error
     assert any("관망 · 종합 신호" in item.value for item in app.markdown)
     assert any("Monthly endpoint" in item.value for item in app.markdown)
@@ -109,7 +109,7 @@ def test_optional_monthly_failure_keeps_dashboard_but_vetoes_signal(monkeypatch,
 
 def test_ichimoku_view_and_overlay_controls_preserve_signal(monkeypatch, tmp_path):
     monkeypatch.setenv("BTC_DB_PATH", str(tmp_path / "ichimoku-ui.sqlite"))
-    app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
+    app = analysis_app(Path(__file__).resolve().parents[1] / "app.py", default_timeout=30).run()
     assert not app.exception and not app.error
     summary = next(item.value for item in app.markdown if 'aria-label="종합 신호 근거"' in item.value)
     assert not any("일목균형표, 이렇게 읽어요" in item.value for item in app.subheader)

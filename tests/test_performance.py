@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-from streamlit.testing.v1 import AppTest
+from scripts.offline_ui_fixture import analysis_app
 
 from btc_analyzer.candles import candle_boundary, candle_shift
 from btc_analyzer.config import IndicatorConfig
@@ -145,7 +145,7 @@ def test_ui_only_runs_active_tab_and_live_refresh_reuses_data(monkeypatch, tmp_p
     monkeypatch.setattr(DataService, "bundle", bundle)
     monkeypatch.setattr("btc_analyzer.data.binance_provider.BinanceProvider.quote", quote)
     monkeypatch.setattr(analysis_cache, "enrich", enriched)
-    app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=45).run()
+    app = analysis_app(Path(__file__).resolve().parents[1] / "app.py", default_timeout=45).run()
     assert not app.exception and not app.error
     assert len(app.get("plotly_chart")) == 1 and len(app.dataframe) <= 1
     assert calls == {"bundle": 1, "quote": 0, "features": 5}

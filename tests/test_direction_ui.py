@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
-from streamlit.testing.v1 import AppTest
+from scripts.offline_ui_fixture import analysis_app
 
 pytestmark = pytest.mark.usefixtures("offline_dashboard")
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,7 +24,7 @@ def control(app, label):
 
 
 def test_default_compares_three_directions_and_model_switch_keeps_original_forecast():
-    app = AppTest.from_file(ROOT / "web_app.py", default_timeout=30).run()
+    app = analysis_app(ROOT / "web_app.py", default_timeout=30).run()
     rerun(app)
     assert not app.exception and not app.error
     assert len(app.get("plotly_chart")) == 1
@@ -72,7 +72,7 @@ def test_default_compares_three_directions_and_model_switch_keeps_original_forec
 
 
 def test_release_assumption_does_not_change_direction_ranking_or_branch_prices():
-    app = AppTest.from_file(ROOT / "web_app.py", default_timeout=30).run()
+    app = analysis_app(ROOT / "web_app.py", default_timeout=30).run()
     rerun(app)
     for _ in range(3):
         if any(item.label == "발표 결과를 가정해 보기" for item in app.get("button_group")):

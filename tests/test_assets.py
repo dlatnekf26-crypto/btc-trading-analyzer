@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-from streamlit.testing.v1 import AppTest
+from scripts.offline_ui_fixture import analysis_app
 
 from btc_analyzer.assets import ASSETS, asset_news, price_text
 from btc_analyzer.analysis.monthly_heatmap import monthly_heatmap
@@ -40,7 +40,7 @@ def test_sol_listing_month_is_excluded_from_historical_average():
 
 @pytest.mark.usefixtures("offline_dashboard")
 def test_four_assets_switch_complete_dashboard_forecast_and_back_without_cross_asset_data():
-    app = AppTest.from_file(Path(__file__).resolve().parents[1] / "web_app.py", default_timeout=45).run()
+    app = analysis_app(Path(__file__).resolve().parents[1] / "web_app.py", default_timeout=45).run()
     anchors = {}
     for code in ("BTC", "ETH", "SOL", "XRP", "BTC"):
         next(x for x in app.get("button_group") if x.label == "분석할 시장").set_value(code)

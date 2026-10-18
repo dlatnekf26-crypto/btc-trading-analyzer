@@ -1,0 +1,84 @@
+/* Quote board: native controls, a single data bridge, and an on-demand detail. */
+:root{--board-up:#ef3f50;--board-down:#2563eb}
+.stApp{background:#f5f6fa}
+.block-container{max-width:1540px;padding-top:2rem}
+.btc-brand{margin-bottom:8px;padding-bottom:12px;border-bottom:1px solid #e3e7ee}
+.btc-logo{background:linear-gradient(140deg,#3478f6,#11aa91);border-radius:12px;width:38px;height:38px;font-size:24px}
+.btc-brand h1{font-size:17px;letter-spacing:.035em}.btc-brand p{font-size:11px}
+.st-key-quote_bridge{height:0!important;min-height:0!important;overflow:hidden;position:absolute!important;width:1px;pointer-events:none}
+.board-topline{display:flex;align-items:center;gap:12px;justify-content:space-between;margin:2px 0 6px;font-size:12px;color:#8290a3}
+.board-pill{background:#fff;border:1px solid #e0e5ed;border-radius:100px;padding:6px 11px;color:#4c6078;white-space:nowrap;box-shadow:0 1px 3px #192f4910}
+.board-pill i{display:inline-block;width:7px;height:7px;background:#11ad73;box-shadow:0 0 0 3px #11ad731a;border-radius:50%;margin-right:8px}
+.board-sentiment,.board-fx{background:#fff;border:1px solid #e1e6ee;border-radius:13px;min-height:63px;padding:12px 16px;display:flex;align-items:center;gap:14px;font-size:12px;color:#53667e;flex-wrap:wrap}
+.board-sentiment b{font-size:23px;color:#26354b;line-height:1}.board-sentiment small,.board-fx small{font-size:10px;color:#8190a5}
+.board-gauge{width:100px;height:5px;position:relative;border-radius:6px;background:linear-gradient(90deg,#ee645b,#f1bd4a,#54bc94)}
+.board-gauge i{position:absolute;left:clamp(0px,var(--score),calc(100% - 2px));top:-3px;background:#26354b;width:2px;height:11px;border-radius:2px}
+.board-fx{justify-content:space-between}.board-fx b{color:#26354b;font-variant-numeric:tabular-nums;font-size:18px}.board-fx>small{width:100%;line-height:1;margin-top:-7px}
+.board-nav{display:flex;align-items:center;gap:20px;border-bottom:1px solid #e1e6ed;margin:8px 0 0;padding:0 2px;color:#8591a4;font-size:12px}
+.board-nav b{display:block;color:#2563eb;border-bottom:2px solid #2563eb;padding:10px 2px;font-size:13px}
+.st-key-board_macro .btc-macro-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0}
+.st-key-board_macro .btc-macro-card{border-radius:13px;padding:13px 16px;display:grid;grid-template-columns:1fr auto;align-items:center;gap:1px 10px}
+.st-key-board_macro .btc-macro-heading{grid-column:1;grid-row:1;margin:0;display:block}.st-key-board_macro .btc-macro-name{font-size:12px;font-weight:500;color:#64758c}
+.st-key-board_macro .btc-macro-value{grid-column:2;grid-row:1;font-size:20px;font-weight:750}
+.st-key-board_macro .btc-macro-change{grid-column:1/-1;font-size:11px;margin:0;text-align:right}
+.st-key-board_macro .btc-macro-status{grid-column:1/-1;font-size:10px;min-height:0;margin:0;color:#8b96a7}
+.st-key-board_macro .btc-macro-badge,.st-key-board_macro .btc-macro-graph,.st-key-board_macro .btc-macro-card>p:last-child{display:none}
+.board-section{display:flex;align-items:center;gap:15px;margin:16px 0 0;color:#8390a2}.board-section h2{font-size:14px;font-weight:650;margin:0;padding:0;white-space:nowrap;color:#53657b;letter-spacing:0}.board-section small{font-size:11px;font-weight:400;margin-left:9px;color:#99a3b3}.board-section>span{font-size:11px;white-space:nowrap}.board-section i{height:1px;background:#e1e6ed;flex:1}
+[class*="st-key-board_card_"]{position:relative;border:1px solid #e0e5ed;border-radius:15px;background:#fff;box-shadow:0 1px 3px #23365008;transition:box-shadow .18s,border-color .18s,transform .18s;overflow:hidden}
+[class*="st-key-board_card_"]:hover{border-color:#afc8f6;box-shadow:0 5px 16px #2763b50d;transform:translateY(-2px)}
+[class*="st-key-board_card_"]:focus-within{outline:2px solid #3182f6;outline-offset:3px}
+[class*="st-key-board_card_"] [data-testid="stButton"]{position:absolute;inset:0;width:100%;height:100%;z-index:2}
+[class*="st-key-board_card_"] [data-testid="stElementContainer"]:has(>[data-testid="stButton"]){position:absolute;inset:0;height:100%;width:100%}
+[class*="st-key-board_card_"] [data-testid="stButton"] button{width:100%;height:100%;opacity:0;border:0;cursor:pointer}
+.board-asset{padding:20px;min-width:0;border:0!important;margin:0!important;background:#fff;border-radius:15px;min-height:349px;box-sizing:border-box}
+.board-identity{display:flex;align-items:center;gap:10px;color:#1c2839;margin-bottom:15px;min-width:0}
+.board-identity>div{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}.board-identity strong{font-size:18px;letter-spacing:-.035em;line-height:1.4}.board-symbol{font-size:11px;color:#94a0b1;font-weight:500;letter-spacing:0}
+.board-icon{display:inline-grid;place-items:center;flex-shrink:0;width:34px;height:34px;border-radius:50%;background:var(--asset-color);color:#fff;font-size:18px;font-weight:700}
+.board-status{font-size:10px!important;color:#8894a5!important;min-height:18px!important;margin:0 0 8px!important;line-height:1.6;overflow-wrap:anywhere}
+.board-asset[data-status="live"] .board-status{color:#139a70!important}
+.board-price{display:flex;flex-direction:column;gap:2px}.board-price b{font-size:30px!important;line-height:1.25;font-weight:760;letter-spacing:-.045em;color:#202b3b;font-variant-numeric:tabular-nums}.board-price small{font-size:10px;color:#8491a4;letter-spacing:0;font-weight:400}
+.board-change{font-size:12px!important;color:#8a96a7;min-height:23px;padding:6px 0 13px;margin:0!important;border-bottom:1px solid #edf0f5;line-height:1.5}
+[data-direction="up"]{color:var(--board-up)!important}[data-direction="down"]{color:var(--board-down)!important}
+.board-metrics,.board-session-info{display:grid;grid-template-columns:1fr auto;gap:8px;font-size:11px;color:#8290a4;padding-top:15px;line-height:1.5}.board-metrics b,.board-session-info b{color:#334155;font-size:11px;font-weight:550;font-variant-numeric:tabular-nums;text-align:right}
+.board-range{height:4px;border-radius:6px;background:#e7ebf1;margin-top:16px;position:relative}.board-range i{position:absolute;top:-1px;width:3px;height:6px;background:#397af6;border-radius:3px}.board-range-label{display:flex;justify-content:space-between;color:#99a4b4;font-size:9px;margin-top:5px}
+.board-spark{height:31px!important;min-height:31px}.board-source{background:none!important;color:#8995a7!important;font-size:10px!important;padding:0!important;display:block;min-height:18px}
+.board-open{margin-top:15px;border-top:1px solid #edf0f5;padding-top:12px;color:#3979e8;font-size:11px;font-weight:550;display:flex;align-items:center;justify-content:space-between}
+.board-footnote{font-size:11px;color:#95a0b0;margin:8px 0 0}
+[data-testid="stHeader"]{height:0;background:transparent;pointer-events:none}
+[data-testid="stToolbar"]{visibility:hidden}
+[data-testid="stDialog"]{padding:24px;align-items:center;justify-content:center;overscroll-behavior:contain}
+[data-testid="stDialog"]>div:has(>[role="dialog"]){width:min(1100px,100%);max-width:1100px;margin:0;overflow:visible}
+[data-testid="stDialog"] [role="dialog"]{width:100%;max-width:100%;max-height:calc(100dvh - 48px);overflow-y:auto;overflow-x:hidden;border-radius:20px;padding:0 24px 24px;overscroll-behavior:contain;scrollbar-width:thin}
+[data-testid="stDialog"] [role="dialog"]>h2[slot="title"]{font-size:13px;color:#8190a3;padding:18px 0 12px;margin:0;line-height:1.4;min-height:48px}
+[data-testid="stDialog"] [role="dialog"]>div{padding:0}
+[data-testid="stDialog"] [role="dialog"]>button[aria-label="Close"]{width:40px;height:40px;top:5px;right:8px;border-radius:12px;background:#fff;z-index:10}
+.board-detail{margin:-6px 0 8px;padding:0 2px}.board-detail .board-identity{margin-bottom:8px}.board-detail .board-identity strong{font-size:22px}.board-detail .board-status{margin-bottom:3px!important}.board-detail .board-price{flex-direction:row;align-items:baseline;gap:12px}.board-detail .board-price b{font-size:34px!important}.board-detail .board-change{padding-bottom:8px;border-bottom:0}
+[data-testid="stDialog"] [data-testid="stPlotlyChart"]{border-radius:12px;border:1px solid #edf0f5}
+[data-testid="stDialog"] [role="tablist"]{border:0;border-bottom:1px solid #edf0f5;border-radius:0;padding:0;gap:18px;background:#fff}
+[data-testid="stDialog"] [role="tab"]{border-radius:0;padding:9px 2px;font-size:13px}
+[data-testid="stDialog"] [role="tab"][aria-selected="true"]{background:#fff;color:#2563eb;border-bottom:2px solid #2563eb}
+[data-testid="stDialog"] .st-key-market_controls [data-testid="stButtonGroup"] button{font-size:12px;min-height:38px}
+@media(max-width:640px){.btc-brand{gap:9px}.btc-brand h1{font-size:14px}.btc-brand p{font-size:10px}.board-topline>span{display:none}.board-topline{margin:0}.board-sentiment{padding:11px 13px;gap:10px;min-height:55px}.board-sentiment small{font-size:9px}.board-gauge{width:68px}.board-nav{gap:12px}.board-nav>span{font-size:10px}.st-key-board_macro .btc-macro-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.st-key-board_macro .btc-macro-card{display:block;padding:10px 8px}.st-key-board_macro .btc-macro-value{font-size:18px;letter-spacing:-.5px}.st-key-board_macro .btc-macro-name{font-size:10px;margin-bottom:5px}.st-key-board_macro .btc-macro-change{font-size:9px;text-align:left;line-height:1.5}.st-key-board_macro .btc-macro-status{font-size:9px;margin-top:4px}.board-section{gap:10px;margin-top:10px}.board-section>span{font-size:9px}.board-footnote{font-size:10px}[data-testid="stDialog"] [data-testid="stVerticalBlock"]{gap:10px}.board-detail .board-identity strong{font-size:20px}.board-detail .board-price b{font-size:30px!important}}
+@media(prefers-reduced-motion:reduce){[class*="st-key-board_card_"]{transition:none;transform:none!important}}
+
+/* Keep quote density useful on tablets and phones without shrinking the detail chart. */
+@media(min-width:641px) and (max-width:1000px){.st-key-board_coins [data-testid="stHorizontalBlock"],.st-key-board_sessions [data-testid="stHorizontalBlock"]{flex-wrap:wrap}.st-key-board_coins [data-testid="stColumn"],.st-key-board_sessions [data-testid="stColumn"]{flex:0 0 calc(50% - 8px);width:calc(50% - 8px);min-width:calc(50% - 8px)}}
+@media(max-width:640px){
+.block-container{padding:20px 14px 24px}
+[data-testid="stDialog"]{padding:0;align-items:stretch}
+[data-testid="stDialog"]>div:has(>[role="dialog"]){width:100%;max-width:100%;margin:0}
+[data-testid="stDialog"] [role="dialog"]{width:100%;max-width:100%;height:100dvh;max-height:100dvh;border-radius:0;padding:0 14px 20px;overflow-y:auto}
+[data-testid="stDialog"] [role="dialog"]>h2[slot="title"]{padding-top:14px;min-height:44px}
+.st-key-board_overview [data-testid="stHorizontalBlock"]{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.st-key-board_overview [data-testid="stColumn"]{width:100%;min-width:0}.st-key-board_overview [data-testid="stColumn"]:first-child{grid-column:1/-1}
+.board-fx{height:75px;padding:10px;font-size:11px;gap:5px}.board-fx b{font-size:17px}.board-fx>small{font-size:9px;line-height:1.4}
+.st-key-board_coins [data-testid="stHorizontalBlock"],.st-key-board_sessions [data-testid="stHorizontalBlock"]{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.st-key-board_coins [data-testid="stColumn"],.st-key-board_sessions [data-testid="stColumn"]{width:100%;min-width:0}
+.board-asset{padding:14px 12px}.board-asset .board-identity{gap:7px;margin-bottom:11px}.board-asset .board-icon{width:28px;height:28px;font-size:16px}.board-asset .board-identity strong{font-size:15px}.board-asset .board-identity>div{gap:0;display:block}.board-asset .board-symbol{display:block;font-size:9px}
+.board-asset .board-price b{font-size:23px!important;letter-spacing:-.05em;white-space:nowrap}.board-asset .board-status{font-size:9px!important;min-height:30px!important;line-height:1.5}
+.board-asset .board-change{font-size:10px!important;padding-bottom:9px}
+.board-metrics,.board-session-info{font-size:10px;gap:7px 4px;padding-top:10px}.board-metrics b,.board-session-info b{font-size:10px}.board-metrics span{max-width:65px}.board-metrics b{max-width:85px;overflow-wrap:anywhere}
+.board-range{margin-top:12px}.board-range-label{font-size:8px}.board-open{font-size:9px;gap:4px;margin-top:12px;padding-top:10px}.board-section>span{white-space:normal}
+}
+@media(min-width:1001px){.board-metrics,.board-session-info{font-size:12px}.board-metrics b,.board-session-info b{font-size:12px}.board-change{font-size:13px!important}.board-status{font-size:11px!important}}
+@media(max-width:359px){.st-key-board_coins [data-testid="stHorizontalBlock"],.st-key-board_sessions [data-testid="stHorizontalBlock"]{grid-template-columns:1fr}.board-asset .board-price b{font-size:28px!important}}

@@ -233,3 +233,5 @@ button:focus-visible { outline: 3px solid #3182f666; outline-offset: 3px; }
 [data-testid="stPlotlyChart"] .main-svg{-webkit-touch-callout:none;user-select:none}
 
 .btc-ai-card{border:1px solid #e6def5;border-radius:18px;background:#fbf9ff;padding:18px 20px;margin:12px 0}.btc-ai-card>span{font-size:12px;color:#7c57bd}.btc-ai-card strong{display:block;font-size:27px;color:#573c88;margin:8px 0}.btc-ai-card p{color:#53647b;font-size:13px;margin:5px 0}.btc-ai-reasons{font-size:13px;color:#53647b;padding-left:20px}
+
+.btc-chart-key{display:flex;flex-wrap:wrap;gap:6px 13px;font-size:10px;color:#71839a;padding:10px 0 0;line-height:1.4}.btc-chart-key span{display:inline-flex;align-items:center;gap:5px}.btc-chart-key i{width:11px;height:2px;border-radius:2px;background:var(--key-color)}.btc-chart-key .btc-cloud-key{height:7px;background:linear-gradient(90deg,#0aa87555,#ec627155)}

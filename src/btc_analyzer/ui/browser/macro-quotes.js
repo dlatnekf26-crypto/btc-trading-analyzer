@@ -183,7 +183,7 @@
   // Restore stream values promptly if a native quote fragment replaces its DOM.
   const macroObserver=parentDoc ? new MutationObserver(records=>{
     const fields='.btc-macro-value,.btc-macro-change,.btc-macro-status,.btc-macro-badge,.btc-macro-graph';
-    const selector='.btc-macro-grid,.btc-macro-card,#macro-fx-reference,#btc-news-bridge,#btc-move-alerts,#btc-live-selection,'+fields;
+    const selector='.btc-macro-grid,.btc-macro-card,#macro-fx-reference,#btc-news-bridge,#btc-move-alerts,#btc-live-selection,[data-quote-symbol],[data-reference],'+fields;
     const overwritten=records.some(r=>r.target.matches?.(fields) && Object.values(macros).some(s=>s.stream &&
       [[s.nodes?.value,s.priceText],[s.nodes?.change,s.changeText],[s.nodes?.status,s.statusText],[s.nodes?.badge,s.badgeText]]
         .some(([node,text])=>node===r.target && node.textContent!==text)));

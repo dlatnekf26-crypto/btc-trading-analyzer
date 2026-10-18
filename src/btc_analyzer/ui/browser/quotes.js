@@ -127,6 +127,7 @@
       }
       paintAux();
       paintMacro();
+      paintBoard();
       paintMoves();
       const selected=states.find(s=>s.symbol===ACTIVE_SYMBOL);
       if(selected){
@@ -157,6 +158,7 @@
     const time = binance ? item.E ?? item.closeTime : item.timestamp;
     if (!validNumber(price) || price <= 0 || !validNumber(time) || time <= 0 ||
         time < s.lastEvent || time > Date.now()+3000) return;
+    tickerMetrics(s,item);
     s.price=price;
     if (validNumber(change)) s.change=change;
     s.lastEvent=time; s.lastRx=Date.now(); s.transport=transport;
@@ -320,6 +322,7 @@
   /* RATES_BRIDGE */
   /* MACRO_BRIDGE */
   /* ALERTS_BRIDGE */
+  /* BOARD_BRIDGE */
   const heartbeat=setInterval(()=>{
     if (disposed || document.hidden) return;
     for (const s of states) {

@@ -31,7 +31,7 @@ def verify(browser, width, url, events):
     install_quote_transport(page)
     MarketFixture(page)
     page.goto(url)
-    page.frame_locator("iframe").locator("#binance").wait_for(timeout=60000)
+    page.frame_locator("iframe").locator("#binance").wait_for(state="attached", timeout=60000)
     page.locator("#btc-chart-reader").wait_for(timeout=60000)
     widget = next(f for f in page.frames if f.locator("#binance").count())
     cdp = context.new_cdp_session(page)

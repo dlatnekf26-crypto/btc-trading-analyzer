@@ -78,7 +78,7 @@ def test_selected_nq_has_own_chart_forecast_and_returns_to_crypto(tmp_path, monk
     from pathlib import Path
     import json
     import sys
-    from streamlit.testing.v1 import AppTest
+    from scripts.offline_ui_fixture import analysis_app
 
     root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(root / "scripts"))
@@ -86,7 +86,7 @@ def test_selected_nq_has_own_chart_forecast_and_returns_to_crypto(tmp_path, monk
 
     monkeypatch.setenv("BTC_WEB_DATA_DIR", str(tmp_path))
     with offline_market_data(root):
-        app = AppTest.from_file(root / "web_app.py", default_timeout=60).run()
+        app = analysis_app(root / "web_app.py", default_timeout=60).run()
         next(x for x in app.get("button_group") if x.label == "분석할 시장").set_value("NQ").run()
         assert not app.exception and not app.error
         spec = json.loads(app.get("plotly_chart")[0].proto.spec)

@@ -295,3 +295,12 @@ def offline_context_data():
         correction = sys.modules.get("btc_analyzer.ui.correction_view")
         if correction is not None:
             correction.calendar_service.clear()
+
+
+def analysis_app(path, *, default_timeout=30):
+    """Open the public analysis deep link rather than the quote-only landing page."""
+    from streamlit.testing.v1 import AppTest
+
+    app = AppTest.from_file(path, default_timeout=default_timeout)
+    app.query_params.update({"market": "BTC", "view": "chart"})
+    return app

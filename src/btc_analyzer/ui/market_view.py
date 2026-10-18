@@ -106,7 +106,7 @@ def market_chart_spec(
     fig.update_yaxes(side="right", title_text=None, row=1, col=1)
     fig.update_yaxes(side="right", title_text=None)
     fig.update_layout(
-        height=640, margin={"t": 30, "b": 30, "l": 5, "r": 5}, legend={"y": 1.01}, hovermode=False
+        height=640, margin={"t": 12, "b": 30, "l": 5, "r": 5}, showlegend=False, hovermode=False
     )
     # Plotly's date axes use display wall time. Integer milliseconds avoid
     # repeating long ISO/timezone strings in every overlay; source cutoffs stay UTC.

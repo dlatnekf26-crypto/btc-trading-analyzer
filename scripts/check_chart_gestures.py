@@ -148,7 +148,12 @@ def verify(browser, width, url, event_log, check_ai=False):
         print(json.dumps({"width": width, "timeframe": tf, "pan_pinch_auto": True}), flush=True)
     assert not page.get_by_role("button", name="지표", exact=True).count()
     assert page.evaluate("document.documentElement.scrollWidth<=innerWidth")
-    page.locator('[data-testid="stMain"]').evaluate("e=>e.scrollTop=0")
+    scroller = (
+        page.get_by_role("dialog")
+        if page.get_by_role("dialog").count()
+        else page.locator('[data-testid="stMain"]')
+    )
+    scroller.evaluate("e=>e.scrollTop=0")
     page.screenshot(path=f"/tmp/btc-gestures-top-{width}.png")
     page.get_by_role("tab", name="미래 예측", exact=True).tap()
     for key, label in (

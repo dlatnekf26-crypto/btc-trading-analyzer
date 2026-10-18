@@ -4,14 +4,14 @@ import json
 from pathlib import Path
 
 import pytest
-from streamlit.testing.v1 import AppTest
+from scripts.offline_ui_fixture import analysis_app
 
 pytestmark = pytest.mark.usefixtures("offline_dashboard")
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_sentiment_and_period_heatmap_keep_the_same_market_chart_and_no_extra_iframe():
-    app = AppTest.from_file(ROOT / "web_app.py", default_timeout=45).run()
+    app = analysis_app(ROOT / "web_app.py", default_timeout=45).run()
     assert not app.exception and not app.error
     before = json.loads(app.get("plotly_chart")[0].proto.spec)
     assert len(app.get("plotly_chart")) == 1 and len(app.get("iframe")) == 1
