@@ -187,8 +187,10 @@ BTC_AI_MODEL = "gpt-4.1-mini"
 
 ## 국내·미국 주식 확장
 
-삼성전자(005930.KS), SK하이닉스(000660.KS), 애플(AAPL), 엔비디아(NVDA), 마이크론(MU), 샌디스크(SNDK)를 카드와 공통 7봉/6기간 분석 화면에서 엽니다. `?market=SAMSUNG&view=chart` 같은 공개 URL과 차트 오른쪽의 검색형 종목 선택을 사용합니다. 현재가/주식 REST·봉은 기존 `query1.finance.yahoo.com`, 주식 스트림은 기존 `streamer.finance.yahoo.com`을 사용해 새 도메인/키/SDK가 필요하지 않습니다. 기존 Binance/Upbit·환율·뉴스 연결 설정은 유지합니다.
+삼성전자(005930.KS), SK하이닉스(000660.KS), 삼성전기(009150.KS), LS일렉트릭(010120.KS), 애플(AAPL), 엔비디아(NVDA), 마이크론(MU), 샌디스크(SNDK), S&P 500(^GSPC)을 카드와 공통 7봉/6기간 분석 화면에서 엽니다. `?market=SAMSUNG_EM&view=chart`, `?market=LS_ELECTRIC&view=chart`, `?market=SP500&view=chart` 같은 공개 URL을 사용합니다. 현재가/REST·봉은 기존 `query1.finance.yahoo.com`, 스트림은 기존 `streamer.finance.yahoo.com`을 사용해 새 도메인/키/SDK가 필요하지 않습니다.
 
-주식 시세는 정규장과 공급자 기준 시각/지연을 표시합니다. REST 씨앗/대체는 종목별 30초 간격·공유 작업자 최대4개/진행중1개·오류 대기를 사용하고 여섯 스트림 심볼은 기존 Yahoo 연결 하나에 함께 구독합니다. 주식 선택 시 Binance 봉을 구독하지 않습니다. 원화/달러·종목·EQUITY 종류·거래소 시간대를 검증하며, SNDK는 2025년 이전의 같은 티커를 이어 붙이지 않습니다. 달력의 초기 생성은 직렬화해 upstream 휴일 캐시 초기화 경합을 막고 결과를 공유합니다.
+주식 REST는 종목별30초·작업자 최대4개/진행중1개·실패 대기를 유지하고 초기 주식을 먼저 요청합니다. native 카드들을2초마다 다시 만들지 않고 `ui/quote_snapshot.py`의 작은 snapshot fragment 하나에서 시세를 전달합니다. 브라우저는 REST만 있어도 현재가/상세/그래프를 복원하고7일 이내의 같은 통화 최근 가격을 localStorage에 보존합니다(시각/마지막 값 표시, service worker에는 저장하지 않음). 미국 주식 includePrePost 자료의 확인된 장전/장후 가격과 정규장 가격은 분리하고, 차트/예측 달력은 정규장을 유지합니다. KRX 장외/별도24시간 시세는 추정하지 않습니다.
 
-`check_stocks.py --app-url <서버 루트> --event-log <계측 로그> --all-periods`는 개발 fixture로 여섯 종목·7봉·6기간/통화 거절·현재가/터치·주식↔코인 전환·한 iframe/3공개연결을 확인합니다. 공급자의 지연·실제 무지연 스트림 권한·공개 재배포·물리 Safari 확인과 구분합니다. 유사 사례나 이력이 부족하면 모델의 보류 안내를 유지합니다.
+분봉 가격 조회 실패 시 같은 Yahoo의 작은 일봉 메타데이터를 검증해 대체합니다. 429는 추가 요청 없이 기존 Retry-After 대기를 적용합니다. 여덟 주식과 지수/선물은 기존 Yahoo 연결 하나를 공유합니다. `^GSPC`는 INDEX, 주식은 EQUITY/정확한 통화·시간대로 검증합니다. `korulive.com`과 네이버 후보 자료원은 현재 클라우드에서 프록시 CONNECT403으로 확인할 수 없어 연결하지 않았습니다. 기존 네트워크 허용 목록을 읽을 수 없으므로 추측으로 교체하지 않았습니다. 코루 연결을 재개하려면 환경 설정에서 해당 호스트의 접근을 허용한 뒤 실제 API·심볼·통화·가격 기준·이용 조건부터 확인해야 합니다.
+
+`check_stocks.py --app-url <서버 루트> --event-log <계측 로그> --all-periods`는 개발 fixture로 여덟 종목·7봉·6기간/통화 거절·터치·주식↔코인 전환·한 iframe/3공개연결을 확인합니다. `check_stock_delivery.py`는 REST 단독 표시/같은 카드 복원/장후·정규장 분리/캐시 검증과 휠·Shift/버튼·시간/가격축 드래그를 확인합니다. `check_nasdaq_chart.py --market SP500 --app-url <서버 루트/?market=BTC&view=chart>`는 지수 분석/예측을 확인합니다. 공급자의 지연·공개 재배포·물리 Safari 확인과 구분합니다. 유사 사례나 이력이 부족하면 보류 안내를 유지합니다.

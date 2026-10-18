@@ -21,7 +21,7 @@ def calendar_bars(start_year, end_year, timeframe, market="NQ"):
         from btc_analyzer.data.kospi import calendar_bars as kospi_bars
 
         return kospi_bars(start_year, end_year, timeframe)
-    if venue.kind == "EQUITY":
+    if venue.calendar == "NYSE":
         from btc_analyzer.data.equity_sessions import calendar_bars as equity_bars
 
         return equity_bars(start_year, end_year, timeframe)

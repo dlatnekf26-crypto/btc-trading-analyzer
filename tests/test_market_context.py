@@ -309,6 +309,7 @@ def test_blocked_provider_does_not_block_fast_quotes_or_spawn_duplicate_requests
             "fear",
             "fx",
             "kospi",
+            "lselectric",
             "mu",
             "news_en",
             "news_ko",
@@ -316,8 +317,10 @@ def test_blocked_provider_does_not_block_fast_quotes_or_spawn_duplicate_requests
             "nvda",
             "oil",
             "samsung",
+            "samsungem",
             "skhynix",
             "sndk",
+            "sp500",
             "tnx",
             "tyx",
         ]

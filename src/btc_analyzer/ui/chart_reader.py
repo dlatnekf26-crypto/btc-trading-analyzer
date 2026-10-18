@@ -26,6 +26,13 @@ FIELDS = {
     "ichimoku_kijun": "일목 기준선",
 }
 
+CHART_ACTIONS = (
+    '<div class="btc-chart-actions"><button type="button" class="btc-chart-auto" data-chart-action="zoom" '
+    'aria-pressed="false" title="켠 뒤 마우스로 좌우 드래그하면 봉 수를 조절해요. Shift+드래그나 휠도 사용할 수 있어요.">확대·축소</button>'
+    '<button type="button" class="btc-chart-auto" data-chart-action="auto" aria-pressed="true" '
+    'title="현재 보이는 캔들·경로에 가격축을 맞춰요">오토</button></div>'
+)
+
 
 def reader_html(frame, timeframe, asset_code, averages, bands):
     keys = ["open", "high", "low", "close", *averages]
@@ -71,7 +78,7 @@ def reader_html(frame, timeframe, asset_code, averages, bands):
         f'data-timeframe="{escape(timeframe)}" data-decimals="{MARKETS[asset_code].decimals}" data-mode="latest" '
         'aria-label="가리킨 봉의 가격과 지표">'
         '<div class="btc-chart-toolbar"><div class="btc-cursor-reading">현재 가격 <b data-field="current">—</b><small> USDT</small><span class="btc-current-status" data-current-status>현재가 연결 중</span></div>'
-        '<button type="button" class="btc-chart-auto" data-chart-action="auto" aria-pressed="true" title="현재 보이는 캔들에 가격축을 맞춰요">오토</button></div>'
+        f"{CHART_ACTIONS}</div>"
         f'<div class="btc-reader-heading"><span data-reader-time>{at} KST · 마지막 확정 봉</span><span data-visible-bars></span></div>'
         f'<div class="btc-reader-values">{cells}</div>'
         f'<div class="btc-chart-key" aria-label="차트 선 색상">{legend}</div>'

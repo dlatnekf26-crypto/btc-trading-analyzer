@@ -16,6 +16,7 @@ from btc_analyzer.assets import (
 from btc_analyzer.data.market_context import MacroQuote, UTC
 from btc_analyzer.ui.browser_assets import browser_asset
 from btc_analyzer.ui.market_context import current_context, render_macro_quotes
+from btc_analyzer.ui.quote_snapshot import render_quote_snapshot, quote_display
 
 BOARD_CSS = "<style>" + browser_asset("board.css") + "</style>"
 COLORS = {
@@ -31,6 +32,9 @@ COLORS = {
     "NVDA": "#eb79a8",
     "MU": "#dfaa00",
     "SNDK": "#875ec2",
+    "SAMSUNG_EM": "#4574db",
+    "LS_ELECTRIC": "#12a080",
+    "SP500": "#755ce0",
 }
 ICONS = {
     "BTC": "₿",
@@ -45,6 +49,9 @@ ICONS = {
     "NVDA": "엔",
     "MU": "마",
     "SNDK": "샌",
+    "SAMSUNG_EM": "전",
+    "LS_ELECTRIC": "LS",
+    "SP500": "S",
 }
 
 
@@ -63,28 +70,43 @@ def quote_fields(code, *, detail=False, context=None):
     attributes, price, change, status, direction = "", "—", "변동률 대기", "시세 연결 중…", ""
     value = None
     if session:
-        value = context.feed(asset.card_id.removeprefix("macro-")).value if context else None
+        feed = context.feed(asset.card_id.removeprefix("macro-")) if context else None
+        value = feed.value if feed else None
+        if isinstance(value, MacroQuote) and value.symbol != asset.symbol:
+            value = None
+        if feed and feed.error:
+            status = feed.error + " · 자동 재시도 중"
         if isinstance(value, MacroQuote) and timedelta(0) <= datetime.now(UTC) - value.as_of <= timedelta(
             days=7
         ):
+            display = quote_display(value)
             prefix = (
                 "₩" if code in STOCK_MARKETS and asset.decimals == 0 else "$" if code in STOCK_MARKETS else ""
             )
-            price = prefix + f"{value.price:,.{asset.decimals}f}"
-            change = f"{value.change:+.2%}" if value.change is not None else change
-            stamp = value.as_of.astimezone(ZoneInfo("Asia/Seoul"))
+            price = prefix + f"{display['price']:,.{asset.decimals}f}"
+            change = f"{display['change']:+.2f}%" if display["change"] is not None else change
+            if value.extended:
+                change += " · 정규장 종가 대비"
+            stamp = (value.extended.as_of if value.extended else value.as_of).astimezone(
+                ZoneInfo("Asia/Seoul")
+            )
             old = datetime.now(UTC) - value.as_of > timedelta(hours=2)
             prefix = "마지막 거래" if old else "공개 조회"
-            status = f"{prefix} · {stamp:%m.%d %H:%M} KST · 지연 " + (
+            phase = (
+                {"regular": "정규장", "pre": "장전", "post": "장후"}[display["session"]]
+                if code in STOCK_MARKETS
+                else ""
+            )
+            status = f"{phase} {prefix} · {stamp:%m.%d %H:%M} KST · 지연 " + (
                 f"{value.delay_minutes}분" if value.delay_minutes is not None else "미확인"
             )
             if context.feed(asset.card_id.removeprefix("macro-")).error:
                 status += " · 갱신 지연"
             direction = (
                 "up"
-                if value.change is not None and value.change >= 0
+                if display["change"] is not None and display["change"] >= 0
                 else "down"
-                if value.change is not None
+                if display["change"] is not None
                 else ""
             )
             attributes = (
@@ -113,10 +135,17 @@ def quote_fields(code, *, detail=False, context=None):
                 else None
             )
             metrics = (
-                '<div class="board-metrics"><span>전일 종가</span><b>' + number(previous) + "</b>"
-                "<span>거래일 고가</span><b>" + number(value.day_high if value else None) + "</b>"
-                "<span>거래일 저가</span><b>" + number(value.day_low if value else None) + "</b>"
-                "<span>거래량</span><b>"
+                '<div class="board-metrics"><span>정규장 가격</span><b data-quote-field="regular">'
+                + number(value.price if value else None)
+                + "</b>"
+                '<span>전일 종가</span><b data-quote-field="previous">' + number(previous) + "</b>"
+                '<span>거래일 고가</span><b data-quote-field="high">'
+                + number(value.day_high if value else None)
+                + "</b>"
+                '<span>거래일 저가</span><b data-quote-field="low">'
+                + number(value.day_low if value else None)
+                + "</b>"
+                '<span>거래량</span><b data-quote-field="volume">'
                 + (f"{value.volume:,.0f}주" if value and value.volume is not None else "—")
                 + "</b></div>"
                 '<div class="btc-macro-graph board-spark"></div>'
@@ -193,6 +222,7 @@ def market_columns(codes):
 
 
 def render_board(on_open):
+    render_quote_snapshot()
     st.markdown(
         '<div class="board-topline"><div class="board-pill"><i></i>코인 24시간 거래</div>'
         "<span>가격은 실시간으로 · 판단은 근거와 함께</span></div>",
@@ -219,8 +249,16 @@ def render_board(on_open):
     with st.container(key="board_macro"):
         render_macro_quotes(("oil", "tnx", "tyx"))
     for title, codes, subtitle in (
-        ("국내 주식", ("SAMSUNG", "SKHYNIX"), "KRX 보통주 · 원화 · 정규장 시세"),
-        ("미국 주식", ("AAPL", "NVDA", "MU", "SNDK"), "NASDAQ · USD · 정규장 시세"),
+        (
+            "국내 주식",
+            tuple(code for code in STOCK_MARKETS if EXCHANGE_HISTORY[code].calendar == "KRX"),
+            "KRX 보통주 · 원화",
+        ),
+        (
+            "미국 주식",
+            tuple(code for code in STOCK_MARKETS if EXCHANGE_HISTORY[code].calendar == "NYSE"),
+            "NASDAQ · USD · 장전·장후 자료 포함",
+        ),
     ):
         section_heading(title, len(codes), subtitle)
         with st.container(key="board_sessions_" + codes[0]):
@@ -246,12 +284,15 @@ def render_board(on_open):
     )
 
 
-@st.fragment(run_every=2)
 def render_session_cards(on_open, codes):
     context = current_context()
     for column, code in market_columns(codes):
         with column, st.container(key=f"board_card_{code}"):
             st.markdown(quote_fields(code, context=context), unsafe_allow_html=True)
-            if st.button(f"{MARKETS[code].name} 차트 열기", key=f"open_{code}", width="stretch"):
-                on_open(code)
-                st.rerun(scope="app")
+            st.button(
+                f"{MARKETS[code].name} 차트 열기",
+                key=f"open_{code}",
+                width="stretch",
+                on_click=on_open,
+                args=(code,),
+            )

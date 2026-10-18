@@ -6,6 +6,7 @@
 .btc-logo{background:linear-gradient(140deg,#3478f6,#11aa91);border-radius:12px;width:38px;height:38px;font-size:24px}
 .btc-brand h1{font-size:17px;letter-spacing:.035em}.btc-brand p{font-size:11px}
 .st-key-quote_bridge{height:0!important;min-height:0!important;overflow:hidden;position:absolute!important;width:1px;pointer-events:none}
+[data-testid="stElementContainer"]:has(#btc-quote-snapshot){display:none}
 .board-topline{display:flex;align-items:center;gap:12px;justify-content:space-between;margin:2px 0 6px;font-size:12px;color:#8290a3}
 .board-pill{background:#fff;border:1px solid #e0e5ed;border-radius:100px;padding:6px 11px;color:#4c6078;white-space:nowrap;box-shadow:0 1px 3px #192f4910}
 .board-pill i{display:inline-block;width:7px;height:7px;background:#11ad73;box-shadow:0 0 0 3px #11ad731a;border-radius:50%;margin-right:8px}
@@ -100,6 +101,8 @@
 [data-testid="stDialog"] .btc-cursor-reading b{font-size:14px;margin-left:5px}
 [data-testid="stDialog"] .btc-current-status{font-size:9px;margin-top:1px}
 [data-testid="stDialog"] .btc-chart-auto{min-height:30px;padding:5px 10px;border:1px solid #e3e9f4;border-radius:100px;font-size:11px}
+.btc-chart-actions{display:flex;align-items:center;gap:5px;flex-shrink:0}.btc-chart-actions button{white-space:nowrap}
+.btc-chart-actions [data-chart-action="zoom"][aria-pressed="true"]{background:#e9f1ff;color:#2563eb;border-color:#bed3ff}
 [data-testid="stDialog"] .btc-reader-heading{margin:4px 0 6px;font-size:10px}
 [data-testid="stDialog"] .btc-reader-values{gap:13px;padding-bottom:3px}
 [data-testid="stDialog"] .btc-reader-values>div{min-width:66px}

@@ -17,14 +17,25 @@ from btc_analyzer.assets import asset_news, STOCK_MARKETS, EXCHANGE_HISTORY
 
 from btc_analyzer.data.economic_calendar import EconomicEvent
 from btc_analyzer.data.sentiment import FEAR_API, FEAR_REFRESH_SECONDS, FearGreed, parse_fear_greed
+from btc_analyzer.data.extended_quotes import ExtendedQuote, extended_quote
 
 UTC = timezone.utc
 MAX_BYTES = 512_000
 NEWS_MAX_AGE = timedelta(hours=24)
 QUOTE_REFRESH_SECONDS = 10
 NEWS_REFRESH_SECONDS = 30
-SYMBOLS = {"kospi": "^KS11", "nq": "NQ=F", "tnx": "^TNX", "fx": "KRW=X", "oil": "CL=F", "tyx": "^TYX"}
-SYMBOLS.update({a.card_id.removeprefix("macro-"): a.symbol for a in STOCK_MARKETS.values()})
+SYMBOLS = {a.card_id.removeprefix("macro-"): a.symbol for a in STOCK_MARKETS.values()}
+SYMBOLS.update(
+    {
+        "sp500": "^GSPC",
+        "kospi": "^KS11",
+        "nq": "NQ=F",
+        "tnx": "^TNX",
+        "fx": "KRW=X",
+        "oil": "CL=F",
+        "tyx": "^TYX",
+    }
+)
 STOCK_SYMBOLS = {a.symbol: EXCHANGE_HISTORY[code] for code, a in STOCK_MARKETS.items()}
 TOPICS = {
     "oil": "유가",
@@ -48,6 +59,7 @@ class MacroQuote:
     day_high: float | None = None
     day_low: float | None = None
     volume: float | None = None
+    extended: ExtendedQuote | None = None
 
 
 @dataclass(frozen=True)
@@ -139,6 +151,12 @@ def parse_quote(payload: dict, symbol: str, now: datetime) -> MacroQuote:
         or meta.get("exchangeTimezoneName") != "Asia/Seoul"
     ):
         raise ValueError("Expected KRX KOSPI index · KRW · Asia/Seoul")
+    if symbol == "^GSPC" and (
+        meta.get("instrumentType") != "INDEX"
+        or meta.get("currency") != "USD"
+        or meta.get("exchangeTimezoneName") != "America/New_York"
+    ):
+        raise ValueError("Expected S&P 500 index · USD · America/New_York")
     if symbol in STOCK_SYMBOLS:
         venue = STOCK_SYMBOLS[symbol]
         if (
@@ -153,11 +171,16 @@ def parse_quote(payload: dict, symbol: str, now: datetime) -> MacroQuote:
     as_of = datetime.fromtimestamp(_finite_positive(meta["regularMarketTime"]), UTC)
     if not timedelta(0) <= now - as_of <= timedelta(days=7):
         raise ValueError("Invalid quote time")
+    extended = extended_quote(result, as_of, now) if symbol in STOCK_SYMBOLS else None
+    latest_at = extended.as_of if extended else as_of
     stamps = result.get("timestamp") or []
     closes = result.get("indicators", {}).get("quote", [{}])[0].get("close") or []
     points = []
     for stamp, close in zip(stamps, closes):
-        if isinstance(stamp, (int, float)) and as_of.timestamp() - 7 * 86400 <= stamp <= as_of.timestamp():
+        if (
+            isinstance(stamp, (int, float))
+            and latest_at.timestamp() - 7 * 86400 <= stamp <= latest_at.timestamp()
+        ):
             try:
                 points.append(_finite_positive(close))
             except ValueError:
@@ -200,6 +223,7 @@ def parse_quote(payload: dict, symbol: str, now: datetime) -> MacroQuote:
         optional_number("regularMarketDayHigh"),
         optional_number("regularMarketDayLow"),
         optional_number("regularMarketVolume"),
+        extended,
     )
 
 
@@ -389,8 +413,20 @@ def fetch_feed(key: str, now: datetime):
     if key == "fear":
         return parse_fear_greed(json.loads(_download(FEAR_API)), now)
     if key in SYMBOLS:
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(SYMBOLS[key], safe='')}?interval=1m&range=1d"
-        return parse_quote(json.loads(_download(url)), SYMBOLS[key], now)
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(SYMBOLS[key], safe='')}"
+        params = "?interval=1m&range=1d" + ("&includePrePost=true" if SYMBOLS[key] in STOCK_SYMBOLS else "")
+        try:
+            return parse_quote(json.loads(_download(url + params)), SYMBOLS[key], now)
+        except (requests.RequestException, ValueError, KeyError, TypeError) as exc:
+            # A minute-series outage can still leave valid regular quote metadata.
+            # Rate limits retain the existing Retry-After/backoff behavior.
+            if (
+                isinstance(exc, requests.HTTPError)
+                and exc.response is not None
+                and exc.response.status_code == 429
+            ):
+                raise
+            return parse_quote(json.loads(_download(url + "?interval=1d&range=1d")), SYMBOLS[key], now)
     language = "ko" if key == "news_ko" else "en-US"
     query = (
         "(비트코인 OR 이더리움 OR 솔라나 OR 리플 OR 암호화폐) (ETF OR 규제 OR 수급 OR 가격 OR 금리 OR CPI OR 유가 OR 전쟁) when:1d"

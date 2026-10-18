@@ -41,6 +41,9 @@ def test_landing_never_collects_candles_or_forecasts(monkeypatch):
         "open_NVDA",
         "open_MU",
         "open_SNDK",
+        "open_SAMSUNG_EM",
+        "open_LS_ELECTRIC",
+        "open_SP500",
     }
     app.run()
     assert not app.exception and not app.get("plotly_chart")

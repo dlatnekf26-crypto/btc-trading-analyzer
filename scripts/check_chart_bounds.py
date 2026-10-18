@@ -184,7 +184,11 @@ def verify(browser, width, url, event_log):
     cdp = context.new_cdp_session(page)
     results = []
     for asset, tf, name in (("BTC", "5m", "5분"), ("BTC", "1M", "월봉"), ("NQ", "5m", "5분")):
-        page.get_by_role("radio", name=asset, exact=True).tap()
+        select_market(page, asset)
+        page.wait_for_function(
+            "s=>document.querySelector('#btc-chart-reader')?.dataset.symbol===s",
+            arg="NQ=F" if asset == "NQ" else "BTCUSDT",
+        )
         page.get_by_role("tab", name="시장 개요", exact=True).tap()
         page.get_by_role("radio", name=name, exact=True).tap()
         page.wait_for_function(

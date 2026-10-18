@@ -5,7 +5,7 @@ const chartReader = (() => {
   const {values,times,nearest}=PlotData, view=ChartViewport;
   const states=new WeakMap(),cards=new WeakMap();
   const money=Object.fromEntries([0,2,4,6,8].map(n=>[n,new Intl.NumberFormat('en-US',{minimumFractionDigits:n,maximumFractionDigits:n})]));
-  let active=null,pending=null,raf=null,pressTimer=null,last=null,disposed=false;
+  let active=null,pending=null,raf=null,pressTimer=null,wheelTimer=null,last=null,disposed=false;
   const write=(el,value)=>{if(el && el.textContent!==value)el.textContent=value;};
   function state(plot) {
     const revision=plot.layout?.uirevision ?? '';
@@ -60,6 +60,17 @@ const chartReader = (() => {
     const axes=plot._fullLayout._plots[subplot];
     return axes?{plot,rect,subplot,axis:axes.xaxis,yaxis:axes.yaxis,primary:axes.yaxis===plot._fullLayout.yaxis}:null;
   }
+  function axisGeometry(event){
+    const plot=event.target.closest?.('.js-plotly-plot');if(!plot)return null;
+    const rects=plot.querySelectorAll('.nsewdrag'),rect=rects[0];if(!rect)return null;
+    const box=rect.getBoundingClientRect(),outer=plot.getBoundingClientRect();
+    if(event.clientX>=box.right&&event.clientX<=outer.right&&event.clientY>=box.top&&event.clientY<=box.bottom)
+      return {...geometry(rect),gestureAxis:'y'};
+    const bottom=rects[rects.length-1].getBoundingClientRect().bottom;
+    if(event.clientY>=bottom&&event.clientY<=bottom+32&&event.clientX>=box.left&&event.clientX<=box.right)
+      return {...geometry(rect),gestureAxis:'x'};
+    return null;
+  }
   function show(point) {
     if(!point.plot.isConnected)return;
     const bounds=point.rect.getBoundingClientRect(),box=point.plot.getBoundingClientRect();
@@ -104,10 +115,18 @@ const chartReader = (() => {
   }
   function autoRange(plot,range,manualY) {
     const axis=plot._fullLayout.xaxis,candle=plot.data.find(t=>t.type==='candlestick');
+    const s=state(plot),xs=candle?times(candle.x,axis):null;
+    const begin=xs?view.lower(xs,range[0]):0,end=xs?view.lower(xs,range[1]+1):0;
+    const cached=s.fit;
+    if(xs&&cached?.data===plot.data&&cached.high===candle.high&&cached.low===candle.low&&cached.event===plot.dataset.liveEvent&&cached.begin===begin&&cached.end===end){
+      write(reader(plot)?.querySelector('[data-visible-bars]'),`${end-begin}봉 보기`);
+      return manualY&&cached.prices?{...cached.updates,'yaxis.range':view.priceLimit(manualY,cached.prices)}:cached.updates;
+    }
     const updates={};
+    let prices=null;
     if(candle){
-      const xs=times(candle.x,axis),fit=view.extent(xs,values(candle.low),values(candle.high),range);
-      if(fit)updates['yaxis.range']=manualY?view.priceLimit(manualY,fit.prices):fit.range;
+      const fit=view.extent(xs,values(candle.low),values(candle.high),range);
+      if(fit){updates['yaxis.range']=fit.range;prices=fit.prices;}
       const volume=plot.data.find(t=>t.type==='bar');
       if(fit&&volume){const ys=values(volume.y);let max=1;for(let i=fit.begin;i<fit.end;i++)if(Number.isFinite(ys[i]))max=Math.max(max,ys[i]);updates['yaxis2.range']=[0,max*1.12];}
       write(reader(plot)?.querySelector('[data-visible-bars]'),fit?`${fit.end-fit.begin}봉 보기`:'');
@@ -131,6 +150,8 @@ const chartReader = (() => {
       const pad=Math.max(high-low,Math.abs(high),Math.abs(low),1e-8)*.12;
       updates[panel.axis+'.range']=[low-pad,high+pad];
     }
+    if(xs)s.fit={data:plot.data,high:candle.high,low:candle.low,event:plot.dataset.liveEvent,begin,end,prices,updates};
+    if(manualY&&prices)return {...updates,'yaxis.range':view.priceLimit(manualY,prices)};
     return updates;
   }
   function apply(plot,range,yRange) {
@@ -166,6 +187,7 @@ const chartReader = (() => {
   }
   function queue(work){pending=work;if(raf===null)raf=root.requestAnimationFrame(()=>{raf=null;const work=pending;pending=null;work?.();});}
   function cancel(keepPreview=false,commit=false){
+    if(wheelTimer!==null)root.clearTimeout(wheelTimer);wheelTimer=null;
     if(pressTimer!==null)root.clearTimeout(pressTimer);pressTimer=null;if(raf!==null)root.cancelAnimationFrame(raf);raf=null;pending=null;
     const g=active;active=null;if(!g)return;
     const view=g.state.preview;
@@ -226,14 +248,47 @@ const chartReader = (() => {
   }
   function mouse(event){
     if(event.sourceCapabilities?.firesTouchEvents)return;
-    if(active?.mouse){const g=active;queue(()=>pan(point(event),g));return;}
+    if(active?.mouse){const g=active;queue(()=>g.mode==='zoom'||g.mode==='priceZoom'?zoomDrag(point(event),g):pan(point(event),g));return;}
     const part=geometry(event.target);if(!part){clearCursor();return;}queue(()=>show({...part,...point(event)}));
   }
-  function mouseStart(event){if(event.button!==0||event.sourceCapabilities?.firesTouchEvents)return;const part=geometry(event.target);if(!part)return;event.preventDefault();event.stopPropagation();cancel();begin(part,[point(event)],'pan');active.mouse=true;}
+  function zoomDrag(p,g){
+    if(!currentGesture(g))return;
+    if(g.mode==='priceZoom'){
+      const scale=Math.exp(Math.max(-3,Math.min(3,(g.y-p.y)/g.box.height*3)));
+      const y=view.pinch(g.yRange,g.box.bottom-g.y,g.box.bottom-g.y,g.box.height,scale);
+      clearCursor();preview(g,g.range,y);return;
+    }
+    const scale=Math.exp(Math.max(-3,Math.min(3,(p.x-g.x)/g.box.width*4)));
+    const range=view.limit(view.pinch(g.range,g.x-g.box.left,g.x-g.box.left,g.box.width,scale),g.bounds);
+    clearCursor();preview(g,range,null);state(g.plot).follow=range[1]>=g.bounds.xs.at(-1);
+  }
+  function mouseStart(event){
+    if(event.button!==0||event.sourceCapabilities?.firesTouchEvents)return;
+    const part=geometry(event.target)||axisGeometry(event);if(!part?.plot)return;
+    event.preventDefault();event.stopPropagation();cancel();
+    const mode=part.gestureAxis==='y'?'priceZoom':part.gestureAxis==='x'||event.shiftKey||state(part.plot).zoom?'zoom':'pan';
+    if(mode==='priceZoom'){
+      state(part.plot).auto=false;reader(part.plot)?.querySelector('[data-chart-action="auto"]')?.setAttribute('aria-pressed','false');
+    }
+    begin(part,[point(event)],mode);active.mouse=true;
+  }
+  function wheel(event){
+    const part=geometry(event.target);if(!part||active&&!active.wheel)return;
+    event.preventDefault();event.stopPropagation();
+    if(!active){begin(part,[point(event)],'wheel');active.wheel=true;active.scale=1;}
+    const g=active;if(g.plot!==part.plot)return;
+    const delta=event.deltaY*(event.deltaMode===1?16:event.deltaMode===2?g.box.height:1);
+    g.scale*=Math.exp(-Math.max(-160,Math.min(160,delta))*.004);
+    queue(()=>{if(!currentGesture(g))return;const range=view.limit(view.pinch(g.range,g.x-g.box.left,g.x-g.box.left,g.box.width,g.scale),g.bounds);clearCursor();preview(g,range,null);state(g.plot).follow=range[1]>=g.bounds.xs.at(-1);});
+    if(wheelTimer!==null)root.clearTimeout(wheelTimer);
+    wheelTimer=root.setTimeout(()=>{wheelTimer=null;end({stopPropagation(){}});},120);
+  }
   function controls(event){
-    const button=event.target.closest?.('[data-chart-action="auto"]');if(!button)return;
+    const button=event.target.closest?.('[data-chart-action]');if(!button)return;
     const node=button.closest('.btc-chart-reader'),plot=Array.from(doc.querySelectorAll('.js-plotly-plot')).find(p=>reader(p)===node);
-    if(!plot)return;const s=state(plot);s.auto=!s.auto;button.setAttribute('aria-pressed',String(s.auto));
+    if(!plot)return;const s=state(plot);
+    if(button.dataset.chartAction==='zoom'){s.zoom=!s.zoom;button.setAttribute('aria-pressed',String(Boolean(s.zoom)));clearCursor();return;}
+    s.auto=!s.auto;button.setAttribute('aria-pressed',String(s.auto));
     const range=plot._fullLayout.xaxis.range.map(n=>plot._fullLayout.xaxis.r2c(n));apply(plot,range);clearCursor();
   }
   function refresh(plot) {
@@ -246,12 +301,14 @@ const chartReader = (() => {
     if(s.follow&&s.lastAt!==null&&lastAt!==null&&lastAt>s.lastAt){const delta=lastAt-s.lastAt;range[0]+=delta;range[1]+=delta;}
     s.data=plot.data;s.lastAt=lastAt;s.version=version;
     const button=reader(plot).querySelector('[data-chart-action="auto"]');button?.setAttribute('aria-pressed',String(s.auto));
+    reader(plot).querySelector('[data-chart-action="zoom"]')?.setAttribute('aria-pressed',String(Boolean(s.zoom)));
     plot.dataset.autoScale=String(s.auto);if(s.auto)apply(plot,range);
   }
   function abort(){cancel();clearCursor();}
   function hidden(){if(doc.hidden)abort();}
   function context(event){if(geometry(event.target))event.preventDefault();}
-  const listeners=[['visibilitychange',hidden,{}],['touchstart',start,{capture:true,passive:false}],['touchmove',move,{capture:true,passive:false}],['touchend',end,{capture:true,passive:true}],['touchcancel',abort,{capture:true,passive:true}],['mousemove',mouse,{capture:true,passive:true}],['mousedown',mouseStart,{capture:true,passive:false}],['mouseup',end,{capture:true,passive:true}],['contextmenu',context,{capture:true}],['click',controls,{}]];
+  const listeners=[['visibilitychange',hidden,{}],['touchstart',start,{capture:true,passive:false}],['touchmove',move,{capture:true,passive:false}],['touchend',end,{capture:true,passive:true}],['touchcancel',abort,{capture:true,passive:true}],['mousemove',mouse,{capture:true,passive:true}],['mousedown',mouseStart,{capture:true,passive:false}],['mouseup',end,{capture:true,passive:true}],['wheel',wheel,{capture:true,passive:false}],['contextmenu',context,{capture:true}],['click',controls,{}]];
   for(const [name,handler,options] of listeners)doc.addEventListener(name,handler,options);
-  return {inspect,refresh,currentQuote,isInteracting:plot=>active?.plot===plot,dispose(){disposed=true;abort();for(const [name,handler,options] of listeners)doc.removeEventListener(name,handler,options);doc.querySelectorAll('.btc-crosshair').forEach(n=>n.remove());}};
+  root.addEventListener('blur',abort);
+  return {inspect,refresh,currentQuote,isInteracting:plot=>active?.plot===plot,dispose(){disposed=true;abort();root.removeEventListener('blur',abort);for(const [name,handler,options] of listeners)doc.removeEventListener(name,handler,options);doc.querySelectorAll('.btc-crosshair').forEach(n=>n.remove());}};
 })();

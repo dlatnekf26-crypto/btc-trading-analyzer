@@ -143,3 +143,27 @@ console.log(JSON.stringify({during,after:node.style,x:ChartPreview.matrix([10,20
     assert data["y"] == {"scale": 1, "offset": 50}
     assert data["during"]["transform"] == "matrix(2,0,0,1,-40,50)"
     assert data["after"] == {"transform": "", "transformOrigin": ""}
+
+
+def test_preview_skips_empty_layers_and_unchanged_transforms_but_can_resume_after_clear():
+    source = Path(__file__).resolve().parents[1] / "src/btc_analyzer/ui/browser/chart-preview.js"
+    program = (
+        source.read_text()
+        + """
+let writes=0;
+const style=new Proxy({transform:'',transformOrigin:''},{set(o,k,v){writes++;o[k]=v;return true;}});
+const filled={style,childElementCount:1},empty={style:{},childElementCount:0};
+const x={range:[0,100],r2c:n=>n,_length:100},y={range:[0,100],_length:100,_name:'yaxis'};
+const plot={_fullLayout:{_plots:{xy:{xaxis:x,yaxis:y}},yaxis:y},querySelector:()=>({children:[empty,filled]})};
+const p=ChartPreview.create(plot);p.show([0,50],{});const first=writes;p.show([0,50],{});
+const repeated=writes;p.clear();p.show([0,50],{});
+console.log(JSON.stringify({first,repeated,empty:empty.style,again:style.transform}));
+"""
+    )
+    result = subprocess.run(["node", "-e", program], capture_output=True, text=True, check=True)
+    assert json.loads(result.stdout) == {
+        "first": 2,
+        "repeated": 2,
+        "empty": {},
+        "again": "matrix(2,0,0,1,0,0)",
+    }

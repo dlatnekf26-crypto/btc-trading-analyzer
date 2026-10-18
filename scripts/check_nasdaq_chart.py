@@ -12,7 +12,11 @@ from check_chart_gestures import gesture_check, region_box, touch
 
 
 def verify(browser, width, url, event_log, market="NQ"):
-    symbol, title, card = ("^KS11", "코스피", "kospi") if market == "KOSPI" else ("NQ=F", "NQ", "nq")
+    symbol, title, card = {
+        "KOSPI": ("^KS11", "코스피", "kospi"),
+        "SP500": ("^GSPC", "S&P 500", "sp500"),
+        "NQ": ("NQ=F", "NQ", "nq"),
+    }[market]
     context = browser.new_context(
         viewport={"width": width, "height": 1000}, has_touch=True, is_mobile=width < 1000
     )
@@ -166,7 +170,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--app-url", required=True)
     parser.add_argument("--event-log", type=Path)
-    parser.add_argument("--market", choices=("NQ", "KOSPI"), default="NQ")
+    parser.add_argument("--market", choices=("NQ", "KOSPI", "SP500"), default="NQ")
     parser.add_argument("--widths", type=int, nargs="+", default=[390, 820, 1440])
     args = parser.parse_args()
     with sync_playwright() as p:

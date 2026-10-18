@@ -12,6 +12,7 @@ from btc_analyzer.analysis.direction_outlook import direction_outlook
 from btc_analyzer.analysis.direction_explanation import explain_direction
 from btc_analyzer.analysis.price_explanation import explain_price
 from btc_analyzer.ui.charts import READ_CHART_CONFIG, bind_asset
+from btc_analyzer.ui.chart_reader import CHART_ACTIONS
 from btc_analyzer.ui.market_context import current_context
 from btc_analyzer.data.market_context import UTC
 from btc_analyzer.ui.direction_view import direction_cards, direction_headline, direction_reason_card
@@ -240,7 +241,7 @@ def render_prediction(
             else ""
         )
         st.markdown(
-            f'<section id="btc-forecast-reader" class="btc-chart-reader" data-symbol="{asset.stream_symbol}" data-decimals="{asset.decimals}"><div class="btc-chart-toolbar"><div class="btc-cursor-reading">현재 가격 <b data-field="current">—</b><small> {escape(quote)}</small><span class="btc-current-status" data-current-status>현재가 연결 중</span></div><button type="button" class="btc-chart-auto" data-chart-action="auto" aria-pressed="true" title="보이는 가격 경로에 가격축 맞춤">오토</button></div><div class="btc-reader-heading"><span data-reader-time>길게 눌러 움직이면 예상 지표도 확인해요</span></div><div class="btc-reader-values">{cells}</div></section>',
+            f'<section id="btc-forecast-reader" class="btc-chart-reader" data-symbol="{asset.stream_symbol}" data-decimals="{asset.decimals}"><div class="btc-chart-toolbar"><div class="btc-cursor-reading">현재 가격 <b data-field="current">—</b><small> {escape(quote)}</small><span class="btc-current-status" data-current-status>현재가 연결 중</span></div>{CHART_ACTIONS}</div><div class="btc-reader-heading"><span data-reader-time>길게 눌러 움직이면 예상 지표도 확인해요</span></div><div class="btc-reader-values">{cells}</div></section>',
             unsafe_allow_html=True,
         )
         st.plotly_chart(

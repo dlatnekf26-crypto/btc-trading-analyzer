@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from btc_analyzer.assets import STOCK_MARKETS, EXCHANGE_HISTORY
+from btc_analyzer.assets import STOCK_MARKETS, SESSION_MARKETS, EXCHANGE_HISTORY
 from btc_analyzer.data.exchange_history import calendar_bars, parse_history, aggregate, horizon_bars
 from btc_analyzer.data.market_context import parse_quote
 from btc_analyzer.market_clock import bar_closes, gap_groups
@@ -17,7 +17,7 @@ NOW = pd.Timestamp("2026-10-18T12:00Z")
 
 
 def stock_payload(code, timeframe="1d", count=400):
-    asset, venue = STOCK_MARKETS[code], EXCHANGE_HISTORY[code]
+    asset, venue = SESSION_MARKETS[code], EXCHANGE_HISTORY[code]
     starts, ends = calendar_bars(2025, 2027, timeframe, code)
     index = starts[
         (ends <= NOW) & (starts >= pd.Timestamp(asset.listed, tz=venue.timezone).tz_convert("UTC"))
@@ -31,7 +31,7 @@ def stock_payload(code, timeframe="1d", count=400):
                         "symbol": asset.symbol,
                         "currency": venue.currency,
                         "exchangeTimezoneName": venue.timezone,
-                        "instrumentType": "EQUITY",
+                        "instrumentType": venue.kind,
                         "dataGranularity": timeframe,
                         "regularMarketPrice": float(price[-1]),
                         "regularMarketTime": int(NOW.timestamp() - 900),
@@ -64,6 +64,8 @@ def stock_payload(code, timeframe="1d", count=400):
     [
         ("SAMSUNG", "005930.KS", "KRW"),
         ("SKHYNIX", "000660.KS", "KRW"),
+        ("SAMSUNG_EM", "009150.KS", "KRW"),
+        ("LS_ELECTRIC", "010120.KS", "KRW"),
         ("AAPL", "AAPL", "USD"),
         ("NVDA", "NVDA", "USD"),
         ("MU", "MU", "USD"),
@@ -95,8 +97,9 @@ def test_stock_identity_quote_and_closed_daily_bars(code, pair, currency):
 
 
 @pytest.mark.parametrize("tf", ["5m", "15m", "1h", "4h", "1d", "1w", "1M"])
-def test_us_equity_holidays_early_close_and_forecast_use_cash_sessions(tf):
-    starts, ends = calendar_bars("2026-11-26", "2026-11-27", tf, "AAPL")
+@pytest.mark.parametrize("market", ["AAPL", "SP500"])
+def test_us_equity_holidays_early_close_and_forecast_use_cash_sessions(tf, market):
+    starts, ends = calendar_bars("2026-11-26", "2026-11-27", tf, market)
     assert len(starts) > 0
     assert starts[0].tz_convert("America/New_York").strftime("%Y-%m-%d %H:%M") == "2026-11-27 09:30"
     # Thanksgiving is absent; Friday's last bar closes at 13:00, including daily bars.
@@ -134,7 +137,20 @@ def test_sandisk_history_never_reuses_the_old_pre_2025_ticker():
         parse_history(payload, "1d", NOW, "SNDK")
 
 
-@pytest.mark.parametrize("code", list(STOCK_MARKETS))
+def test_sp500_is_the_actual_index_with_regular_us_sessions():
+    payload = stock_payload("SP500")
+    frame = parse_history(payload, "1d", NOW, "SP500")
+    assert frame.attrs["market"] == "SP500" and len(frame) == 400
+    assert parse_quote(payload, "^GSPC", NOW.to_pydatetime()).symbol == "^GSPC"
+    assert horizon_bars(bar_closes(frame, frame.index[-1], "1d"), "1w", "SP500") == 5
+    for field, value in (("symbol", "SPY"), ("instrumentType", "ETF"), ("currency", "KRW")):
+        wrong = deepcopy(payload)
+        wrong["chart"]["result"][0]["meta"][field] = value
+        with pytest.raises(ValueError):
+            parse_quote(wrong, "^GSPC", NOW.to_pydatetime())
+
+
+@pytest.mark.parametrize("code", [*STOCK_MARKETS, "SP500"])
 def test_stock_cards_open_shared_chart_and_forecast_with_correct_units(code, offline_dashboard, monkeypatch):
     from scripts.offline_ui_fixture import analysis_app
     from btc_analyzer.data.service import DataService
@@ -150,7 +166,7 @@ def test_stock_cards_open_shared_chart_and_forecast_with_correct_units(code, off
     assert app.button(key="open_" + code)
     assert app.selectbox(key="analysis_asset").value == code
     spec = json.loads(app.get("plotly_chart")[0].proto.spec)
-    assert spec["layout"]["meta"]["btcLive"]["symbol"] == STOCK_MARKETS[code].symbol
+    assert spec["layout"]["meta"]["btcLive"]["symbol"] == SESSION_MARKETS[code].symbol
     assert len(spec["layout"]["meta"]["btcLive"]["panels"]) == 2
     app.session_state["dashboard_tab"] = "미래 예측"
     app.run(timeout=60)

@@ -11,6 +11,8 @@ from check_touch_charts import inspect
 STOCKS = (
     ("SAMSUNG", "삼성전자", "005930.KS", "KRW", 215500),
     ("SKHYNIX", "SK하이닉스", "000660.KS", "KRW", 1272000),
+    ("SAMSUNG_EM", "삼성전기", "009150.KS", "KRW", 1188000),
+    ("LS_ELECTRIC", "LS일렉트릭", "010120.KS", "KRW", 158600),
     ("AAPL", "AAPL", "AAPL", "USD", 343.46),
     ("NVDA", "NVDA", "NVDA", "USD", 214.13),
     ("MU", "MU", "MU", "USD", 878.84),
@@ -47,7 +49,7 @@ def verify(browser, width, url, events, all_periods=False, stock_codes=None):
     baseline = events.read_text() if events else None
     page.goto(url)
     page.get_by_role("button", name="삼성전자 차트 열기", exact=True).wait_for(timeout=60000)
-    assert page.locator(".board-asset").count() == 12
+    assert page.locator(".board-asset").count() == 15
     assert not page.locator(".js-plotly-plot").count()
     if baseline is not None:
         assert events.read_text() == baseline
@@ -167,7 +169,13 @@ def verify(browser, width, url, events, all_periods=False, stock_codes=None):
     widget.evaluate("clearInterval(window.__stockFeed)")
     cleanup(page, widget)
     context.close()
-    return {"width": width, "stock_cards": 6, "shared_bridge": True, "crypto_return": True, "errors": errors}
+    return {
+        "width": width,
+        "stock_cards": len(STOCKS),
+        "shared_bridge": True,
+        "crypto_return": True,
+        "errors": errors,
+    }
 
 
 if __name__ == "__main__":

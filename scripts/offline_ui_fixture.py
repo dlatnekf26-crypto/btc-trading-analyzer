@@ -188,6 +188,8 @@ def offline_context_data():
             stock_prices = {
                 "005930.KS": 215500,
                 "000660.KS": 1272000,
+                "009150.KS": 1188000,
+                "010120.KS": 158600,
                 "AAPL": 343.46,
                 "NVDA": 214.13,
                 "MU": 878.84,
@@ -240,6 +242,7 @@ def offline_context_data():
             price = {
                 **stock_prices,
                 "^KS11": 2800.0,
+                "^GSPC": 7659.44,
                 "NQ=F": 22345.50,
                 "CL=F": 87.42,
                 "^TNX": 4.25,

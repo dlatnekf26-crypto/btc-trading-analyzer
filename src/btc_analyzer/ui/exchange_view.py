@@ -56,6 +56,11 @@ def render_exchange_market(market):
     st.caption(
         f"{asset.symbol} · {venue.source} · 공개 지연 자료 · 1분마다 확정 봉 확인"
         + (" · 롤오버 가격 차이 포함" if market == "NQ" else f" · {venue.unit}")
+        + (
+            " · 현재가는 장외 포함, 차트·분석은 정규장 기준"
+            if venue.kind == "EQUITY" and venue.calendar == "NYSE"
+            else ""
+        )
     )
     try:
         if tabs[0].open:
@@ -120,7 +125,7 @@ def render_exchange_market(market):
                     else "지표에 필요한 연속 이력이 부족합니다."
                 )
                 st.caption(
-                    "드래그 이동 · 두 손가락으로 봉 수 조절 · 길게 눌러 가격 · 오토 가격축. "
+                    "드래그 이동 · 휠/시간축 드래그로 봉 수 조절 · 가격축 드래그로 높이 조절 · 두 손가락 확대·축소 · 오토 가격축. "
                     + (
                         "일봉은 미국 정규 거래일 기준(단축장 제외), 주·월봉은 이 일봉을 합산해요."
                         if market == "NQ"
