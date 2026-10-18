@@ -64,62 +64,61 @@ function makeLiveAnalysis(root) {
   // fragment replacements get a new WeakMap state and the newest candle.
   function update(plot,key,work) {
     let state=plots.get(plot);
-    if(!state || (!state.busy && state.data!==plot.data)) {
-      state={key:null,busy:false,base:JSON.parse(JSON.stringify(plot.data)),data:plot.data};plots.set(plot,state);
+    if(!state || (!state.busy && (state.data!==plot.data || state.revision!==plot.layout.uirevision))) {
+      state={key:null,busy:false,base:null,data:plot.data,revision:plot.layout.uirevision};plots.set(plot,state);
     }
     if(state.busy || state.key===key) return;
     state.busy=true;
-    Promise.resolve().then(()=>work(state)).then(()=>{state.key=key;}).catch(()=>{}).finally(()=>{state.busy=false;});
+    const meta=plot.layout.meta?.btcLive;
+    Promise.resolve().then(()=>work(state)).then(()=>{
+      if(plot.layout.meta?.btcLive===meta){state.key=key;state.data=plot.data;}
+    }).catch(()=>{}).finally(()=>{state.busy=false;});
   }
   function market(plot,meta,b,now) {
     if(!current(b,now)) return;
-    const k=b.candle, key=`${k.event}-${k.row[4]}`;
+    const k=b.candle, key=`${k.at}-${k.row.slice(1).join(',')}`;
+    plot.dataset.liveEvent=String(k.event);
     update(plot,key,async state=>{
-      // Include a closed candle observed since the server snapshot, then the
-      // current candle. A missing intervening candle stops updates above.
+      // Keep only immutable calculation arrays, not a JSON copy of all styles.
+      // Plotly's own updates may replace data arrays; the server base stays fixed.
+      if(!state.base)state.base=plot.data.map(t=>{
+        const result={type:t.type};
+        for(const field of ['x','y','open','high','low','close'])if(t[field])result[field]=Array.from(array(t[field]));
+        result.colors=Array.isArray(t.marker?.color)?t.marker.color.slice():[];
+        return result;
+      });
       const extra=b.seed.rows.filter(r=>r[0]>=meta.closedEnd).concat(k.closed ? [] : [k.row]);
+      if(!extra.length)return;
       const extraX=extra.map(r=>displayDate(r[0],meta.timezone,true));
-      // Plotly restyle re-infers matched axes from numeric timestamps. Update
-      // dates and explicit axis types together, retaining the user's viewport.
       const dateAxes={};
-      for(const name of ['xaxis','xaxis2'])if(plot._fullLayout[name]){
+      for(const name of Object.keys(plot._fullLayout))if(/^xaxis\d*$/.test(name)){
         dateAxes[`${name}.type`]='date';dateAxes[`${name}.autorange`]=false;
         dateAxes[`${name}.range`]=plot._fullLayout[name].range.slice();
       }
-      const lines={x:[],y:[],'marker.color':[]},lineIndices=[];
+      const fields=['x','y','open','high','low','close','marker.color'];
+      const updates=Object.fromEntries(fields.map(f=>[f,[]])),indices=[];
+      const append=(base,tail)=>[...(base??[]),...tail].slice(-meta.bars);
       for(let i=0;i<state.base.length;i++) {
-        const trace=state.base[i];
-        if(trace.type!=='candlestick' && trace.type!=='bar') continue;
-        const xs=[...array(trace.x),...extraX].slice(-meta.bars);
-        const updates={x:[xs]};
-        for(const [field,column] of [['open',1],['high',2],['low',3],['close',4]])
-          if(trace.type==='candlestick') updates[field]=[[...array(trace[field]),...extra.map(r=>r[column])].slice(-meta.bars)];
-        if(trace.type==='bar') {
-          lineIndices.push(i);lines.x.push(xs);
-          lines.y.push([...array(trace.y),...extra.map(r=>r[5])].slice(-meta.bars));
-          lines['marker.color'].push([...array(trace.marker.color),...extra.map(r=>r[4]>=r[1] ? '#34d399' : '#fb7185')].slice(-meta.bars));
-        } else {
-          if(extra.length) await root.Plotly.update(plot,updates,dateAxes,[i]);
+        const trace=state.base[i],column=meta.overlays?.[i];
+        if(trace.type!=='candlestick' && i!==meta.volumeIndex && !column)continue;
+        const data={x:append(trace.x,extraX)};
+        if(trace.type==='candlestick'){
+          for(const [field,n] of [['open',1],['high',2],['low',3],['close',4]])data[field]=append(trace[field],extra.map(r=>r[n]));
+        }else if(i===meta.volumeIndex){
+          data.y=append(trace.y,extra.map(r=>r[5]));
+          data['marker.color']=append(trace.colors,extra.map(r=>r[4]>=r[1]?'#34d399':'#fb7185'));
+        }else{
+          const ys=extra.map(r=>r[0]===k.at?b.features[column]:r[0]===b.seed.at?b.seed.features?.[column]??null:null);
+          data.y=append(trace.y,ys);
+          if(column==='macd_hist')data['marker.color']=append(trace.colors,ys.map(y=>y>=0?'#10a878':'#e94b65'));
         }
+        indices.push(i);
+        // Plotly treats undefined as leave unchanged, including mixed trace types.
+        for(const field of fields)updates[field].push(data[field]);
       }
-      if(!extra.length) return;
-      for(const [index,column] of Object.entries(meta.overlays ?? {})) {
-        const trace=state.base[index];
-        const ys=extra.map(r=>r[0]===k.at ? b.features[column] : r[0]===b.seed.at ? b.seed.features?.[column] ?? null : null);
-        lineIndices.push(Number(index));
-        lines.x.push([...array(trace.x),...extraX].slice(-meta.bars));
-        lines.y.push([...array(trace.y),...ys].slice(-meta.bars));lines['marker.color'].push(null);
-      }
-      await root.Plotly.update(plot,lines,dateAxes,lineIndices);
-      if(doc.getElementById('btc-chart-reader')?.dataset.mode==='latest')
-        chartReader.inspect(plot,Infinity,'latest');
-      // Overlays from the server remain explicitly closed-candle geometry.
-      // A marker adds the current price without moving axes or hiding hover.
+      await root.Plotly.update(plot,updates,dateAxes,indices);
+      if(doc.getElementById('btc-chart-reader')?.dataset.mode==='latest')chartReader.inspect(plot,Infinity,'latest');
       plot.dataset.liveEvent=String(k.event);plot.dataset.livePrice=String(k.row[4]);plot.dataset.liveTimeframe=k.tf;
-      const summary=doc.querySelector('.btc-chart-summary');
-      text(summary?.querySelector('strong'),`${k.row[4].toLocaleString('en-US',{minimumFractionDigits:k.row[4]<10 ? 4 : 2,maximumFractionDigits:k.row[4]<10 ? 4 : 2})} USDT`);
-      text(summary?.querySelector('span'),`${meta.label} · 진행 중 봉 · ${clock.format(new Date(k.event))} KST`);
-      text(summary?.querySelector('span:last-child'),`현재 봉 ${k.row[4]/k.row[1]-1>=0 ? '+' : ''}${((k.row[4]/k.row[1]-1)*100).toFixed(2)}% · EMA/밴드 잠정 · 일목 구름은 확정 봉`);
     });
   }
   function forecast(plot,meta,quote,now) {
@@ -137,7 +136,7 @@ function makeLiveAnalysis(root) {
     const up=directions.filter(n=>n>0).length,down=directions.filter(n=>n<0).length;
     text(card?.querySelector('.btc-live-forecast-reason'),`${up}개 시간대 20봉선 위 · ${down}개 아래. 현재가로 출발점을 바꾸고 기존 지표·유사 사례의 수익률 경로/방향 비중을 유지해요. 잠정 지표는 관찰 근거이며 추가 가격 가중치로 쓰지 않아요.`);
     const xs=meta.offsets.map(t=>displayDate(quote.event+t,meta.timezone));
-    update(plot,`${quote.event}-${quote.price}`,async()=>{
+    update(plot,`${Math.floor(quote.event/60000)}-${quote.price}`,async()=>{
       const indices=[...meta.liveIndices], xValues=[xs,xs,xs], yValues=[upper,lower,center];
       if(meta.indicatorSeed){
         const projected=projectIndicators(meta.indicatorSeed,center);

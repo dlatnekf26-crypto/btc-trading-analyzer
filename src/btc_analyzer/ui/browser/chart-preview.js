@@ -13,13 +13,13 @@ const ChartPreview = (()=>{
       const x=axes.xaxis,y=axes.yaxis;
       for(const node of group.children){
         layers.push({node,x:x.range.map(n=>x.r2c(n)),y:y.range.map(Number),width:x._length,height:y._length,
-          primary:y===plot._fullLayout.yaxis,transform:node.style.transform,origin:node.style.transformOrigin});
+          axis:y._name ?? Object.keys(plot._fullLayout).find(k=>/^yaxis\d*$/.test(k)&&plot._fullLayout[k]===y) ?? 'yaxis',transform:node.style.transform,origin:node.style.transformOrigin});
       }
     }
     return {
       show(range,updates){
         for(const layer of layers){
-          const x=matrix(layer.x,range,layer.width),target=updates[layer.primary?'yaxis.range':'yaxis2.range']??layer.y;
+          const x=matrix(layer.x,range,layer.width),target=updates[layer.axis+'.range']??layer.y;
           const y=matrix(layer.y,target,layer.height,true);
           layer.node.style.transformOrigin='0 0';
           layer.node.style.transform=`matrix(${x.scale},0,0,${y.scale},${x.offset},${y.offset})`;

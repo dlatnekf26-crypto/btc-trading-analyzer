@@ -42,6 +42,7 @@ def market_chart_spec(
         zones_visible=False,
         levels_visible=False,
         bars=bars,
+        oscillators=True,
     )
     fig.update_layout(
         uirevision=f"market-{features.attrs.get('timeframe')}-{bars}",
@@ -60,7 +61,7 @@ def market_chart_spec(
     fig.update_xaxes(
         tickformat="%m.%d<br>%H:%M" if timeframe in ("5m", "15m", "1h", "4h") else "%y.%m.%d",
         nticks=5,
-        row=2,
+        row=4,
         col=1,
     )
     overlays = {}
@@ -68,11 +69,22 @@ def market_chart_spec(
     for index, trace in enumerate(fig.data):
         if trace.name.startswith("EMA "):
             overlays[str(index)] = trace.name.lower().replace(" ", "_")
+        elif trace.name in ("RSI", "MACD", "MACD 시그널", "MACD 히스토그램"):
+            overlays[str(index)] = {
+                "RSI": "rsi",
+                "MACD": "macd",
+                "MACD 시그널": "macd_signal",
+                "MACD 히스토그램": "macd_hist",
+            }[trace.name]
         elif trace.name in ("전환선", "기준선"):
             overlays[str(index)] = "ichimoku_tenkan" if trace.name == "전환선" else "ichimoku_kijun"
         elif trace.name == "볼린저 밴드":
             overlays[str(index)] = next(bands_seen)
+    from btc_analyzer.ui.oscillator_chart import PANELS, macd_range
+
     fig.layout.meta["btcLive"]["overlays"] = overlays
+    fig.layout.meta["btcLive"]["panels"] = PANELS
+    fig.layout.meta["btcLive"]["volumeIndex"] = next(i for i, t in enumerate(fig.data) if t.name == "거래량")
     window = min(60, len(features), bars)
     fig.layout.meta["btcLive"]["window"] = window
     fig.layout.meta["btcLive"]["displacement"] = displacement
@@ -82,6 +94,7 @@ def market_chart_spec(
     padding = max(high - low, high * 0.001) * 0.12
     fig.update_yaxes(range=[low - padding, high + padding], autorange=False, row=1, col=1)
     fig.update_yaxes(range=[0, max(float(visible.volume.max()), 1) * 1.12], autorange=False, row=2, col=1)
+    fig.update_yaxes(range=macd_range(visible), autorange=False, row=4, col=1)
     step = (
         shown.index[-1] - shown.index[-2]
         if len(shown) > 1
@@ -91,9 +104,9 @@ def market_chart_spec(
     right = shown.index[-1] + step * 1.5
     fig.update_xaxes(range=[left.tz_convert(timezone), right.tz_convert(timezone)])
     fig.update_yaxes(side="right", title_text=None, row=1, col=1)
-    fig.update_yaxes(side="right", row=2, col=1)
+    fig.update_yaxes(side="right", title_text=None)
     fig.update_layout(
-        height=470, margin={"t": 30, "b": 30, "l": 5, "r": 5}, legend={"y": 1.01}, hovermode=False
+        height=640, margin={"t": 30, "b": 30, "l": 5, "r": 5}, legend={"y": 1.01}, hovermode=False
     )
     # Plotly's date axes use display wall time. Integer milliseconds avoid
     # repeating long ISO/timezone strings in every overlay; source cutoffs stay UTC.
@@ -169,5 +182,5 @@ def render_market_chart(
         "드래그로 이동 · 두 손가락으로 봉 수 조절 · 길게 눌러 가격 · 오토는 보이는 봉의 가격축에 맞춰요."
     )
     st.caption(
-        f"{FRAME_LABELS[chart_tf]} · Binance {ASSETS[asset_code].symbol} · EMA·볼린저·일목 항상 표시 · 진행 중 봉은 잠정값이에요."
+        f"{FRAME_LABELS[chart_tf]} · Binance {ASSETS[asset_code].symbol} · EMA·볼린저·일목·RSI·MACD 항상 표시 · 진행 중 봉은 잠정값이에요."
     )

@@ -8,6 +8,10 @@ import math
 from btc_analyzer.assets import MARKETS, price_text
 
 FIELDS = {
+    "rsi": "RSI 14",
+    "macd": "MACD",
+    "macd_signal": "시그널",
+    "macd_hist": "MACD 차이",
     "open": "시가",
     "high": "고가",
     "low": "저가",
@@ -29,11 +33,16 @@ def reader_html(frame, timeframe, asset_code, averages, bands):
         keys.extend(("bb_upper", "bb_middle", "bb_lower"))
     if "ichimoku_tenkan" in frame:
         keys.extend(("ichimoku_tenkan", "ichimoku_kijun"))
+    keys.extend(key for key in ("rsi", "macd", "macd_signal", "macd_hist") if key in frame)
     row = frame.iloc[-1]
 
     def value(key):
         n = row.get(key)
-        return price_text(n) if n is not None and math.isfinite(n) else "—"
+        if n is None or not math.isfinite(n):
+            return "—"
+        if key.startswith("macd") and 0 < abs(n) < 0.0001:
+            return f"{n:,.8f}"
+        return price_text(n)
 
     cells = "".join(
         f'<div class="btc-read-{key}"><span>{FIELDS[key]}</span><b data-field="{key}">{value(key)}</b></div>'

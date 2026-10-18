@@ -331,8 +331,8 @@
       if (s.history && !s.historyReady) history(s);
       poll(s);
     }
-    if (macroSocket && Date.now()-Math.max(macroOpened,macroRx)>120000) macroSocket.close();
-    if (Date.now()-macroSubscribed>15000) subscribeMacro();
+    // An open macro stream may be silent during holidays. Subscribe on open;
+    // transport close/error and browser online events drive reconnection.
     pollRates(); schedulePaint();
   },1000);
   document.addEventListener('visibilitychange',()=>{
@@ -349,6 +349,15 @@
     } else {connectMacro();pollRates();}
     schedulePaint();
   });
+  function online(){
+    if(disposed||document.hidden)return;
+    for(const s of states)if(s.id==='binance'||s.id==='upbit'){
+      if(s.socketRef&&!fresh(s))stop(s);connect(s);poll(s);
+    }
+    stopMacro();connectMacro();
+    pollRates();schedulePaint();
+  }
+  window.addEventListener('online',online);
   const observer=new ResizeObserver(()=>{
     try {
       const frame=window.frameElement,height=Math.ceil(document.body.scrollHeight)+'px';
@@ -360,6 +369,7 @@
   });
   observer.observe(document.body);
   window.addEventListener('pagehide',()=>{
+    window.removeEventListener('online',online);
     chartReader.dispose();
     disposePwa();
     liveAnalysis.dispose();

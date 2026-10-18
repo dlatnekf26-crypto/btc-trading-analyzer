@@ -189,6 +189,29 @@ def verify(browser, width, url=None, event_log=None):
         )
         == 1
     )
+    # A quiet open stream is valid over holidays; neither repeated subscriptions
+    # nor an idle reconnect should manufacture network activity.
+    quiet = widget.evaluate(
+        "()=>({connections:window.__quoteSockets.filter(s=>s.url.includes('streamer.finance')).length,subscriptions:window.__subscriptions.filter(s=>s.subscribe).length})"
+    )
+    page.clock.run_for(181000)
+    assert (
+        widget.evaluate("window.__quoteSockets.filter(s=>s.url.includes('streamer.finance')).length")
+        == quiet["connections"]
+    )
+    assert widget.evaluate("window.__subscriptions.filter(s=>s.subscribe).length") == quiet["subscriptions"]
+    widget.evaluate("window.dispatchEvent(new Event('online'))")
+    page.clock.run_for(100)
+    assert (
+        widget.evaluate("window.__quoteSockets.filter(s=>s.url.includes('streamer.finance')).length")
+        == quiet["connections"] + 1
+    )
+    assert (
+        widget.evaluate(
+            "window.__quoteSockets.filter(s=>s.url.includes('streamer.finance')&&s.readyState===1).length"
+        )
+        == 1
+    )
     assert not errors, errors
     assert page.evaluate("document.documentElement.scrollWidth<=innerWidth")
     cleanup(page, widget)

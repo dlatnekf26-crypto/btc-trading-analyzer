@@ -49,7 +49,7 @@
     dirty:false,graphDirty:false,node:null,nodes:null,statusSecond:-1
   }]));
   const macroSymbols=[...Object.keys(macros),'KRW=X'];
-  let macroSocket=null, macroRetry=null, macroRetries=0, macroOpened=0, macroRx=0, macroSubscribed=0;
+  let macroSocket=null, macroRetry=null, macroRetries=0;
   let parentDoc=null;
   try {parentDoc=window.parent.document;} catch (_) {}
   function acceptMacro(value) {
@@ -75,7 +75,7 @@
         change,bucket});
       s.points=s.points.slice(-60);
     }
-    macroRx=Date.now(); macroRetries=0; schedulePaint();
+    macroRetries=0; schedulePaint();
   }
   function paintMacro() {
     if (!parentDoc) return;
@@ -155,7 +155,7 @@
   }
   function subscribeMacro() {
     if (macroSocket?.readyState!==1) return;
-    try {macroSocket.send(JSON.stringify({subscribe:macroSymbols})); macroSubscribed=Date.now();}
+    try {macroSocket.send(JSON.stringify({subscribe:macroSymbols}));}
     catch (_) {macroSocket.close();}
   }
   function connectMacro() {
@@ -163,7 +163,7 @@
     let ws;
     try {ws=new WebSocket('wss://streamer.finance.yahoo.com/?version=2');}
     catch (_) {retryMacro(); return;}
-    macroSocket=ws; macroOpened=Date.now();
+    macroSocket=ws;
     ws.onopen=subscribeMacro;
     ws.onmessage=event=>{
       if (disposed || document.hidden || macroSocket!==ws) return;

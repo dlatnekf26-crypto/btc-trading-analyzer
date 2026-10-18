@@ -158,11 +158,18 @@ def price_chart(
     zones_visible: bool = True,
     levels_visible: bool = True,
     bars: int = 300,
+    oscillators: bool = False,
 ) -> go.Figure:
     """Display time in the selected timezone; analysis/storage timestamps remain UTC."""
     frame = df.tail(bars)
     x = frame.index.tz_convert(timezone)
-    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.78, 0.22], vertical_spacing=0.03)
+    fig = make_subplots(
+        rows=4 if oscillators else 2,
+        cols=1,
+        shared_xaxes=True,
+        row_heights=[0.60, 0.10, 0.14, 0.16] if oscillators else [0.78, 0.22],
+        vertical_spacing=0.025 if oscillators else 0.03,
+    )
     fig.add_trace(
         go.Candlestick(
             x=x,
@@ -219,6 +226,10 @@ def price_chart(
         row=2,
         col=1,
     )
+    if oscillators:
+        from btc_analyzer.ui.oscillator_chart import add_oscillators
+
+        add_oscillators(fig, frame, x)
     for zone in analysis.zones if zones_visible and analysis is not None else []:
         fig.add_hrect(
             y0=zone.low,
@@ -263,7 +274,12 @@ def price_chart(
     fig.update_layout(xaxis_rangeslider_visible=False, uirevision=f"btc-{df.attrs.get('timeframe', '1h')}")
     fig.update_xaxes(title_text=f"{timezone} · 봉 시작 시각", row=2, col=1)
     fig.update_yaxes(title_text=quote, row=1, col=1)
-    return style_chart(fig, 550)
+    fig = style_chart(fig, 640 if oscillators else 550)
+    if oscillators:
+        fig.update_xaxes(title_text=None)
+        fig.update_yaxes(range=[0, 100], tickvals=[30, 50, 70], autorange=False, row=3, col=1)
+        fig.update_yaxes(tickformat=".4~g", zeroline=False, row=4, col=1)
+    return fig
 
 
 def indicator_chart(df: pd.DataFrame, timezone: str = "Asia/Seoul", kind: str = "RSI") -> go.Figure:

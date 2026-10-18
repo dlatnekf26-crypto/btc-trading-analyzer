@@ -53,6 +53,7 @@ const LiveCandles = (()=>{
     const window=closes.slice(-cfg.bb_length), mean=window.reduce((a,b)=>a+b,0)/window.length;
     const deviation=Math.sqrt(window.reduce((s,c)=>s+(c-mean)**2,0)/window.length)*cfg.bb_std;
     const features={rsi:!finite(gain)||!finite(loss) ? null : loss===0 ? (gain===0 ? 50 : 100) : 100-100/(1+gain/loss),
+      macd:line,macd_signal:n>=cfg.macd_slow+cfg.macd_signal-1 ? signal : null,
       macd_hist:n>=cfg.macd_slow+cfg.macd_signal-1 ? line-signal : null,atr,atr_pct:finite(atr) ? atr/price*100 : null,
       bb_middle:n>=cfg.bb_length ? mean : null,bb_upper:n>=cfg.bb_length ? mean+deviation : null,bb_lower:n>=cfg.bb_length ? mean-deviation : null,
       ichimoku_tenkan:tenkan,ichimoku_kijun:kijun,ichimoku_cloud_a:cloudA,ichimoku_cloud_b:cloudB};

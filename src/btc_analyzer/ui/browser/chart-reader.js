@@ -4,7 +4,7 @@ const chartReader = (() => {
   try {root=window.parent;doc=root.document;}catch(_){return {inspect(){},refresh(){},currentQuote(){},dispose(){}};}
   const {values,times,nearest}=PlotData, view=ChartViewport;
   const states=new WeakMap(),cards=new WeakMap();
-  const money=Object.fromEntries([2,4].map(n=>[n,new Intl.NumberFormat('en-US',{minimumFractionDigits:n,maximumFractionDigits:n})]));
+  const money=Object.fromEntries([2,4,6,8].map(n=>[n,new Intl.NumberFormat('en-US',{minimumFractionDigits:n,maximumFractionDigits:n})]));
   let active=null,pending=null,raf=null,pressTimer=null,last=null,disposed=false;
   const write=(el,value)=>{if(el && el.textContent!==value)el.textContent=value;};
   function state(plot) {
@@ -20,7 +20,8 @@ const chartReader = (() => {
   }
   function number(node,key,n) {
     let cache=cards.get(node);if(!cache){cache={};cards.set(node,cache);}
-    const text=Number.isFinite(n)?money[node.dataset.decimals||2].format(n):'—';
+    const digits=key==='rsi'?2:key.startsWith('macd')&&Math.abs(n)>0&&Math.abs(n)<1?(Math.abs(n)<.0001?8:6):node.dataset.decimals||2;
+    const text=Number.isFinite(n)?money[digits].format(n):'—';
     const field=node.querySelector(`[data-field="${key}"]`);
     if(cache[key]!==text||field?.textContent!==text){cache[key]=text;write(field,text);}
   }
@@ -64,7 +65,7 @@ const chartReader = (() => {
     const bounds=point.rect.getBoundingClientRect(),box=point.plot.getBoundingClientRect();
     const px=Math.max(0,Math.min(bounds.width,point.x-bounds.left)),py=Math.max(0,Math.min(bounds.height,point.y-bounds.top));
     const x=point.axis.p2c(px),price=point.yaxis.p2c(py);
-    if(!point.primary||!['market','forecast'].includes(point.plot.layout?.meta?.btcLive?.kind)){
+    if(!['market','forecast'].includes(point.plot.layout?.meta?.btcLive?.kind)){
       root.Plotly.Fx.hover(point.plot,{xval:x,yval:price},[point.subplot]);return;
     }
     let layer=point.plot.querySelector('.btc-crosshair');
@@ -76,13 +77,17 @@ const chartReader = (() => {
     }
     layer.hidden=false;last=layer;
     const left=bounds.left-box.left,top=bounds.top-box.top;
-    Object.assign(layer.querySelector('.btc-crosshair-x').style,{left:left+px+'px',top:top+'px',height:bounds.height+'px'});
+    const axes=Object.entries(point.plot._fullLayout).filter(([key])=>/^yaxis\d*$/.test(key)).map(([,a])=>a),offset=top-point.yaxis._offset;
+    const first=Math.min(...axes.map(a=>a._offset))+offset,bottom=Math.max(...axes.map(a=>a._offset+a._length))+offset;
+    Object.assign(layer.querySelector('.btc-crosshair-x').style,{left:left+px+'px',top:first+'px',height:bottom-first+'px'});
     Object.assign(layer.querySelector('.btc-crosshair-y').style,{left:left+'px',top:top+py+'px',width:bounds.width+'px'});
     const p=layer.querySelector('.btc-crosshair-price');
     Object.assign(p.style,{top:top+py-11+'px',left:Math.max(0,left+bounds.width-72)+'px'});
-    write(p,money[reader(point.plot)?.dataset.decimals||2].format(price));
+    const panel=(point.plot.layout.meta.btcLive.panels??[]).find(p=>p.axis===point.yaxis._name);
+    const digits=panel?.label==='RSI'?2:panel&&Math.abs(price)<1?6:reader(point.plot)?.dataset.decimals||2;
+    write(p,(panel?panel.label+' ':'')+money[digits].format(price));
     const t=layer.querySelector('.btc-crosshair-time');
-    Object.assign(t.style,{top:top+bounds.height-19+'px',left:Math.max(left,Math.min(left+bounds.width-128,left+px-64))+'px'});
+    Object.assign(t.style,{top:bottom-19+'px',left:Math.max(left,Math.min(left+bounds.width-128,left+px-64))+'px'});
     write(t,view.label(x));
     point.plot.dataset.cursorPrice=String(price);point.plot.dataset.cursorX=String(x);
     inspect(point.plot,x,'inspect');
@@ -116,6 +121,16 @@ const chartReader = (() => {
       }
       if(Number.isFinite(low)&&Number.isFinite(high))updates['yaxis.range']=manualY?view.priceLimit(manualY,[low,high]):[low,high];
     }
+    for(const panel of plot.layout.meta?.btcLive?.panels??[]){
+      if(panel.fixed){updates[panel.axis+'.range']=panel.fixed;continue;}
+      let low=0,high=0;
+      for(const [i,field] of Object.entries(plot.layout.meta.btcLive.overlays??{}))if(panel.fields.includes(field)){
+        const t=plot.data[i],fit=view.extent(times(t.x,axis),values(t.y),values(t.y),range);
+        if(fit){low=Math.min(low,fit.prices[0]);high=Math.max(high,fit.prices[1]);}
+      }
+      const pad=Math.max(high-low,Math.abs(high),Math.abs(low),1e-8)*.12;
+      updates[panel.axis+'.range']=[low-pad,high+pad];
+    }
     return updates;
   }
   function apply(plot,range,yRange) {
@@ -125,7 +140,7 @@ const chartReader = (() => {
     const next=s.next;s.next=null;s.busy=true;
     const xaxis=plot._fullLayout.xaxis;
     const updates={'xaxis.range':next.range.map(n=>xaxis.c2d(n)),'yaxis.autorange':false};
-    if(plot._fullLayout.xaxis2)updates['xaxis2.range']=updates['xaxis.range'];
+    for(const axis of Object.keys(plot._fullLayout))if(/^xaxis\d+$/.test(axis))updates[axis+'.range']=updates['xaxis.range'];
     Object.assign(updates,s.auto?autoRange(plot,next.range):next.yRange?autoRange(plot,next.range,next.yRange):{});
     plot.dataset.autoScale=String(s.auto);
     for(const key of Object.keys(updates)){
