@@ -14,8 +14,7 @@ CSAT_DAYS = """1999-11-17 2000-11-15 2001-11-07 2002-11-06 2003-11-05
 2021-11-18 2022-11-17 2023-11-16 2024-11-14 2025-11-13 2026-11-19""".split()
 
 
-@lru_cache(maxsize=24)
-def calendar_bars(start_year, end_year, timeframe):
+def session_schedule(start_year, end_year):
     from btc_analyzer.data.trading_calendar import schedule as calendar_schedule
 
     start = pd.Timestamp(f"{start_year}-01-01" if isinstance(start_year, int) else start_year)
@@ -34,7 +33,12 @@ def calendar_bars(start_year, end_year, timeframe):
     schedule.loc[first, "market_open"] += pd.Timedelta(hours=1)
     special = schedule.index.isin(pd.to_datetime(CSAT_DAYS))
     schedule.loc[special, ["market_open", "market_close"]] += pd.Timedelta(hours=1)
-    schedule = schedule.loc[start:end]
+    return schedule.loc[start:end]
+
+
+@lru_cache(maxsize=24)
+def calendar_bars(start_year, end_year, timeframe):
+    schedule = session_schedule(start_year, end_year)
     if timeframe in ("5m", "15m", "1h", "4h"):
         span = pd.Timedelta(minutes={"5m": 5, "15m": 15, "1h": 60, "4h": 240}[timeframe])
         starts, ends = [], []

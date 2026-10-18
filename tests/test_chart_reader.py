@@ -24,7 +24,8 @@ def test_reader_keeps_xrp_prices_and_missing_averages_distinct():
     assert 'data-symbol="XRPUSDT"' in html and 'data-decimals="4"' in html
     assert 'data-field="close">1.1535' in html and 'data-field="ema_20">—' in html
     assert 'data-field="ema_200">—' in html and 'data-field="bb_upper">—' in html
-    assert '현재 가격 <b data-field="current">—</b>' in html and "현재가 연결 중" in html
+    assert "data-current-label>현재 가격</span>" in html and 'data-field="current">—</b>' in html
+    assert "현재가 연결 중" in html
     assert 'data-field="cursor"' not in html
     assert "nan" not in html and "10.16 09:00 KST" in html
     bare = reader_html(frame, "1d", "XRP", (), False)

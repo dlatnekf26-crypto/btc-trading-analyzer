@@ -48,7 +48,7 @@
     ['^TNX','tnx','% · 10년물 금리',true,'USD',2,false],['^TYX','tyx','% · 30년물 금리',true,'USD',2,false]
   ].map(([symbol,id,label,yieldIndex,currency,decimals,equity])=>[symbol,{
     id,label,yieldIndex,currency,decimals,equity,price:null,asOf:0,received:0,stream:false,change:null,points:[],bucket:0,delay:-1,
-    dirty:false,graphDirty:false,node:null,nodes:null,statusSecond:-1,session:'regular',error:false,cached:false
+    dirty:false,graphDirty:false,node:null,nodes:null,statusKey:null,session:'regular',error:false,cached:false,marketState:'unknown',stateUntil:0
   }]));
   const macroSymbols=[...Object.keys(macros),'KRW=X'];
   let macroSocket=null, macroRetry=null, macroRetries=0;
@@ -62,9 +62,12 @@
     for(const row of rows){
       if(!row||typeof row!=='object')continue;
       const s=macros[row.symbol];if(!s)continue;
-      if(!cached){s.error=Boolean(row.error)&&!(s.stream&&Date.now()-s.received<15000);s.statusSecond=-1;}
+      if(!cached)s.error=Boolean(row.error)&&!(s.stream&&Date.now()-s.received<15000);
       if(!validNumber(row.price)||row.price<=0||!quoteTime(row.asOf))continue;
       if(cached&&row.currency!==s.currency)continue;
+      if(['regular','pre','post','closed'].includes(row.marketState)&&Number.isSafeInteger(row.stateUntil)&&row.stateUntil>Date.now()){
+        s.marketState=row.marketState;s.stateUntil=row.stateUntil;
+      }
       // Regular-session metadata has its own timestamp. It may arrive behind
       // a newer after-hours tick and must still update that tick's reference.
       if(validNumber(row.regularPrice)&&row.regularPrice>0&&quoteTime(row.regularAsOf)&&row.regularAsOf>=(s.regularAsOf||0)){
@@ -78,11 +81,16 @@
       if(row.asOf<s.asOf)continue;
       // Equal-time REST metadata must not undo a stream tick's price.
       if(!s.stream||row.asOf>s.asOf){
-        Object.assign(s,{price:row.price,asOf:row.asOf,change:validNumber(row.change)&&row.change>-100?row.change:null,
+        const change=validNumber(row.change)&&row.change>-100?row.change:null;
+        const session=s.equity&&['pre','post','extended','stream'].includes(row.session)?row.session:'regular';
+        s.dirty ||= s.price!==row.price||s.change!==change||s.session!==session;
+        Object.assign(s,{price:row.price,asOf:row.asOf,change,
           received:!cached&&quoteTime(row.fetched)?row.fetched:0,stream:false,cached,
-          session:s.equity&&['pre','post','extended','stream'].includes(row.session)?row.session:'regular'});
-        s.dirty=true;s.graphDirty=true;
-        if(Array.isArray(row.points))s.points=row.points.filter(p=>validNumber(p)&&p>0).slice(-60);
+          session});
+        if(Array.isArray(row.points)){
+          const points=row.points.filter(p=>validNumber(p)&&p>0).slice(-60);
+          if(points.length!==s.points.length||points.some((p,i)=>p!==s.points[i])){s.points=points;s.graphDirty=true;}
+        }
       }
     }
   }
@@ -96,7 +104,8 @@
     if(Date.now()-lastMacroSave<30000)return;
     const rows=Object.entries(macros).filter(([,s])=>s.price!==null&&quoteTime(s.asOf)).map(([symbol,s])=>({
       symbol,currency:s.currency,price:s.price,asOf:s.asOf,change:s.change,session:s.session,regularPrice:s.regularPrice,
-      regularAsOf:s.regularAsOf,regularChange:s.regularChange,high:s.high,low:s.low,volume:s.volume,delay:s.delay,points:s.points
+      regularAsOf:s.regularAsOf,regularChange:s.regularChange,high:s.high,low:s.low,volume:s.volume,delay:s.delay,points:s.points,
+      marketState:s.marketState,stateUntil:s.stateUntil
     }));
     if(rows.length){lastMacroSave=Date.now();try{localStorage.setItem(macroCacheKey,JSON.stringify(rows));}catch(_){}}
   }
@@ -131,7 +140,7 @@
   function paintMacro() {
     if (!parentDoc) return;
     readMacroSnapshot();
-    const now=Date.now(), second=Math.floor(now/1000);
+    const now=Date.now();
     const write=(node,text)=>{if (node && node.textContent!==text) node.textContent=text;};
     for (const [symbol,s] of Object.entries(macros)) {
       const el=parentDoc.getElementById('macro-'+s.id);
@@ -156,7 +165,7 @@
       if (rebound) {
         s.node=el;
         s.nodes=Object.fromEntries(['value','change','status','badge','graph'].map(name=>[name,el.querySelector('.btc-macro-'+name)]));
-        s.dirty=true; s.graphDirty=true; s.statusSecond=-1;
+        s.dirty=true; s.graphDirty=true; s.statusKey=null;
       }
       if (el.dataset.transport!=='ws') el.dataset.transport='ws';
       if (s.dirty) {
@@ -170,17 +179,21 @@
       // Streamlit may replace children while keeping the article itself.
       // Compare cached text, without formatting or rewriting unchanged values.
       write(s.nodes.value,s.priceText); write(s.nodes.change,s.changeText);
-      // Source age changes once a second. Crypto ticks don't rewrite macro DOM.
+      // Closed/unchanged quotes keep their formatted status and sparkline.
+      // Reformat only when an actual source/session/age boundary changes.
       const connected=s.stream&&now-s.received<15000&&macroSocket?.readyState===1;
-      if (s.statusSecond!==second) {
-        const age=Math.max(0,Math.floor((now-s.asOf)/1000));
+      const age=Math.max(0,Math.floor((now-s.asOf)/1000));
+      const closed=s.marketState==='closed'&&now<s.stateUntil;
+      const statusKey=[closed,connected,s.cached,s.error,age>7200,age<=15,s.asOf,s.delay,s.session].join('|');
+      if (s.statusKey!==statusKey) {
         const tone=s.cached||s.error||age>7200?'stale':connected&&age<=15&&s.delay===0?'stream':'delayed';
         s.tone=tone;
-        s.phase=s.equity?({regular:'정규장',pre:'장전',post:'장후',extended:'장외',stream:'스트림'}[s.session]||'정규장'):'';
+        s.phase=closed?'장 마감':s.equity?({regular:'정규장',pre:'장전',post:'장후',extended:'장외',stream:'스트림'}[s.session]||'정규장'):'';
         s.badgeText=s.phase||(connected?'스트림':tone==='stale'?'마지막 시세':'공개 조회');
-        const source=s.cached?'최근 수신 · 마지막 값':s.error?'갱신 지연 · 마지막 값':connected?'스트림 수신':age>7200?'마지막 거래':'공개 조회';
+        const last=closed?(s.session==='post'?'장후 마지막 거래가':s.session==='pre'?'장전 마지막 거래가':'마지막 거래가'):null;
+        const source=s.cached?'최근 수신 · '+(last||'마지막 값'):s.error?'갱신 지연 · '+(last||'마지막 값'):last||(connected?'스트림 수신':age>7200?'마지막 거래':'공개 조회');
         s.statusText=(s.phase?s.phase+' · ':'')+source+' · '+dayFormat.format(new Date(s.asOf))+' '+clock(s.asOf)+' KST · '+(s.delay>=0?'지연 '+s.delay+'분':'지연 미확인');
-        s.statusSecond=second;
+        s.statusKey=statusKey;
       }
       if (el.dataset.status!==s.tone) el.dataset.status=s.tone;
       write(s.nodes.status,s.statusText);write(s.nodes.badge,s.badgeText);
@@ -192,8 +205,7 @@
         for(const key of ['high','low'])setField(fields,key,fmt(s[key]));
         setField(fields,'volume',validNumber(s.volume)?s.volume.toLocaleString('en-US',{maximumFractionDigits:0})+'주':'—');
       }
-      if(SESSION_SYMBOLS.includes(symbol))chartReader.currentQuote(symbol,s.price,
-        `${s.phase?s.phase+' · ':''}${s.tone==='stale'?'마지막 가격':connected?'공개 스트림':'공개 조회'} · ${clock(s.asOf)} KST`);
+      if(SESSION_SYMBOLS.includes(symbol))chartReader.currentQuote(symbol,s.price,s.statusText);
       const graph=s.nodes.graph;
       if (graph && (s.graphDirty || graph.firstElementChild!==s.svgNode)) {
         if (s.points.length>1) {

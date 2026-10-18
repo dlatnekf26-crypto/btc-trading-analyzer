@@ -117,7 +117,7 @@ def test_minute_failure_uses_validated_daily_metadata_and_rate_limits_are_respec
     monkeypatch.setattr(market_context, "_download", download)
     q = market_context.fetch_feed("aapl", NOW)
     assert q.price == 100 and q.extended is None
-    assert len(calls) == 2 and "includePrePost=true" in calls[0] and "interval=1d&range=1d" in calls[1]
+    assert len(calls) == 2 and "includePrePost=true" in calls[0] and "interval=1d&range=1mo" in calls[1]
 
     def limited(url):
         calls.append(url)

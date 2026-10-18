@@ -254,7 +254,11 @@ def await_idle(service):
     raise AssertionError("Background requests did not finish")
 
 
-def test_stock_rest_fallback_waits_thirty_seconds_without_delaying_other_feeds():
+def test_open_stock_rest_fallback_waits_thirty_seconds_without_delaying_other_feeds(monkeypatch):
+    monkeypatch.setattr(
+        "btc_analyzer.data.market_context.market_hours",
+        lambda symbol, now: ("regular", now + timedelta(hours=1)),
+    )
     stocks = ("samsung", "skhynix", "aapl", "nvda", "mu", "sndk")
     clock, calls = [NOW], []
 

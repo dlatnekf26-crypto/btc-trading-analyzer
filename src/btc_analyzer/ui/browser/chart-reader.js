@@ -27,7 +27,16 @@ const chartReader = (() => {
   }
   function currentQuote(symbol,price,status){
     for(const node of doc.querySelectorAll('.btc-chart-reader'))if(node.dataset.symbol===symbol){
-      number(node,'current',price);write(node.querySelector('[data-current-status]'),status);
+      if(Number.isFinite(price)){
+        const cached=cards.get(node),field=node.querySelector('[data-field="current"]');
+        if(cached?.quotePrice!==price||field?.textContent!==cached?.current){number(node,'current',price);cards.get(node).quotePrice=price;}
+        if(node.dataset.lastQuoteStatus!==status)node.dataset.lastQuoteStatus=status;
+        write(node.querySelector('[data-current-label]'),status.startsWith('장 마감')?'마지막 가격':'현재 가격');
+      }else{
+        const fallback=node.dataset.lastQuoteStatus||node.dataset.fallbackStatus;
+        if(fallback){status=fallback+' · 시세 연결 대기';write(node.querySelector('[data-current-label]'),'마지막 가격');}
+      }
+      write(node.querySelector('[data-current-status]'),status);
     }
   }
   function inspect(plot,x,mode='inspect') {

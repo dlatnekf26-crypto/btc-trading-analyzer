@@ -11,13 +11,15 @@ from threading import RLock
 import time
 from urllib.parse import quote, urlencode, urlsplit
 from xml.etree import ElementTree
+from zoneinfo import ZoneInfo
 
 import requests
-from btc_analyzer.assets import asset_news, STOCK_MARKETS, EXCHANGE_HISTORY
+from btc_analyzer.assets import asset_news, STOCK_MARKETS, SESSION_MARKETS, EXCHANGE_HISTORY
 
 from btc_analyzer.data.economic_calendar import EconomicEvent
 from btc_analyzer.data.sentiment import FEAR_API, FEAR_REFRESH_SECONDS, FearGreed, parse_fear_greed
 from btc_analyzer.data.extended_quotes import ExtendedQuote, extended_quote
+from btc_analyzer.data.quote_hours import market_hours
 
 UTC = timezone.utc
 MAX_BYTES = 512_000
@@ -37,6 +39,7 @@ SYMBOLS.update(
     }
 )
 STOCK_SYMBOLS = {a.symbol: EXCHANGE_HISTORY[code] for code, a in STOCK_MARKETS.items()}
+MARKET_CODES = {asset.symbol: code for code, asset in SESSION_MARKETS.items()}
 TOPICS = {
     "oil": "유가",
     "geopolitics": "전쟁·지정학",
@@ -129,6 +132,15 @@ def _finite_positive(value):
     return float(value)
 
 
+def _daily_frame(payload, symbol, now):
+    from btc_analyzer.data.exchange_history import parse_history
+
+    market = MARKET_CODES.get(symbol)
+    if market is None or payload["chart"]["result"][0]["meta"].get("dataGranularity") != "1d":
+        raise ValueError("No completed daily close")
+    return parse_history(payload, "1d", now, market)
+
+
 def parse_quote(payload: dict, symbol: str, now: datetime) -> MacroQuote:
     """NQ points, WTI USD/barrel, CBOE 10/30-year yield % (never /10)."""
     result = payload["chart"]["result"][0]
@@ -165,10 +177,30 @@ def parse_quote(payload: dict, symbol: str, now: datetime) -> MacroQuote:
             or meta.get("exchangeTimezoneName") != venue.timezone
         ):
             raise ValueError("Expected stock · exact currency and exchange timezone")
-    price = _finite_positive(meta["regularMarketPrice"])
+    frame = None
+    try:
+        price = _finite_positive(meta.get("regularMarketPrice"))
+        as_of = datetime.fromtimestamp(_finite_positive(meta.get("regularMarketTime")), UTC)
+    except (ValueError, OverflowError, OSError):
+        # A closed market can have daily bars even when current quote metadata
+        # is missing. Reuse strict identity/OHLCV/session validation, never a
+        # partial day's close or an adjusted historical price.
+        frame = _daily_frame(payload, symbol, now)
+        if frame.empty:
+            raise ValueError("No completed daily close") from None
+        ends = dict(zip(frame.attrs["bar_starts"], frame.attrs["bar_ends"]))
+        as_of = datetime.fromtimestamp(ends[frame.index[-1].value] / 1e9, UTC)
+        price = _finite_positive(float(frame.close.iloc[-1]))
+        # These fields belong to this completed trading date only.
+        meta = dict(
+            meta,
+            regularMarketDayHigh=float(frame.high.iloc[-1]),
+            regularMarketDayLow=float(frame.low.iloc[-1]),
+            regularMarketVolume=float(frame.volume.iloc[-1]),
+            chartPreviousClose=float(frame.close.iloc[-2]) if len(frame) > 1 else None,
+        )
     if symbol in ("^TNX", "^TYX") and price > 30:
         raise ValueError("Unrecognized yield units")
-    as_of = datetime.fromtimestamp(_finite_positive(meta["regularMarketTime"]), UTC)
     if not timedelta(0) <= now - as_of <= timedelta(days=7):
         raise ValueError("Invalid quote time")
     extended = extended_quote(result, as_of, now) if symbol in STOCK_SYMBOLS else None
@@ -186,6 +218,20 @@ def parse_quote(payload: dict, symbol: str, now: datetime) -> MacroQuote:
             except ValueError:
                 pass
     previous = meta.get("chartPreviousClose", meta.get("previousClose"))
+    if frame is None and meta.get("dataGranularity") == "1d" and meta.get("range") not in (None, "1d"):
+        # chartPreviousClose is the *range's* reference for a monthly response,
+        # not yesterday's close. Keep the valid price if daily bars are bad,
+        # but withhold the change rather than presenting a monthly move as daily.
+        previous = None
+        try:
+            frame = _daily_frame(payload, symbol, now)
+            zone = EXCHANGE_HISTORY[MARKET_CODES[symbol]].timezone
+            dates = frame.index.tz_convert(zone).date
+            prior = frame.close[dates < as_of.astimezone(ZoneInfo(zone)).date()]
+            if len(prior):
+                previous = float(prior.iloc[-1])
+        except (ValueError, KeyError, TypeError, IndexError):
+            pass
     try:
         change = price / _finite_positive(previous) - 1
     except ValueError:
@@ -426,7 +472,7 @@ def fetch_feed(key: str, now: datetime):
                 and exc.response.status_code == 429
             ):
                 raise
-            return parse_quote(json.loads(_download(url + "?interval=1d&range=1d")), SYMBOLS[key], now)
+            return parse_quote(json.loads(_download(url + "?interval=1d&range=1mo")), SYMBOLS[key], now)
     language = "ko" if key == "news_ko" else "en-US"
     query = (
         "(비트코인 OR 이더리움 OR 솔라나 OR 리플 OR 암호화폐) (ETF OR 규제 OR 수급 OR 가격 OR 금리 OR CPI OR 유가 OR 전쟁) when:1d"
@@ -493,6 +539,12 @@ class MarketContextService:
                         delay = min(delay, max(60, (value.next_update - now).total_seconds()))
                 elif key in SYMBOLS and SYMBOLS[key] in STOCK_SYMBOLS:
                     delay = 30  # Stock streams share one socket; REST only seeds/falls back.
+                if key in SYMBOLS:
+                    phase, boundary = market_hours(SYMBOLS[key], now)
+                    if phase == "closed" and boundary:
+                        # Five-minute quiet refresh, with the next open checked
+                        # within ten seconds. Streams and other feeds stay independent.
+                        delay = min(300, max(1, (boundary - now).total_seconds()))
                 delay = self._refresh_intervals.get(key, delay)
             except Exception as exc:
                 self._failures[key] += 1

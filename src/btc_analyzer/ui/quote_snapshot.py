@@ -6,10 +6,12 @@ import json
 import streamlit as st
 
 from btc_analyzer.data.market_context import MacroQuote, SYMBOLS
+from btc_analyzer.data.quote_hours import market_hours
 
 
 def quote_display(value):
     extended = value.extended
+    phase, boundary = market_hours(value.symbol)
     return {
         "price": extended.price if extended else value.price,
         "asOf": int((extended.as_of if extended else value.as_of).timestamp() * 1000),
@@ -19,6 +21,8 @@ def quote_display(value):
         if value.change is not None
         else None,
         "session": extended.session if extended else "regular",
+        "marketState": phase,
+        "stateUntil": int(boundary.timestamp() * 1000) if boundary else 0,
     }
 
 

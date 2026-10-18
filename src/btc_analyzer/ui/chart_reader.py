@@ -5,7 +5,7 @@ from btc_analyzer.ui.browser_assets import browser_asset
 from html import escape
 import math
 
-from btc_analyzer.assets import MARKETS, price_text
+from btc_analyzer.assets import MARKETS, SESSION_MARKETS, price_text
 
 FIELDS = {
     "rsi": "RSI 14",
@@ -73,11 +73,16 @@ def reader_html(frame, timeframe, asset_code, averages, bands):
     if "ichimoku_tenkan" in keys:
         legend += '<span><i class="btc-cloud-key"></i>일목 구름</span>'
     at = frame.index[-1].tz_convert("Asia/Seoul").strftime("%m.%d %H:%M")
+    fallback = asset_code in SESSION_MARKETS and math.isfinite(row.get("close", float("nan")))
+    fallback_status = f"{at} KST · 마지막 확정 봉 ({timeframe})"
+    current = value("close") if fallback else "—"
+    current_status = fallback_status if fallback else "현재가 연결 중"
     return (
         f'<section id="btc-chart-reader" class="btc-chart-reader" data-symbol="{MARKETS[asset_code].stream_symbol}" '
         f'data-timeframe="{escape(timeframe)}" data-decimals="{MARKETS[asset_code].decimals}" data-mode="latest" '
+        f'data-fallback-status="{fallback_status if fallback else ""}" '
         'aria-label="가리킨 봉의 가격과 지표">'
-        '<div class="btc-chart-toolbar"><div class="btc-cursor-reading">현재 가격 <b data-field="current">—</b><small> USDT</small><span class="btc-current-status" data-current-status>현재가 연결 중</span></div>'
+        f'<div class="btc-chart-toolbar"><div class="btc-cursor-reading"><span data-current-label>{"마지막 가격" if fallback else "현재 가격"}</span> <b data-field="current">{current}</b><small> USDT</small><span class="btc-current-status" data-current-status>{current_status}</span></div>'
         f"{CHART_ACTIONS}</div>"
         f'<div class="btc-reader-heading"><span data-reader-time>{at} KST · 마지막 확정 봉</span><span data-visible-bars></span></div>'
         f'<div class="btc-reader-values">{cells}</div>'

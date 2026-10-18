@@ -97,6 +97,15 @@ def quote_fields(code, *, detail=False, context=None):
                 if code in STOCK_MARKETS
                 else ""
             )
+            if display["marketState"] == "closed":
+                phase = "장 마감"
+                prefix = (
+                    "장후 마지막 거래가"
+                    if value.extended and value.extended.session == "post"
+                    else "장전 마지막 거래가"
+                    if value.extended
+                    else "마지막 거래가"
+                )
             status = f"{phase} {prefix} · {stamp:%m.%d %H:%M} KST · 지연 " + (
                 f"{value.delay_minutes}분" if value.delay_minutes is not None else "미확인"
             )
@@ -149,7 +158,13 @@ def quote_fields(code, *, detail=False, context=None):
                 + (f"{value.volume:,.0f}주" if value and value.volume is not None else "—")
                 + "</b></div>"
                 '<div class="btc-macro-graph board-spark"></div>'
-                '<span class="btc-macro-badge board-source">공개 조회</span>'
+                '<span class="btc-macro-badge board-source">'
+                + (
+                    "장 마감"
+                    if isinstance(value, MacroQuote) and quote_display(value)["marketState"] == "closed"
+                    else "공개 조회"
+                )
+                + "</span>"
             )
         elif session:
             metrics = (
