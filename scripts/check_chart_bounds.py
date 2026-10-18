@@ -10,7 +10,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 from check_chart_gestures import gesture_check, ranges, region_box, touch
-from check_live_widget import MarketFixture, cleanup, install_quote_transport
+from check_live_widget import select_market, MarketFixture, cleanup, install_quote_transport
 
 
 def visible(plot):
@@ -72,7 +72,7 @@ def boundary_check(page, cdp, plot, event_log, label):
 
 
 def mouse_live_check(page, crypto, event_log):
-    page.get_by_role("radio", name="BTC", exact=True).click()
+    select_market(page, "BTC")
     page.get_by_role("tab", name="시장 개요", exact=True).click()
     page.get_by_role("radio", name="5분", exact=True).click()
     page.wait_for_function(

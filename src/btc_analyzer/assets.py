@@ -35,10 +35,22 @@ ASSETS = {
 }
 
 
-SESSION_MARKETS = {
+STOCK_MARKETS = {
+    asset.code: asset
+    for asset in (
+        Asset("SAMSUNG", "삼성전자", "macro-samsung", 0, date(1975, 6, 11), "", "005930.KS"),
+        Asset("SKHYNIX", "SK하이닉스", "macro-skhynix", 0, date(1996, 12, 26), "", "000660.KS"),
+        Asset("AAPL", "애플", "macro-aapl", 2, date(1980, 12, 12), "", "AAPL"),
+        Asset("NVDA", "엔비디아", "macro-nvda", 2, date(1999, 1, 22), "", "NVDA"),
+        Asset("MU", "마이크론", "macro-mu", 2, date(1984, 6, 1), "", "MU"),
+        Asset("SNDK", "샌디스크", "macro-sndk", 2, date(2025, 2, 13), "", "SNDK"),
+    )
+}
+INDEX_MARKETS = {
     "NQ": Asset("NQ", "나스닥100 선물", "macro-nq", 2, date(1999, 6, 21), "", "NQ=F"),
     "KOSPI": Asset("KOSPI", "코스피", "macro-kospi", 2, date(1999, 1, 1), "", "^KS11"),
 }
+SESSION_MARKETS = {**INDEX_MARKETS, **STOCK_MARKETS}
 MARKETS = {**ASSETS, **SESSION_MARKETS}
 
 
@@ -48,12 +60,29 @@ class ExchangeHistory:
     timezone: str
     exchange: str
     source: str
+    calendar: str = "CME_Equity"
+    kind: str = "FUTURE"
+    unit: str = "pt"
 
 
 EXCHANGE_HISTORY = {
     "NQ": ExchangeHistory("USD", "America/New_York", "CME", "CME NQ 연속 선물"),
-    "KOSPI": ExchangeHistory("KRW", "Asia/Seoul", "KRX", "KRX 코스피 종합지수"),
+    "KOSPI": ExchangeHistory("KRW", "Asia/Seoul", "KRX", "KRX 코스피 종합지수", "KRX", "INDEX"),
+    **{
+        code: ExchangeHistory("KRW", "Asia/Seoul", "KRX", "KRX 보통주", "KRX", "EQUITY", "KRW")
+        for code in ("SAMSUNG", "SKHYNIX")
+    },
+    **{
+        code: ExchangeHistory(
+            "USD", "America/New_York", "NASDAQ", "NASDAQ 정규장 주식", "NYSE", "EQUITY", "USD"
+        )
+        for code in ("AAPL", "NVDA", "MU", "SNDK")
+    },
 }
+
+
+def market_label(code):
+    return MARKETS[code].name if code in ("KOSPI", "SAMSUNG", "SKHYNIX") else code
 
 
 def asset_news(title):

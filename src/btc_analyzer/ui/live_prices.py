@@ -6,7 +6,7 @@ from btc_analyzer.ui.browser_assets import quotes_document
 
 import streamlit as st
 import streamlit.components.v1 as components
-from btc_analyzer.assets import ASSETS, MARKETS
+from btc_analyzer.assets import ASSETS, MARKETS, SESSION_MARKETS, EXCHANGE_HISTORY
 
 from btc_analyzer.ui.live_analysis import LIVE_ANALYSIS_CSS
 
@@ -20,7 +20,22 @@ def live_prices_html(asset_code="BTC"):
         [[a.code, a.card_id, a.name, a.decimals] for a in ASSETS.values()], ensure_ascii=False
     )
     default_markets = "[['BTC','binance','비트코인',2],['ETH','ethereum','이더리움',2],['SOL','solana','솔라나',2],['XRP','ripple','리플',4]]"
-    return LIVE_PRICES_HTML.replace(default_markets, markets)
+    sessions = json.dumps(
+        [
+            [
+                code,
+                a.symbol,
+                a.card_id.removeprefix("macro-"),
+                EXCHANGE_HISTORY[code].unit,
+                EXCHANGE_HISTORY[code].currency,
+                a.decimals,
+            ]
+            for code, a in SESSION_MARKETS.items()
+        ],
+        ensure_ascii=False,
+    )
+    default_sessions = "[['NQ','NQ=F','nq','pt','USD',2],['KOSPI','^KS11','kospi','pt','KRW',2]]"
+    return LIVE_PRICES_HTML.replace(default_markets, markets).replace(default_sessions, sessions)
 
 
 def render_live_prices(asset_code="BTC") -> None:

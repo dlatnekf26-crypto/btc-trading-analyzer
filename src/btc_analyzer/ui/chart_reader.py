@@ -40,9 +40,11 @@ def reader_html(frame, timeframe, asset_code, averages, bands):
         n = row.get(key)
         if n is None or not math.isfinite(n):
             return "—"
+        if key == "rsi":
+            return f"{n:,.2f}"
         if key.startswith("macd") and 0 < abs(n) < 0.0001:
             return f"{n:,.8f}"
-        return price_text(n)
+        return f"{n:,.0f}" if MARKETS[asset_code].decimals == 0 and key != "rsi" else price_text(n)
 
     cells = "".join(
         f'<div class="btc-read-{key}"><span>{FIELDS[key]}</span><b data-field="{key}">{value(key)}</b></div>'

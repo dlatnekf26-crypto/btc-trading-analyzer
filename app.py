@@ -15,7 +15,7 @@ SOURCE_VERSION = globals().get("CHECKOUT_SOURCE_VERSION") or ensure_checkout(PRO
 import streamlit as st
 from dotenv import load_dotenv
 
-from btc_analyzer.assets import MARKETS
+from btc_analyzer.assets import MARKETS, market_label
 from btc_analyzer.ui.presentation import BRAND, CSS
 from btc_analyzer.ui.live_prices import render_live_prices
 from btc_analyzer.ui.market_board import render_board, detail_heading, BOARD_CSS
@@ -55,23 +55,26 @@ def close_market():
 def market_detail(code):
     from btc_analyzer.ui.analysis_view import render_market_analysis, request_market_refresh
 
-    st.markdown(detail_heading(code), unsafe_allow_html=True)
-    with st.container(key="market_controls"):
-        market_control, refresh_control = st.columns([3, 1], vertical_alignment="bottom")
+    with st.container(key="detail_header"):
+        heading, market_control, refresh_control = st.columns([6, 2, 1], vertical_alignment="top")
+        with heading:
+            st.markdown(detail_heading(code), unsafe_allow_html=True)
         with market_control:
-            selected = (
-                st.segmented_control(
-                    "분석할 시장",
-                    list(MARKETS),
-                    required=True,
-                    format_func=lambda value: "코스피" if value == "KOSPI" else value,
-                    key="analysis_asset",
-                    label_visibility="collapsed",
-                )
-                or "BTC"
+            selected = st.selectbox(
+                "분석할 시장",
+                list(MARKETS),
+                format_func=market_label,
+                key="analysis_asset",
+                label_visibility="collapsed",
             )
         with refresh_control:
-            st.button("새로고침", on_click=request_market_refresh, width="stretch")
+            st.button(
+                "새로고침",
+                icon=":material/refresh:",
+                key="refresh_market",
+                on_click=request_market_refresh,
+                width="stretch",
+            )
     if selected != code:
         st.query_params.update({"market": selected, "view": "chart"})
         st.rerun(scope="app")

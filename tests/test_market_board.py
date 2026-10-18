@@ -35,6 +35,12 @@ def test_landing_never_collects_candles_or_forecasts(monkeypatch):
         "open_XRP",
         "open_NQ",
         "open_KOSPI",
+        "open_SAMSUNG",
+        "open_SKHYNIX",
+        "open_AAPL",
+        "open_NVDA",
+        "open_MU",
+        "open_SNDK",
     }
     app.run()
     assert not app.exception and not app.get("plotly_chart")
@@ -51,7 +57,7 @@ def test_market_card_opens_the_matching_detail(market):
     # The modal shares quote state instead of duplicating macro IDs/streams.
     for key in ("nq", "kospi", "oil", "tnx", "tyx"):
         assert sum(item.value.count(f'id="macro-{key}"') for item in app.markdown) == 1
-    control = next(item for item in app.get("button_group") if item.label == "분석할 시장")
+    control = next(item for item in app.selectbox if item.label == "분석할 시장")
     control.set_value("ETH").run()
     assert not app.exception and app.query_params["market"] == "ETH"
 

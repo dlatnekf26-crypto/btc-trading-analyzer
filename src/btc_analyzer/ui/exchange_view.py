@@ -55,7 +55,7 @@ def render_exchange_market(market):
     tabs = st.tabs(["시장 개요", "미래 예측"], key="dashboard_tab", on_change="rerun")
     st.caption(
         f"{asset.symbol} · {venue.source} · 공개 지연 자료 · 1분마다 확정 봉 확인"
-        + (" · 롤오버 가격 차이 포함" if market == "NQ" else " · 지수 단위 pt")
+        + (" · 롤오버 가격 차이 포함" if market == "NQ" else f" · {venue.unit}")
     )
     try:
         if tabs[0].open:
@@ -68,18 +68,19 @@ def render_exchange_market(market):
                         required=True,
                         format_func=FRAME_LABELS.get,
                         key="price_chart_timeframe",
+                        label_visibility="collapsed",
                     )
                     or "1d"
                 )
                 raw = frame(tf)
                 features = market_features(raw, tf)
-                if market == "KOSPI" and tf in ("5m", "15m", "1h", "4h"):
+                if venue.calendar == "KRX" and tf in ("5m", "15m", "1h", "4h"):
                     st.caption(
                         "공개 분봉은 장 막판 자료가 빠질 수 있어요. 누락 시 지표를 다시 계산하며, 충분한 이력이 없으면 표시를 보류해요. 중장기 분석은 일봉을 권해요."
                     )
                 st.markdown(
                     reader_html(features, tf, market, ("ema_20", "ema_50", "ema_200"), True).replace(
-                        "USDT", "pt"
+                        "USDT", venue.unit
                     ),
                     unsafe_allow_html=True,
                 )
@@ -88,7 +89,7 @@ def render_exchange_market(market):
                     "Asia/Seoul",
                     ("ema_20", "ema_50", "ema_200"),
                     True,
-                    "pt",
+                    venue.unit,
                     True,
                     True,
                     min(600, len(features)),
@@ -124,6 +125,8 @@ def render_exchange_market(market):
                         "일봉은 미국 정규 거래일 기준(단축장 제외), 주·월봉은 이 일봉을 합산해요."
                         if market == "NQ"
                         else "한국 거래일·거래시간 기준. 주·월봉은 확정 일봉을 합산해요."
+                        if venue.calendar == "KRX"
+                        else "미국 정규장·단축장 기준. 주·월봉은 확정 일봉을 합산해요."
                     )
                     + " 휴장일은 가짜 봉으로 채우지 않아요."
                 )

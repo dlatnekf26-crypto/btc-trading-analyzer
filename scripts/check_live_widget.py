@@ -397,3 +397,14 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def select_market(page, label):
+    """The chart's compact market selector opens a searchable native list."""
+    control = page.get_by_role("combobox", name="분석할 시장", exact=True)
+    dialog = page.get_by_role("dialog")
+    if dialog.count():
+        dialog.evaluate("e=>e.scrollTop=0")
+    control.click()
+    control.fill(label)
+    page.get_by_role("option", name=label, exact=True).click()

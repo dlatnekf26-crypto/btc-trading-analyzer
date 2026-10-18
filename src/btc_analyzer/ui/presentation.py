@@ -19,7 +19,7 @@ CSS = "<style>" + browser_asset("theme.css") + "</style>"
 BRAND = """
 <div class="btc-brand">
   <div class="btc-logo" aria-hidden="true">◈</div>
-  <div><h1>CRYPTO SIGNAL LAB</h1><p>코인과 선물, 가격과 근거를 함께</p></div>
+  <div><h1>CRYPTO SIGNAL LAB</h1><p>주식·코인·지수, 가격과 근거를 함께</p></div>
   <span class="btc-brand-tag">가격 · 흐름 · 근거</span>
 </div>
 """

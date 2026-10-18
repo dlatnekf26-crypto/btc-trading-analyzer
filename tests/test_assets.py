@@ -43,7 +43,7 @@ def test_four_assets_switch_complete_dashboard_forecast_and_back_without_cross_a
     app = analysis_app(Path(__file__).resolve().parents[1] / "web_app.py", default_timeout=45).run()
     anchors = {}
     for code in ("BTC", "ETH", "SOL", "XRP", "BTC"):
-        next(x for x in app.get("button_group") if x.label == "분석할 시장").set_value(code)
+        next(x for x in app.selectbox if x.label == "분석할 시장").set_value(code)
         app.session_state["dashboard_tab"] = "시장 개요"
         app.run()
         assert not app.exception and not app.error

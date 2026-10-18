@@ -5,7 +5,14 @@ from html import escape
 from zoneinfo import ZoneInfo
 
 import streamlit as st
-from btc_analyzer.assets import ASSETS, MARKETS, SESSION_MARKETS
+from btc_analyzer.assets import (
+    ASSETS,
+    MARKETS,
+    SESSION_MARKETS,
+    STOCK_MARKETS,
+    INDEX_MARKETS,
+    EXCHANGE_HISTORY,
+)
 from btc_analyzer.data.market_context import MacroQuote, UTC
 from btc_analyzer.ui.browser_assets import browser_asset
 from btc_analyzer.ui.market_context import current_context, render_macro_quotes
@@ -18,8 +25,27 @@ COLORS = {
     "XRP": "#377de0",
     "NQ": "#9b6fd4",
     "KOSPI": "#ef789e",
+    "SAMSUNG": "#eaa400",
+    "SKHYNIX": "#14b88c",
+    "AAPL": "#397ddb",
+    "NVDA": "#eb79a8",
+    "MU": "#dfaa00",
+    "SNDK": "#875ec2",
 }
-ICONS = {"BTC": "₿", "ETH": "Ξ", "SOL": "◎", "XRP": "X", "NQ": "N", "KOSPI": "K"}
+ICONS = {
+    "BTC": "₿",
+    "ETH": "Ξ",
+    "SOL": "◎",
+    "XRP": "X",
+    "NQ": "N",
+    "KOSPI": "K",
+    "SAMSUNG": "삼",
+    "SKHYNIX": "S",
+    "AAPL": "애",
+    "NVDA": "엔",
+    "MU": "마",
+    "SNDK": "샌",
+}
 
 
 def asset_identity(code):
@@ -35,12 +61,16 @@ def quote_fields(code, *, detail=False, context=None):
     asset = MARKETS[code]
     session = code in SESSION_MARKETS
     attributes, price, change, status, direction = "", "—", "변동률 대기", "시세 연결 중…", ""
+    value = None
     if session:
         value = context.feed(asset.card_id.removeprefix("macro-")).value if context else None
         if isinstance(value, MacroQuote) and timedelta(0) <= datetime.now(UTC) - value.as_of <= timedelta(
             days=7
         ):
-            price = f"{value.price:,.2f}"
+            prefix = (
+                "₩" if code in STOCK_MARKETS and asset.decimals == 0 else "$" if code in STOCK_MARKETS else ""
+            )
+            price = prefix + f"{value.price:,.{asset.decimals}f}"
             change = f"{value.change:+.2%}" if value.change is not None else change
             stamp = value.as_of.astimezone(ZoneInfo("Asia/Seoul"))
             old = datetime.now(UTC) - value.as_of > timedelta(hours=2)
@@ -65,12 +95,34 @@ def quote_fields(code, *, detail=False, context=None):
                 f' data-points="{",".join(str(p) for p in value.points)}"'
             )
     macro_id = f' id="{asset.card_id}"' if session and not detail else ""
-    source = "KRX 코스피 · pt" if code == "KOSPI" else "CME NQ · pt" if session else "Binance · USDT"
+    source = (
+        f"{EXCHANGE_HISTORY[code].exchange} · {EXCHANGE_HISTORY[code].unit}" if session else "Binance · USDT"
+    )
     classes = "board-detail" if detail else "board-asset" + (" btc-macro-card" if session else "")
     heading = f'<div class="board-identity">{asset_identity(code)}</div>'
     metrics = ""
     if not detail:
-        if session:
+        if code in STOCK_MARKETS:
+
+            def number(n):
+                return f"{n:,.{asset.decimals}f}" if n is not None else "—"
+
+            previous = (
+                value.price / (1 + value.change)
+                if value and value.change is not None and value.change > -1
+                else None
+            )
+            metrics = (
+                '<div class="board-metrics"><span>전일 종가</span><b>' + number(previous) + "</b>"
+                "<span>거래일 고가</span><b>" + number(value.day_high if value else None) + "</b>"
+                "<span>거래일 저가</span><b>" + number(value.day_low if value else None) + "</b>"
+                "<span>거래량</span><b>"
+                + (f"{value.volume:,.0f}주" if value and value.volume is not None else "—")
+                + "</b></div>"
+                '<div class="btc-macro-graph board-spark"></div>'
+                '<span class="btc-macro-badge board-source">공개 조회</span>'
+            )
+        elif session:
             metrics = (
                 '<div class="board-session-info"><span>가격 기준</span><b>공개 거래소 시세</b>'
                 "<span>분석 시간대</span><b>5분 ~ 월봉</b><span>미래 예측</span><b>1주 ~ 6개월</b></div>"
@@ -166,6 +218,13 @@ def render_board(on_open):
     )
     with st.container(key="board_macro"):
         render_macro_quotes(("oil", "tnx", "tyx"))
+    for title, codes, subtitle in (
+        ("국내 주식", ("SAMSUNG", "SKHYNIX"), "KRX 보통주 · 원화 · 정규장 시세"),
+        ("미국 주식", ("AAPL", "NVDA", "MU", "SNDK"), "NASDAQ · USD · 정규장 시세"),
+    ):
+        section_heading(title, len(codes), subtitle)
+        with st.container(key="board_sessions_" + codes[0]):
+            render_session_cards(on_open, codes)
     section_heading("암호화폐", len(ASSETS), "Binance · 24시간 등락률")
     with st.container(key="board_coins"):
         for column, code in market_columns(ASSETS):
@@ -178,9 +237,9 @@ def render_board(on_open):
                     args=(code,),
                     width="stretch",
                 )
-    section_heading("지수 · 선물", len(SESSION_MARKETS), "거래소 운영 시간 · 공개 자료 지연 별도")
+    section_heading("지수 · 선물", len(INDEX_MARKETS), "거래소 운영 시간 · 공개 자료 지연 별도")
     with st.container(key="board_sessions"):
-        render_session_cards(on_open)
+        render_session_cards(on_open, tuple(INDEX_MARKETS))
     st.markdown(
         '<p class="board-footnote">수신 시각과 지연 상태를 함께 확인하세요. 예측은 과거 자료·기술 지표에 기반한 시나리오예요.</p>',
         unsafe_allow_html=True,
@@ -188,9 +247,9 @@ def render_board(on_open):
 
 
 @st.fragment(run_every=2)
-def render_session_cards(on_open):
+def render_session_cards(on_open, codes):
     context = current_context()
-    for column, code in market_columns(SESSION_MARKETS):
+    for column, code in market_columns(codes):
         with column, st.container(key=f"board_card_{code}"):
             st.markdown(quote_fields(code, context=context), unsafe_allow_html=True)
             if st.button(f"{MARKETS[code].name} 차트 열기", key=f"open_{code}", width="stretch"):

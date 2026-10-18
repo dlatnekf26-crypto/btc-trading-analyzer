@@ -236,8 +236,10 @@ def render_history_view(
         else:
             st.caption("최근 구간보다 앞에서 이후 관찰까지 끝난 연속 데이터가 부족합니다.")
         return
+    from btc_analyzer.assets import EXCHANGE_HISTORY
+
     quote = (
-        "pt"
+        EXCHANGE_HISTORY[frame.attrs["market"]].unit
         if market_frames is not None
         else symbol.split("/")[-1]
         if exchange == "Binance"

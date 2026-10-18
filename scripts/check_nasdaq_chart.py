@@ -6,7 +6,7 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-from check_live_widget import MarketFixture, cleanup, install_quote_transport, send_macro
+from check_live_widget import select_market, MarketFixture, cleanup, install_quote_transport, send_macro
 from check_touch_charts import inspect
 from check_chart_gestures import gesture_check, region_box, touch
 
@@ -33,7 +33,7 @@ def verify(browser, width, url, event_log, market="NQ"):
       for(const [symbol,price] of [['BTCUSDT',100000],['ETHUSDT',3000],['SOLUSDT',150],['XRPUSDT',1.1532]])b?.emit(JSON.stringify({data:{s:symbol,c:String(price),P:'2.34',E:now}}));
       window.__quoteSockets.find(s=>s.url.includes('api.upbit.com') && s.readyState===1)?.emit(JSON.stringify({code:'KRW-BTC',trade_price:130000000,signed_change_rate:.01,timestamp:now}),true);
     },1000);""")
-    page.get_by_role("radio", name=title, exact=True).tap()
+    select_market(page, title)
     page.wait_for_function("s=>document.querySelector('#btc-chart-reader')?.dataset.symbol===s", arg=symbol)
     crypto.wait_for_function("s=>document.body.dataset.asset===s", arg=symbol)
     assert not crypto.locator('.crypto[data-selected="true"]').count()
@@ -146,7 +146,7 @@ def verify(browser, width, url, event_log, market="NQ"):
     )
     assert page.locator("iframe").count() == 1
     page.screenshot(path=f"/tmp/btc-{market.lower()}-forecast-{width}.png")
-    page.get_by_role("radio", name="ETH", exact=True).tap()
+    select_market(page, "ETH")
     page.wait_for_function("()=>document.querySelector('#btc-forecast-reader')?.dataset.symbol==='ETHUSDT'")
     assert page.locator("#btc-live-forecast").count() == 1 and crypto.evaluate("window.__nqToken") == token
     assert page.evaluate("document.documentElement.scrollWidth<=innerWidth") and not errors, errors

@@ -136,7 +136,7 @@ def test_kospi_full_chart_forecast_and_market_switch_isolation(tmp_path, monkeyp
     monkeypatch.setenv("BTC_WEB_DATA_DIR", str(tmp_path))
     with offline_market_data(root):
         app = analysis_app(root / "web_app.py", default_timeout=60).run()
-        next(x for x in app.get("button_group") if x.label == "분석할 시장").set_value("KOSPI").run()
+        next(x for x in app.selectbox if x.label == "분석할 시장").set_value("KOSPI").run()
         assert not app.exception and not app.error
         spec = json.loads(app.get("plotly_chart")[0].proto.spec)
         assert spec["layout"]["meta"]["btcLive"]["symbol"] == "^KS11"
@@ -154,7 +154,7 @@ def test_kospi_full_chart_forecast_and_market_switch_isolation(tmp_path, monkeyp
         release = next(x for x in app.get("button_group") if x.label == "발표 결과를 가정해 보기")
         assert release.options == ["예상 부합", "시장에 부담", "시장에 우호"]
         for code, symbol in [("NQ", "NQ=F"), ("ETH", "ETHUSDT"), ("KOSPI", "^KS11")]:
-            next(x for x in app.get("button_group") if x.label == "분석할 시장").set_value(code).run()
+            next(x for x in app.selectbox if x.label == "분석할 시장").set_value(code).run()
             assert not app.exception and not app.error
             assert (
                 json.loads(app.get("plotly_chart")[0].proto.spec)["layout"]["meta"]["btcLive"]["symbol"]

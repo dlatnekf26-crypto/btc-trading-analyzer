@@ -19,7 +19,7 @@ def macd_range(frame):
 
 def add_oscillators(fig, frame, x):
     for key, label, color, row in (
-        ("rsi", "RSI", "#8c65da", 3),
+        ("rsi", "RSI", "#ef3f50", 3),
         ("macd", "MACD", "#3182f6", 4),
         ("macd_signal", "MACD 시그널", "#dd9b24", 4),
     ):

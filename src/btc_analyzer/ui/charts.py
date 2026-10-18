@@ -31,11 +31,11 @@ def bind_asset(spec, asset_code):
     asset = MARKETS[asset_code]
     spec["layout"]["meta"]["btcLive"]["symbol"] = asset.stream_symbol
     spec["layout"]["uirevision"] = f"{asset.stream_symbol}-{spec['layout'].get('uirevision', 'chart')}"
-    if asset.decimals > 2:
-        spec["layout"]["yaxis"].update(tickformat=",.4f", hoverformat=",.4f")
+    if asset.decimals != 2:
+        spec["layout"]["yaxis"].update(tickformat=f",.{asset.decimals}f", hoverformat=f",.{asset.decimals}f")
         for trace in spec["data"]:
             if "hovertemplate" in trace:
-                trace["hovertemplate"] = trace["hovertemplate"].replace(",.2f", ",.4f")
+                trace["hovertemplate"] = trace["hovertemplate"].replace(",.2f", f",.{asset.decimals}f")
     return spec
 
 
@@ -92,8 +92,8 @@ def add_ichimoku(fig: go.Figure, df: pd.DataFrame, frame: pd.DataFrame, timezone
             lower.extend([*part.b, None])
         if not xs:
             continue
-        color = "rgba(16,168,119,0.15)" if bullish else "rgba(233,75,101,0.13)"
-        edge = "rgba(16,168,119,0.45)" if bullish else "rgba(233,75,101,0.4)"
+        color = "rgba(16,168,119,0.055)" if bullish else "rgba(233,75,101,0.055)"
+        edge = "rgba(16,168,119,0.22)" if bullish else "rgba(233,75,101,0.22)"
         for values, fill in ((upper, False), (lower, True)):
             fig.add_trace(
                 go.Scatter(
@@ -178,8 +178,10 @@ def price_chart(
             low=frame.low,
             close=frame.close,
             name="가격",
-            increasing_line_color="#10a878",
-            decreasing_line_color="#e94b65",
+            increasing_line_color="#ef3f50",
+            increasing_fillcolor="#ef3f50",
+            decreasing_line_color="#2563eb",
+            decreasing_fillcolor="#2563eb",
         ),
         row=1,
         col=1,
@@ -221,7 +223,7 @@ def price_chart(
             y=frame.volume,
             name="거래량",
             showlegend=False,
-            marker_color=["#34d399" if c >= o else "#fb7185" for c, o in zip(frame.close, frame.open)],
+            marker_color=["#ef3f50" if c >= o else "#2563eb" for c, o in zip(frame.close, frame.open)],
         ),
         row=2,
         col=1,

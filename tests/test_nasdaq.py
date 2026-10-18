@@ -87,7 +87,7 @@ def test_selected_nq_has_own_chart_forecast_and_returns_to_crypto(tmp_path, monk
     monkeypatch.setenv("BTC_WEB_DATA_DIR", str(tmp_path))
     with offline_market_data(root):
         app = analysis_app(root / "web_app.py", default_timeout=60).run()
-        next(x for x in app.get("button_group") if x.label == "분석할 시장").set_value("NQ").run()
+        next(x for x in app.selectbox if x.label == "분석할 시장").set_value("NQ").run()
         assert not app.exception and not app.error
         spec = json.loads(app.get("plotly_chart")[0].proto.spec)
         assert spec["layout"]["meta"]["btcLive"]["symbol"] == "NQ=F"
@@ -99,7 +99,7 @@ def test_selected_nq_has_own_chart_forecast_and_returns_to_crypto(tmp_path, monk
         meta = spec["layout"]["meta"]["btcLive"]
         assert meta["symbol"] == "NQ=F" and len(meta["indicatorOverlays"]) == 6
         assert meta["liveIndices"] == [] and not any("실시간" in t["name"] for t in spec["data"])
-        next(x for x in app.get("button_group") if x.label == "분석할 시장").set_value("ETH").run()
+        next(x for x in app.selectbox if x.label == "분석할 시장").set_value("ETH").run()
         assert not app.exception and not app.error
         spec = json.loads(app.get("plotly_chart")[0].proto.spec)
         assert spec["layout"]["meta"]["btcLive"]["symbol"] == "ETHUSDT"

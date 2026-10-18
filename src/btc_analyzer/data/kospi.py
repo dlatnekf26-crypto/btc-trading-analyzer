@@ -1,7 +1,6 @@
 """KRX sessions for the KOSPI cash index (Yahoo ^KS11), never KOSPI futures."""
 
 from functools import lru_cache
-import warnings
 
 import pandas as pd
 
@@ -17,16 +16,13 @@ CSAT_DAYS = """1999-11-17 2000-11-15 2001-11-07 2002-11-06 2003-11-05
 
 @lru_cache(maxsize=24)
 def calendar_bars(start_year, end_year, timeframe):
-    import pandas_market_calendars as calendars
+    from btc_analyzer.data.trading_calendar import schedule as calendar_schedule
 
     start = pd.Timestamp(f"{start_year}-01-01" if isinstance(start_year, int) else start_year)
     end = pd.Timestamp(f"{end_year}-12-31" if isinstance(end_year, int) else end_year)
     # The mirror calendar retains discontinued lunch-break fields. Request
     # only open/close, and handle special trading hours the mirror omits.
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message=r"\['break_start', 'break_end'\] are discontinued")
-        calendar = calendars.get_calendar("XKRX")
-    schedule = calendar.schedule(f"{start.year}-01-01", end, market_times=["market_open", "market_close"])
+    schedule = calendar_schedule("XKRX", f"{start.year}-01-01", end, ("market_open", "market_close"))
     # XKRX's precomputed table predates the 2026 local election and the
     # restoration of Constitution Day as a public holiday from 2026.
     dates = schedule.index

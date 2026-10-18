@@ -7,7 +7,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 from check_chart_gestures import touch, ranges, gesture_check
-from check_live_widget import MarketFixture, install_quote_transport, cleanup
+from check_live_widget import select_market, MarketFixture, install_quote_transport, cleanup
 
 
 FIELDS = ("rsi", "macd", "macd_signal", "macd_hist")
@@ -74,6 +74,9 @@ def verify(browser, width, url, events):
                 assert events.read_text() == baseline
     page.get_by_role("radio", name="1시간", exact=True).tap()
     page.wait_for_function("()=>document.querySelector('#btc-chart-reader')?.dataset.timeframe==='1h'")
+    page.wait_for_function(
+        "()=>{const ps=[...document.querySelectorAll('.js-plotly-plot')].filter(p=>p.getClientRects().length);return ps.length===1&&ps[0].layout?.meta?.btcLive?.timeframe==='1h'&&ps[0]._fullLayout.yaxis4;}"
+    )
     plot = page.locator(".js-plotly-plot:visible").first
     seed = page.locator("#btc-chart-seed").evaluate("e=>JSON.parse(e.dataset.seeds)")
     at = seed["frames"]["1h"]["end"]
@@ -104,7 +107,7 @@ def verify(browser, width, url, events):
                 expected[field],
             )
         page.wait_for_timeout(550)
-    assert page.evaluate("window.__oscCalls") == 2
+    assert page.evaluate("window.__oscCalls") == 2, page.evaluate("window.__oscCalls")
     # A duplicate candle carries a new event time, without a new chart draw.
     widget.evaluate(
         """at=>{const now=Date.now(),s=window.__quoteSockets.find(s=>s.url.includes('data-stream.binance')&&s.readyState===1);s.emit(JSON.stringify({data:{e:'kline',E:now,s:'BTCUSDT',k:{s:'BTCUSDT',i:'1h',t:at,T:at+3600000-1,o:'100000',h:'102000',l:'98000',c:'100200',v:'18',x:false}}}));}""",
@@ -135,7 +138,7 @@ def verify(browser, width, url, events):
         ("KOSPI", "코스피", "^KS11"),
         ("BTC", "BTC", "BTCUSDT"),
     ):
-        page.get_by_role("radio", name=label, exact=True).tap()
+        select_market(page, label)
         page.wait_for_function(
             "s=>document.querySelector('#btc-chart-reader')?.dataset.symbol===s", arg=symbol
         )

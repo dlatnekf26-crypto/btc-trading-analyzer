@@ -4,7 +4,7 @@ const chartReader = (() => {
   try {root=window.parent;doc=root.document;}catch(_){return {inspect(){},refresh(){},currentQuote(){},dispose(){}};}
   const {values,times,nearest}=PlotData, view=ChartViewport;
   const states=new WeakMap(),cards=new WeakMap();
-  const money=Object.fromEntries([2,4,6,8].map(n=>[n,new Intl.NumberFormat('en-US',{minimumFractionDigits:n,maximumFractionDigits:n})]));
+  const money=Object.fromEntries([0,2,4,6,8].map(n=>[n,new Intl.NumberFormat('en-US',{minimumFractionDigits:n,maximumFractionDigits:n})]));
   let active=null,pending=null,raf=null,pressTimer=null,last=null,disposed=false;
   const write=(el,value)=>{if(el && el.textContent!==value)el.textContent=value;};
   function state(plot) {

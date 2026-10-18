@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
-from check_live_widget import MarketFixture, cleanup, install_quote_transport
+from check_live_widget import select_market, MarketFixture, cleanup, install_quote_transport
 from check_touch_charts import touch
 
 ASSETS = {
@@ -39,7 +39,7 @@ def verify(browser, width, url, event_log):
     history_requests = None
     last_prices = {}
     for code, (name, price) in ASSETS.items():
-        page.get_by_role("radio", name=code, exact=True).tap()
+        select_market(page, code)
         symbol = code + "USDT"
         page.wait_for_function(
             "s=>document.querySelector('#btc-live-analysis')?.dataset.symbol===s", arg=symbol

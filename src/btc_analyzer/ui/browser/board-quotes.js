@@ -47,7 +47,13 @@
         // Preserve the macro bridge's text; its observer restores native reruns.
         for(const key of ['price','change','status']){
           const source=original.querySelector('[data-quote-field="'+key+'"]');
-          if(source&&source!==fields[key])setField(fields,key,source.textContent);
+          if(source&&source!==fields[key]){
+            if(key==='status'&&node.classList.contains('board-detail')&&macro.asOf){
+              const old=Date.now()-macro.asOf>7200000||macro.tone==='stale';
+              const stamp=dayFormat.format(new Date(macro.asOf))+' '+clock(macro.asOf).slice(0,5)+' KST';
+              setField(fields,key,(old?'마지막 값 · ':'')+stamp+' · '+(macro.delay>=0?'지연 '+macro.delay+'분':'지연 미확인'));
+            }else setField(fields,key,source.textContent);
+          }
         }
         write(node.dataset,'status',original.dataset.status||'stale');
         if(fields.change&&macro.change!==null)write(fields.change.dataset,'direction',macro.change>=0?'up':'down');

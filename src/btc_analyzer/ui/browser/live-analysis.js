@@ -106,7 +106,7 @@ function makeLiveAnalysis(root) {
           for(const [field,n] of [['open',1],['high',2],['low',3],['close',4]])data[field]=append(trace[field],extra.map(r=>r[n]));
         }else if(i===meta.volumeIndex){
           data.y=append(trace.y,extra.map(r=>r[5]));
-          data['marker.color']=append(trace.colors,extra.map(r=>r[4]>=r[1]?'#34d399':'#fb7185'));
+          data['marker.color']=append(trace.colors,extra.map(r=>r[4]>=r[1]?'#ef3f50':'#2563eb'));
         }else{
           const ys=extra.map(r=>r[0]===k.at?b.features[column]:r[0]===b.seed.at?b.seed.features?.[column]??null:null);
           data.y=append(trace.y,ys);

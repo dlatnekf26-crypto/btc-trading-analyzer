@@ -13,7 +13,7 @@ from urllib.parse import quote, urlencode, urlsplit
 from xml.etree import ElementTree
 
 import requests
-from btc_analyzer.assets import asset_news
+from btc_analyzer.assets import asset_news, STOCK_MARKETS, EXCHANGE_HISTORY
 
 from btc_analyzer.data.economic_calendar import EconomicEvent
 from btc_analyzer.data.sentiment import FEAR_API, FEAR_REFRESH_SECONDS, FearGreed, parse_fear_greed
@@ -24,6 +24,8 @@ NEWS_MAX_AGE = timedelta(hours=24)
 QUOTE_REFRESH_SECONDS = 10
 NEWS_REFRESH_SECONDS = 30
 SYMBOLS = {"kospi": "^KS11", "nq": "NQ=F", "tnx": "^TNX", "fx": "KRW=X", "oil": "CL=F", "tyx": "^TYX"}
+SYMBOLS.update({a.card_id.removeprefix("macro-"): a.symbol for a in STOCK_MARKETS.values()})
+STOCK_SYMBOLS = {a.symbol: EXCHANGE_HISTORY[code] for code, a in STOCK_MARKETS.items()}
 TOPICS = {
     "oil": "유가",
     "geopolitics": "전쟁·지정학",
@@ -43,6 +45,9 @@ class MacroQuote:
     points: tuple[float, ...]
     change: float | None
     delay_minutes: int | None
+    day_high: float | None = None
+    day_low: float | None = None
+    volume: float | None = None
 
 
 @dataclass(frozen=True)
@@ -134,6 +139,14 @@ def parse_quote(payload: dict, symbol: str, now: datetime) -> MacroQuote:
         or meta.get("exchangeTimezoneName") != "Asia/Seoul"
     ):
         raise ValueError("Expected KRX KOSPI index · KRW · Asia/Seoul")
+    if symbol in STOCK_SYMBOLS:
+        venue = STOCK_SYMBOLS[symbol]
+        if (
+            meta.get("instrumentType") != "EQUITY"
+            or meta.get("currency") != venue.currency
+            or meta.get("exchangeTimezoneName") != venue.timezone
+        ):
+            raise ValueError("Expected stock · exact currency and exchange timezone")
     price = _finite_positive(meta["regularMarketPrice"])
     if symbol in ("^TNX", "^TYX") and price > 30:
         raise ValueError("Unrecognized yield units")
@@ -163,7 +176,31 @@ def parse_quote(payload: dict, symbol: str, now: datetime) -> MacroQuote:
         and 0 <= delay <= 1440
         else None
     )
-    return MacroQuote(symbol, price, as_of, now, tuple(points[-60:]), change, delay)
+
+    def optional_number(key):
+        value = meta.get(key)
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            or value < 0
+            or (key != "regularMarketVolume" and value == 0)
+        ):
+            return None
+        return float(value)
+
+    return MacroQuote(
+        symbol,
+        price,
+        as_of,
+        now,
+        tuple(points[-60:]),
+        change,
+        delay,
+        optional_number("regularMarketDayHigh"),
+        optional_number("regularMarketDayLow"),
+        optional_number("regularMarketVolume"),
+    )
 
 
 def crypto_relevance(title: str) -> str | None:
@@ -418,6 +455,8 @@ class MarketContextService:
                     delay = FEAR_REFRESH_SECONDS
                     if isinstance(value, FearGreed) and value.next_update is not None:
                         delay = min(delay, max(60, (value.next_update - now).total_seconds()))
+                elif key in SYMBOLS and SYMBOLS[key] in STOCK_SYMBOLS:
+                    delay = 30  # Stock streams share one socket; REST only seeds/falls back.
                 delay = self._refresh_intervals.get(key, delay)
             except Exception as exc:
                 self._failures[key] += 1

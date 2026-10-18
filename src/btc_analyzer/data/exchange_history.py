@@ -16,17 +16,20 @@ YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/"
 
 @lru_cache(maxsize=24)
 def calendar_bars(start_year, end_year, timeframe, market="NQ"):
-    if market == "KOSPI":
+    venue = EXCHANGE_HISTORY[market]
+    if venue.calendar == "KRX":
         from btc_analyzer.data.kospi import calendar_bars as kospi_bars
 
         return kospi_bars(start_year, end_year, timeframe)
-    if market != "NQ":
-        raise ValueError("지원하지 않는 거래 시장입니다.")
-    import pandas_market_calendars as calendars
+    if venue.kind == "EQUITY":
+        from btc_analyzer.data.equity_sessions import calendar_bars as equity_bars
+
+        return equity_bars(start_year, end_year, timeframe)
+    from btc_analyzer.data.trading_calendar import schedule as calendar_schedule
 
     start = f"{start_year}-01-01" if isinstance(start_year, int) else str(start_year)
     end = f"{end_year}-12-31" if isinstance(end_year, int) else str(end_year)
-    schedule = calendars.get_calendar("CME_Equity").schedule(start, end)
+    schedule = calendar_schedule("CME_Equity", start, end)
     if timeframe in ("5m", "15m", "1h", "4h"):
         starts, ends = [], []
         for row in schedule.itertuples():
@@ -43,7 +46,7 @@ def calendar_bars(start_year, end_year, timeframe, market="NQ"):
     else:
         # Yahoo's daily NQ series publishes US equity trading dates, omitting
         # full equity holidays even when Globex trades a shortened session.
-        publication = calendars.get_calendar("NYSE").schedule(start, end)
+        publication = calendar_schedule("NYSE", start, end)
         published = publication.index[
             publication.market_close.dt.tz_convert("America/New_York").dt.hour == 16
         ]
@@ -94,8 +97,8 @@ def parse_history(payload, timeframe, now, market="NQ"):
         or meta.get("exchangeTimezoneName") != venue.timezone
     ):
         raise ValueError(f"{asset.symbol}·{venue.currency}·거래소 시간대가 일치하지 않습니다.")
-    if market == "KOSPI" and meta.get("instrumentType") != "INDEX":
-        raise ValueError("코스피 종합지수 원자료가 아닙니다.")
+    if venue.kind != "FUTURE" and meta.get("instrumentType") != venue.kind:
+        raise ValueError(f"{asset.name} {venue.kind} 원자료가 아닙니다.")
     interval = {"1w": "1wk", "1M": "1mo"}.get(timeframe, timeframe)
     if meta.get("dataGranularity") != interval:
         raise ValueError("자료원이 요청한 봉 주기를 변경했습니다.")
@@ -114,7 +117,7 @@ def parse_history(payload, timeframe, now, market="NQ"):
     )
     valid &= frame.high >= frame[["open", "low", "close"]].max(axis=1)
     valid &= frame.low <= frame[["open", "high", "close"]].min(axis=1)
-    if market == "KOSPI" and timeframe != "1d":
+    if (venue.calendar == "KRX" or venue.kind == "EQUITY") and timeframe != "1d":
         # Yahoo sometimes appends a closing-price snapshot with zero volume
         # and identical OHLC. It is a quote, not a complete intraday candle.
         valid &= ~((frame.volume == 0) & (frame.high == frame.low))
@@ -122,7 +125,7 @@ def parse_history(payload, timeframe, now, market="NQ"):
     if timeframe == "1d" and market == "NQ":
         local = frame.index.tz_convert("America/New_York")
         frame = frame.loc[(local.hour == 0) & (local.minute == 0) & (local.second == 0)]
-    if timeframe == "1d" and market == "KOSPI":
+    if timeframe == "1d" and venue.calendar == "KRX":
         local = frame.index.tz_convert("Asia/Seoul")
         frame = frame.loc[local.hour.isin((9, 10)) & (local.minute == 0) & (local.second == 0)]
         # Yahoo uses 10:00 KST labels on some delayed-opening days. Canonical
@@ -130,6 +133,10 @@ def parse_history(payload, timeframe, now, market="NQ"):
         frame.index = frame.index.normalize()
         if frame.index.has_duplicates:
             raise ValueError("중복된 코스피 일봉 날짜입니다.")
+    if venue.kind == "EQUITY":
+        # SNDK is the 2025 independent listing; never splice the old ticker's series.
+        listed = pd.Timestamp(asset.listed, tz=venue.timezone).tz_convert("UTC")
+        frame = frame.loc[frame.index >= listed]
     if frame.empty:
         raise ValueError("유효한 시장 봉이 없습니다.")
     calendar_start = (
@@ -161,7 +168,7 @@ def fetch_history(timeframe, now, market="NQ"):
     if timeframe == "1d":
         params = {
             "interval": "1d",
-            "period1": int(pd.Timestamp("1999-01-01", tz="UTC").timestamp()),
+            "period1": int(pd.Timestamp(SESSION_MARKETS[market].listed, tz="UTC").timestamp()),
             "period2": int(pd.Timestamp(now).timestamp()),
         }
     body = _download(
