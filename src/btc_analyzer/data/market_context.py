@@ -23,7 +23,7 @@ MAX_BYTES = 512_000
 NEWS_MAX_AGE = timedelta(hours=24)
 QUOTE_REFRESH_SECONDS = 10
 NEWS_REFRESH_SECONDS = 30
-SYMBOLS = {"nq": "NQ=F", "tnx": "^TNX", "fx": "KRW=X", "oil": "CL=F", "tyx": "^TYX"}
+SYMBOLS = {"kospi": "^KS11", "nq": "NQ=F", "tnx": "^TNX", "fx": "KRW=X", "oil": "CL=F", "tyx": "^TYX"}
 TOPICS = {
     "oil": "유가",
     "geopolitics": "전쟁·지정학",
@@ -128,6 +128,12 @@ def parse_quote(payload: dict, symbol: str, now: datetime) -> MacroQuote:
         raise ValueError("Expected Treasury yield index")
     if symbol == "KRW=X" and (meta.get("instrumentType") != "CURRENCY" or meta.get("currency") != "KRW"):
         raise ValueError("Expected USD/KRW market quote")
+    if symbol == "^KS11" and (
+        meta.get("instrumentType") != "INDEX"
+        or meta.get("currency") != "KRW"
+        or meta.get("exchangeTimezoneName") != "Asia/Seoul"
+    ):
+        raise ValueError("Expected KRX KOSPI index · KRW · Asia/Seoul")
     price = _finite_positive(meta["regularMarketPrice"])
     if symbol in ("^TNX", "^TYX") and price > 30:
         raise ValueError("Unrecognized yield units")

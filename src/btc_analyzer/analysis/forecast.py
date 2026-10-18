@@ -5,6 +5,8 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from btc_analyzer.assets import SESSION_MARKETS
+
 from btc_analyzer.analysis.historical_similarity import SimilarityReport, prepare_history
 from btc_analyzer.analysis.technical_matching import IndicatorFamily
 from btc_analyzer.config import TIMEFRAMES
@@ -33,10 +35,10 @@ def horizon_days(origin, horizon: str) -> int:
 
 
 def forecast_dates(origin, timeframe, count, market="crypto"):
-    if market == "NQ":
-        from btc_analyzer.data.nasdaq import trading_dates
+    if market in SESSION_MARKETS:
+        from btc_analyzer.data.exchange_history import trading_dates
 
-        return trading_dates(origin, timeframe, count)
+        return trading_dates(origin, timeframe, count, market)
     frequency = pd.offsets.MonthBegin() if timeframe == "1M" else pd.Timedelta(seconds=TIMEFRAMES[timeframe])
     return tuple(pd.date_range(origin, periods=count, freq=frequency))
 

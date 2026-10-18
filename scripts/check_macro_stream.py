@@ -46,6 +46,7 @@ def verify(browser, width, url=None, event_log=None):
         )
         page.goto("http://widget.test/")
         widget = page.main_frame
+    widget.locator(".quote-extra").evaluate("e=>e.open=true")
     widget.locator("#ethereum .price span").get_by_text("3,000.25", exact=True).wait_for()
     page.wait_for_timeout(100)
     assert (
@@ -55,7 +56,7 @@ def verify(browser, width, url=None, event_log=None):
         == 1
     )
     assert widget.evaluate(
-        "window.__subscriptions.some(s=>JSON.stringify(s.subscribe)===JSON.stringify(['NQ=F','CL=F','^TNX','^TYX','KRW=X']))"
+        "window.__subscriptions.some(s=>JSON.stringify(s.subscribe)===JSON.stringify(['^KS11','NQ=F','CL=F','^TNX','^TYX','KRW=X']))"
     )
     baseline = event_log.read_text() if event_log else None
     now = page.evaluate("Date.now()")
@@ -82,7 +83,7 @@ def verify(browser, width, url=None, event_log=None):
     assert "%p" in page.locator("#macro-tyx .btc-macro-change").inner_text()
     assert widget.locator("#forex .price span").inner_text() == "1,348.50"
     assert widget.locator("#forex").get_attribute("data-market") == "true"
-    assert "Yahoo 시장" in widget.locator("#forex").inner_text()
+    assert "Yahoo 시장" in widget.locator("#forex .change").text_content()
     assert "15분" in page.locator("#macro-nq .btc-macro-status").inner_text()
     assert "실시간" not in page.locator("#macro-nq").inner_text()
     assert "10분" in page.locator("#macro-oil .btc-macro-status").inner_text()

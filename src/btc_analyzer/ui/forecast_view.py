@@ -1,7 +1,7 @@
 """Price forecast presentation: absolute prices, uncertainty and measured errors."""
 
 from html import escape
-from btc_analyzer.assets import MARKETS, price_text
+from btc_analyzer.assets import SESSION_MARKETS, MARKETS, price_text
 from datetime import datetime
 
 import streamlit as st
@@ -42,11 +42,11 @@ def render_prediction(
     use_news = (
         st.toggle(
             "뉴스 영향 함께 반영",
-            value=asset_code != "NQ",
+            value=asset_code not in SESSION_MARKETS,
             key="forecast_use_news",
-            disabled=asset_code == "NQ",
+            disabled=asset_code in SESSION_MARKETS,
         )
-        and asset_code != "NQ"
+        and asset_code not in SESSION_MARKETS
     )
     active_news = news if use_news and news.effects else None
     outlook = direction_outlook(result, active_news)
@@ -212,7 +212,7 @@ def render_prediction(
             f"과거 검증에서 가격 유지 가정보다 평균 오차가 {improvement:.0%} 작았습니다. 미래 성능을 보장하지 않습니다."
         )
     with chart_slot:
-        if asset_code != "NQ":
+        if asset_code not in SESSION_MARKETS:
             st.markdown(
                 '<section id="btc-live-forecast" class="btc-live-forecast" aria-label="실시간 조건부 예측">'
                 "<p>현재가에서 출발하는 예상 · 실시간</p><strong>시세 연결 중…</strong>"

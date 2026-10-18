@@ -56,6 +56,7 @@ def sparkline(points):
 def macro_cards(context, now, keys=("nq", "oil", "tnx", "tyx")):
     cards = []
     for key, title, unit, link, source in (
+        ("kospi", "코스피", "pt · ^KS11 종합지수", "https://finance.yahoo.com/quote/%5EKS11/", "KRX 코스피"),
         ("nq", "나스닥100 선물", "pt · NQ=F", "https://finance.yahoo.com/quote/NQ%3DF/", "CME NQ"),
         ("oil", "WTI 원유 선물", "USD/배럴 · CL=F", "https://finance.yahoo.com/quote/CL%3DF/", "NYMEX WTI"),
         ("tnx", "미국채 10년물", "% · 수익률 지표", "https://finance.yahoo.com/quote/%5ETNX/", "CBOE ^TNX"),

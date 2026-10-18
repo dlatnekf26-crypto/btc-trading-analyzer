@@ -42,7 +42,7 @@
     return value;
   }
   const macros=Object.fromEntries([
-    ['NQ=F','nq','pt · NQ 선물',false],['CL=F','oil','USD/배럴 · WTI 선물',false],
+    ['^KS11','kospi','pt · 코스피',false],['NQ=F','nq','pt · NQ 선물',false],['CL=F','oil','USD/배럴 · WTI 선물',false],
     ['^TNX','tnx','% · 10년물 금리',true],['^TYX','tyx','% · 30년물 금리',true]
   ].map(([symbol,id,label,yieldIndex])=>[symbol,{
     id,label,yieldIndex,price:null,asOf:0,received:0,stream:false,change:null,points:[],bucket:0,delay:-1,
@@ -57,7 +57,8 @@
         !Number.isSafeInteger(value.time) || value.time<=0 || value.time>Date.now()+5000 || Date.now()-value.time>7*86400000 ||
         (macros[value.symbol]?.yieldIndex && value.price>30) ||
         (value.symbol==='KRW=X' && (value.currency ? value.currency!=='KRW' : value.exchange!=='CCY')) ||
-        (value.symbol!=='KRW=X' && value.currency && value.currency!=='USD')) return;
+        (value.symbol==='^KS11' && value.currency!=='KRW') ||
+        (!['KRW=X','^KS11'].includes(value.symbol) && value.currency && value.currency!=='USD')) return;
     if (value.symbol==='KRW=X') {
       if (value.time<fx.asOf || Date.now()-value.time>180000) return;
       saveRate(fx,{rate:value.price,asOf:value.time,source:'Yahoo 시장',market:true,daily:false});
@@ -94,7 +95,7 @@
         s.graphDirty=true;
       }
       if (!s.stream || s.price===null) {
-        if(symbol==='NQ=F')chartReader.currentQuote(symbol,s.price,
+        if(['NQ=F','^KS11'].includes(symbol))chartReader.currentQuote(symbol,s.price,
           s.price===null?'현재가 연결 중':`${el.dataset.status==='stale'?'조회 지연 · 마지막 가격':'공개 지연 시세'} · ${clock(s.asOf)} KST`);
         continue;
       }
@@ -128,7 +129,7 @@
       }
       if (el.dataset.status!==s.tone) el.dataset.status=s.tone;
       write(s.nodes.status,s.statusText);write(s.nodes.badge,s.badgeText);
-      if(symbol==='NQ=F')chartReader.currentQuote(symbol,s.price,
+      if(['NQ=F','^KS11'].includes(symbol))chartReader.currentQuote(symbol,s.price,
         `${s.tone==='stale'?'수신 지연 · 마지막 가격':s.delay===0?'공개 스트림':'공개 지연 시세'} · ${clock(s.asOf)} KST`);
       const graph=s.nodes.graph;
       if (graph && (s.graphDirty || graph.firstElementChild!==s.svgNode)) {

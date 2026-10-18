@@ -1,7 +1,7 @@
 """Forecast figure construction; presentation controls live in forecast_view.py."""
 
 from html import escape
-from btc_analyzer.assets import price_text
+from btc_analyzer.assets import SESSION_MARKETS, price_text
 from btc_analyzer.analysis.ai_forecast import forecast_key
 
 import numpy as np
@@ -290,7 +290,7 @@ def prediction_chart(
     )
     live_range = event_projection or news_projection or prediction
     live_start = len(fig.data)
-    if report.market != "NQ":
+    if report.market not in SESSION_MARKETS:
         for name, fill in (("실시간 범위 상단", False), ("실시간 조건부 범위", True)):
             fig.add_trace(
                 go.Scatter(
@@ -330,7 +330,9 @@ def prediction_chart(
                 "offsets": [
                     int((date - prediction.dates[0]).total_seconds() * 1000) for date in prediction.dates
                 ],
-                "liveIndices": [] if report.market == "NQ" else [live_start, live_start + 1, live_start + 2],
+                "liveIndices": []
+                if report.market in SESSION_MARKETS
+                else [live_start, live_start + 1, live_start + 2],
                 "label": "발표 조건부 경로"
                 if event_projection
                 else f"{primary.label} 사례 경로"

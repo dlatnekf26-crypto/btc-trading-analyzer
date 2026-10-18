@@ -4,6 +4,8 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+
+from btc_analyzer.assets import SESSION_MARKETS
 from numpy.lib.stride_tricks import sliding_window_view
 
 from btc_analyzer.candles import candle_boundary, candle_grid
@@ -98,7 +100,7 @@ def prepare_history(
     columns = ["open", "high", "low", "close", "volume"]
     if not set(columns).issubset(raw.columns):
         raise ValueError("가격과 거래량 데이터가 필요합니다.")
-    session_market = raw.attrs.get("market") == "NQ"
+    session_market = raw.attrs.get("market") in SESSION_MARKETS
     boundary = utc(as_of) if session_market else candle_boundary(utc(as_of), timeframe)
     frame = raw[columns].copy()
     frame.index = pd.to_datetime(frame.index, utc=True)
@@ -267,7 +269,7 @@ class PreparedHistory:
                     context_similarity=float(context_scores[start]) if context_used else None,
                     technical_similarity=float(technical_scores[start]) if technical_used else None,
                     dates=tuple(bar_closes(frame, frame.index[start : observed_end + 1], timeframe))
-                    if frame.attrs.get("market") == "NQ"
+                    if frame.attrs.get("market") in SESSION_MARKETS
                     else (),
                 )
             )
@@ -292,7 +294,7 @@ class PreparedHistory:
             technical_used,
             frame.attrs.get("market", "crypto"),
             tuple(bar_closes(frame, frame.index[query_start : last + 1], timeframe))
-            if frame.attrs.get("market") == "NQ"
+            if frame.attrs.get("market") in SESSION_MARKETS
             else (),
         )
 

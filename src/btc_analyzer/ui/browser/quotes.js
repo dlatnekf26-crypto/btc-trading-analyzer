@@ -9,7 +9,7 @@
   const MARKET_ASSETS = [['BTC','binance','비트코인',2],['ETH','ethereum','이더리움',2],['SOL','solana','솔라나',2],['XRP','ripple','리플',4]];
   try {
     const initial=window.parent.document.getElementById('btc-live-selection')?.dataset.symbol;
-    if(initial==='NQ=F' || MARKET_ASSETS.some(([code])=>code+'USDT'===initial)) ACTIVE_SYMBOL=initial;
+    if(['NQ=F','^KS11'].includes(initial) || MARKET_ASSETS.some(([code])=>code+'USDT'===initial)) ACTIVE_SYMBOL=initial;
   } catch(_) {}
   for (const [code,id,name] of MARKET_ASSETS) {
     let card=document.getElementById(id);
@@ -33,7 +33,7 @@
   configs.push({id:'upbit',market:'upbit',symbol:'KRW-BTC',decimals:0,changeLabel:'전일 대비',restGap:11000,
     socket:'wss://api.upbit.com/websocket/v1',ticker:'https://api.upbit.com/v1/ticker?markets=KRW-BTC',history:null});
   const streams=configs.filter(c=>c.market==='binance').flatMap(c=>[c.symbol.toLowerCase()+'@aggTrade',c.symbol.toLowerCase()+'@ticker']);
-  const klineStreams=symbol=>symbol==='NQ=F'?[]:LiveCandles.frames.map(tf=>symbol.toLowerCase()+'@kline_'+tf);
+  const klineStreams=symbol=>['NQ=F','^KS11'].includes(symbol)?[]:LiveCandles.frames.map(tf=>symbol.toLowerCase()+'@kline_'+tf);
   let subscribedSymbol=null,subscriptionId=0,lastSubscriptionAt=0,selectionTimer=null;
   let disposed = false, paintTimer = null;
   const states = configs.map(config => ({...config, el:document.getElementById(config.id), points:[],
@@ -78,7 +78,7 @@
   function syncSelection() {
     let selected;
     try {selected=window.parent.document.getElementById('btc-live-selection')?.dataset.symbol;} catch(_) {}
-    if(selected!=='NQ=F' && !states.some(s=>s.market==='binance' && s.symbol===selected)) selected=ACTIVE_SYMBOL;
+    if(!['NQ=F','^KS11'].includes(selected) && !states.some(s=>s.market==='binance' && s.symbol===selected)) selected=ACTIVE_SYMBOL;
     if(selected!==ACTIVE_SYMBOL) {
       ACTIVE_SYMBOL=selected;liveAnalysis.stop();
       const next=states.find(s=>s.symbol===selected);if(next){next.dirty=true;next.plotDirty=true;}

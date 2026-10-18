@@ -18,7 +18,7 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from btc_analyzer.config import AppConfig
-from btc_analyzer.assets import MARKETS
+from btc_analyzer.assets import MARKETS, SESSION_MARKETS
 from btc_analyzer.candles import candle_boundary
 from btc_analyzer.data.base_provider import DataError
 from btc_analyzer.ui.analysis_cache import market_snapshot
@@ -63,6 +63,7 @@ with st.container(key="market_controls"):
                 "분석할 시장",
                 list(MARKETS),
                 default="BTC",
+                format_func=lambda code: "코스피" if code == "KOSPI" else code,
                 required=True,
                 key="analysis_asset",
                 label_visibility="collapsed",
@@ -170,12 +171,12 @@ def dashboard() -> None:
         render_current_analysis()
 
 
-if asset_code == "NQ":
-    from btc_analyzer.ui.nasdaq_view import render_nasdaq
+if asset_code in SESSION_MARKETS:
+    from btc_analyzer.ui.exchange_view import render_exchange_market
 
     with st.container(key="selected_future"):
-        render_macro_quotes(("nq",))
-    render_nasdaq()
+        render_macro_quotes((asset.card_id.removeprefix("macro-"),))
+    render_exchange_market(asset_code)
 else:
     dashboard()
 from btc_analyzer.ui.ai_view import settings as ai_settings, render_ai_panel
@@ -186,5 +187,5 @@ with st.expander("대외 시장 · 나스닥·유가·국채", expanded=False):
     render_macro_quotes(("oil", "tnx", "tyx") if asset_code == "NQ" else ("nq", "oil", "tnx", "tyx"))
 # News remains an independent fragment and keeps the live alert bridge current
 # on every tab, without pushing the price/forecast chart below a long news feed.
-if asset_code != "NQ":
+if asset_code not in SESSION_MARKETS:
     render_coin_news(asset_code)

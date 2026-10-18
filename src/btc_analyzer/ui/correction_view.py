@@ -1,7 +1,7 @@
 """Compact correction outlook and source-linked release what-if controls."""
 
 from html import escape
-from btc_analyzer.assets import price_text
+from btc_analyzer.assets import SESSION_MARKETS, price_text
 from zoneinfo import ZoneInfo
 
 import streamlit as st
@@ -72,6 +72,7 @@ def outlook_html(outlook, timezone, quote):
 
 
 def render_correction(result, context_values, past_values, news, base, now, timezone, quote):
+    target = "시장" if result.history.market in SESSION_MARKETS else "코인"
     st.subheader("조정은 언제 주의할까요?")
     threshold = (
         st.segmented_control(
@@ -113,7 +114,7 @@ def render_correction(result, context_values, past_values, news, base, now, time
             + (f" / 우호: {', '.join(favorable)}" if favorable else "")
         )
     else:
-        st.caption("새 코인 뉴스의 방향 가정은 현재 조정 설명에 추가되지 않았어요.")
+        st.caption(f"새 {target} 뉴스의 방향 가정은 현재 조정 설명에 추가되지 않았어요.")
     st.markdown("**다가오는 주요 발표와 시장 예상치**")
     feed = calendar_service(__checkout_signature__).snapshot().feed("calendar")
     events = upcoming_events(feed, now)
@@ -164,7 +165,11 @@ def render_correction(result, context_values, past_values, news, base, now, time
         st.segmented_control(
             "발표 결과를 가정해 보기",
             ["neutral", "adverse", "favorable"],
-            format_func={"neutral": "예상 부합", "adverse": "코인에 부담", "favorable": "코인에 우호"}.get,
+            format_func={
+                "neutral": "예상 부합",
+                "adverse": f"{target}에 부담",
+                "favorable": f"{target}에 우호",
+            }.get,
             key="release_condition",
         )
         or "neutral"

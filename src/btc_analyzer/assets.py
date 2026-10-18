@@ -35,7 +35,25 @@ ASSETS = {
 }
 
 
-MARKETS = {**ASSETS, "NQ": Asset("NQ", "나스닥100 선물", "macro-nq", 2, date(1999, 6, 21), "", "NQ=F")}
+SESSION_MARKETS = {
+    "NQ": Asset("NQ", "나스닥100 선물", "macro-nq", 2, date(1999, 6, 21), "", "NQ=F"),
+    "KOSPI": Asset("KOSPI", "코스피", "macro-kospi", 2, date(1999, 1, 1), "", "^KS11"),
+}
+MARKETS = {**ASSETS, **SESSION_MARKETS}
+
+
+@dataclass(frozen=True)
+class ExchangeHistory:
+    currency: str
+    timezone: str
+    exchange: str
+    source: str
+
+
+EXCHANGE_HISTORY = {
+    "NQ": ExchangeHistory("USD", "America/New_York", "CME", "CME NQ 연속 선물"),
+    "KOSPI": ExchangeHistory("KRW", "Asia/Seoul", "KRX", "KRX 코스피 종합지수"),
+}
 
 
 def asset_news(title):

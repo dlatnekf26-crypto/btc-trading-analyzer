@@ -154,11 +154,13 @@ def render_history_view(
             )
         else:
             if market_frames is not None:
-                from btc_analyzer.data.nasdaq import horizon_bars
+                from btc_analyzer.data.exchange_history import horizon_bars
                 from btc_analyzer.market_clock import bar_closes
 
                 daily = market_frames("1d")
-                forward = horizon_bars(bar_closes(daily, daily.index[-1], "1d"), horizon)
+                forward = horizon_bars(
+                    bar_closes(daily, daily.index[-1], "1d"), horizon, daily.attrs["market"]
+                )
             else:
                 forward = horizon_days(candle_boundary(utc(cutoff), "1d"), horizon)
         minimum = st.select_slider("최소 유사도 · 점", (50, 60, 70, 80), value=60)
@@ -260,7 +262,7 @@ def render_history_view(
             period,
             current,
             past,
-            "NQ" if market_frames is not None else symbol.split("/")[0],
+            frame.attrs["market"] if market_frames is not None else symbol.split("/")[0],
             projection_seed(frame, tf, report.query_end),
         )
     else:

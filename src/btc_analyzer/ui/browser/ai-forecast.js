@@ -10,7 +10,7 @@ const aiForecast = (() => {
     if(s.busy||(s.raw===raw&&s.data===plot.data))return;
     let data;
     try{data=raw?JSON.parse(raw):null;}catch(_){return;}
-    const symbol=data?.asset==='NQ'?'NQ=F':data?.asset+'USDT';
+    const symbol=({NQ:'NQ=F',KOSPI:'^KS11'})[data?.asset]??data?.asset+'USDT';
     const valid=data&&symbol===meta.symbol&&data.baseAt===meta.baseAt&&data.count===meta.center.length&&data.basis===meta.aiBasis;
     const previous=plot.data.flatMap((t,i)=>t.meta?.btcAI?[i]:[]);
     if(valid&&previous.length===3&&plot.data[previous[0]].meta.btcAI===data.created){s.raw=raw;s.data=plot.data;return;}

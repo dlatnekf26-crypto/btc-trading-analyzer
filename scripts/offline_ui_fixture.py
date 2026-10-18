@@ -182,9 +182,9 @@ def offline_context_data():
         if host == "query1.finance.yahoo.com":
             symbol = unquote(urlsplit(url).path.rsplit("/", 1)[-1])
             interval = parse_qs(urlsplit(url).query).get("interval", ["1m"])[0]
-            if symbol == "NQ=F" and interval in ("5m", "15m", "1d", "1h"):
+            if symbol in ("NQ=F", "^KS11") and interval in ("5m", "15m", "1d", "1h"):
                 import numpy as np
-                from btc_analyzer.data.nasdaq import calendar_bars
+                from btc_analyzer.data.exchange_history import calendar_bars
 
                 starts, ends = calendar_bars(
                     str((now - timedelta(days=14)).date())
@@ -194,11 +194,12 @@ def offline_context_data():
                     else now.year - 1,
                     str((now + timedelta(days=1)).date()) if interval in ("5m", "15m") else now.year + 1,
                     interval,
+                    "KOSPI" if symbol == "^KS11" else "NQ",
                 )
                 starts = starts[ends <= now][-6600 if interval == "1d" else -3500 :]
                 x = np.arange(len(starts))
                 close = np.exp(0.00007 * x + 0.045 * np.sin(x / 43) + 0.015 * np.cos(x / 11))
-                close *= 22345.5 / close[-1]
+                close *= (2800 if symbol == "^KS11" else 22345.5) / close[-1]
                 candles = {
                     "open": (close * 0.999).tolist(),
                     "high": (close * 1.008).tolist(),
@@ -211,9 +212,12 @@ def offline_context_data():
                         "result": [
                             {
                                 "meta": {
-                                    "symbol": "NQ=F",
-                                    "currency": "USD",
-                                    "exchangeTimezoneName": "America/New_York",
+                                    "symbol": symbol,
+                                    "instrumentType": "INDEX" if symbol == "^KS11" else "FUTURE",
+                                    "currency": "KRW" if symbol == "^KS11" else "USD",
+                                    "exchangeTimezoneName": "Asia/Seoul"
+                                    if symbol == "^KS11"
+                                    else "America/New_York",
                                     "dataGranularity": interval,
                                 },
                                 "timestamp": (starts.asi8 // 1_000_000_000).tolist(),
@@ -223,7 +227,14 @@ def offline_context_data():
                     }
                 }
                 return Response(json.dumps(body).encode())
-            price = {"NQ=F": 22345.50, "CL=F": 87.42, "^TNX": 4.25, "^TYX": 4.80, "KRW=X": 1345.5}[symbol]
+            price = {
+                "^KS11": 2800.0,
+                "NQ=F": 22345.50,
+                "CL=F": 87.42,
+                "^TNX": 4.25,
+                "^TYX": 4.80,
+                "KRW=X": 1345.5,
+            }[symbol]
             stamp = int(
                 (now - timedelta(seconds=2) if symbol == "KRW=X" else now - timedelta(minutes=15)).timestamp()
             )
@@ -236,11 +247,15 @@ def offline_context_data():
                                 "instrumentType": {
                                     "NQ=F": "FUTURE",
                                     "CL=F": "FUTURE",
+                                    "^KS11": "INDEX",
                                     "^TNX": "INDEX",
                                     "^TYX": "INDEX",
                                     "KRW=X": "CURRENCY",
                                 }[symbol],
-                                "currency": "KRW" if symbol == "KRW=X" else "USD",
+                                "currency": "KRW" if symbol in ("KRW=X", "^KS11") else "USD",
+                                "exchangeTimezoneName": "Asia/Seoul"
+                                if symbol == "^KS11"
+                                else "America/New_York",
                                 "regularMarketPrice": price,
                                 "regularMarketTime": stamp,
                                 "chartPreviousClose": price * 0.99,
