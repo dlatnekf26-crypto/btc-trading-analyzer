@@ -165,8 +165,14 @@ def verify(browser, width, url, event_log, check_ai=False):
         ("6mo", "6개월"),
     ):
         page.get_by_role("radio", name=label, exact=True).tap()
+        print(json.dumps({"width": width, "forecast_check": key}), flush=True)
         page.wait_for_function(
-            "()=>document.querySelector('#btc-forecast-reader')&&[...document.querySelectorAll('.js-plotly-plot')].some(p=>p._fullLayout?.meta?.btcLive?.kind==='forecast')"
+            """days=>document.querySelector('#btc-forecast-reader')&&[...document.querySelectorAll('.js-plotly-plot')].some(p=>{
+              const meta=p._fullLayout?.meta?.btcLive;
+              return meta?.kind==='forecast'&&Math.abs(meta.offsets.at(-1)/86400000-days)<=4&&
+                p._fullLayout.dragmode===false&&p.querySelector('.nsewdrag')?.getBoundingClientRect().width>0;
+            })""",
+            arg={"1w": 7, "2w": 14, "1mo": 30, "2mo": 60, "3mo": 90, "6mo": 182}[key],
         )
         page.wait_for_timeout(180)
         assert not page.locator('[data-testid="stException"]').count()

@@ -13,7 +13,7 @@ from btc_analyzer.ui.live_analysis import LIVE_ANALYSIS_CSS
 LIVE_PRICES_HTML = quotes_document()
 
 
-def live_prices_html(asset_code="BTC"):
+def live_prices_html(asset_code="BTC", *, bridge_only=False):
     if asset_code not in MARKETS:
         raise ValueError("Unsupported live asset")
     markets = json.dumps(
@@ -35,7 +35,13 @@ def live_prices_html(asset_code="BTC"):
         ensure_ascii=False,
     )
     default_sessions = "[['NQ','NQ=F','nq','pt','USD',2],['KOSPI','^KS11','kospi','pt','KRW',2]]"
-    return LIVE_PRICES_HTML.replace(default_markets, markets).replace(default_sessions, sessions)
+    document = LIVE_PRICES_HTML.replace(default_markets, markets).replace(default_sessions, sessions)
+    if bridge_only:
+        document = document.replace("<body>", '<body data-bridge-only="true">').replace(
+            "</style>",
+            "body[data-bridge-only]{margin:0;height:0;overflow:hidden}body[data-bridge-only] .dashboard{display:none}</style>",
+        )
+    return document
 
 
 def render_live_prices(asset_code="BTC") -> None:
@@ -44,7 +50,7 @@ def render_live_prices(asset_code="BTC") -> None:
         f'<span hidden id="btc-live-selection" data-symbol="{MARKETS[asset_code].stream_symbol}"></span>',
         unsafe_allow_html=True,
     )
-    components.html(live_prices_html(asset_code), height=540, scrolling=False)
+    components.html(live_prices_html(asset_code, bridge_only=True), height=0, scrolling=False)
     st.markdown(LIVE_ANALYSIS_CSS, unsafe_allow_html=True)
     st.markdown(
         """<style>

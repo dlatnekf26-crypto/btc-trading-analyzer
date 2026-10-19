@@ -158,7 +158,7 @@
       if (s.price===null) {
         const message=s.error?'자료원 연결 지연 · 자동 재시도 중':'시세를 불러오는 중…';
         write(el.querySelector('.btc-macro-status'),message);
-        if(SESSION_SYMBOLS.includes(symbol))chartReader.currentQuote(symbol,NaN,message);
+        if(symbol===ACTIVE_SYMBOL&&SESSION_SYMBOLS.includes(symbol))chartReader.currentQuote(symbol,NaN,message);
         continue;
       }
       const rebound=s.node!==el || Object.values(s.nodes || {}).some(node=>node && !node.isConnected);
@@ -199,13 +199,16 @@
       write(s.nodes.status,s.statusText);write(s.nodes.badge,s.badgeText);
       const fields=fieldsFor(el),fmt=n=>validNumber(n)?n.toLocaleString('en-US',{minimumFractionDigits:s.decimals,maximumFractionDigits:s.decimals}):'—';
       if(s.equity){
-        setField(fields,'regular',fmt(s.regularPrice));
-        const previous=validNumber(s.regularPrice)&&validNumber(s.regularChange)&&s.regularChange>-100?s.regularPrice/(1+s.regularChange/100):NaN;
-        setField(fields,'previous',fmt(previous));
-        for(const key of ['high','low'])setField(fields,key,fmt(s[key]));
-        setField(fields,'volume',validNumber(s.volume)?s.volume.toLocaleString('en-US',{maximumFractionDigits:0})+'주':'—');
+        const key=[s.regularPrice,s.regularChange,s.high,s.low,s.volume].join('|');
+        if(s.metricsKey!==key){
+          s.metricsKey=key;
+          const previous=validNumber(s.regularPrice)&&validNumber(s.regularChange)&&s.regularChange>-100?s.regularPrice/(1+s.regularChange/100):NaN;
+          s.metricsText={regular:fmt(s.regularPrice),previous:fmt(previous),high:fmt(s.high),low:fmt(s.low),
+            volume:validNumber(s.volume)?s.volume.toLocaleString('en-US',{maximumFractionDigits:0})+'주':'—'};
+        }
+        for(const [key,text] of Object.entries(s.metricsText))setField(fields,key,text);
       }
-      if(SESSION_SYMBOLS.includes(symbol))chartReader.currentQuote(symbol,s.price,s.statusText);
+      if(symbol===ACTIVE_SYMBOL&&SESSION_SYMBOLS.includes(symbol))chartReader.currentQuote(symbol,s.price,s.statusText);
       const graph=s.nodes.graph;
       if (graph && (s.graphDirty || graph.firstElementChild!==s.svgNode)) {
         if (s.points.length>1) {

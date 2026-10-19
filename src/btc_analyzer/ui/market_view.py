@@ -13,6 +13,7 @@ from btc_analyzer.strategy.composite import FRAME_LABELS
 from btc_analyzer.ui.charts import price_chart, READ_CHART_CONFIG, bind_asset
 from btc_analyzer.ui.chart_reader import reader_html
 from btc_analyzer.market_clock import bar_closes
+from btc_analyzer.ui.canvas_chart import canvas_market
 
 
 @st.cache_data(ttl=3600, max_entries=24, show_spinner=False, hash_funcs=MARKET_HASH_FUNCS)
@@ -115,7 +116,7 @@ def market_chart_spec(
             None if t is None else int(pd.Timestamp(t).tz_localize(None).value // 1_000_000) for t in trace.x
         ]
     fig.update_xaxes(type="date")
-    return fig.to_dict()
+    return canvas_market(fig.to_dict())
 
 
 @st.fragment

@@ -19,7 +19,7 @@ from btc_analyzer.assets import asset_news, STOCK_MARKETS, SESSION_MARKETS, EXCH
 from btc_analyzer.data.economic_calendar import EconomicEvent
 from btc_analyzer.data.sentiment import FEAR_API, FEAR_REFRESH_SECONDS, FearGreed, parse_fear_greed
 from btc_analyzer.data.extended_quotes import ExtendedQuote, extended_quote
-from btc_analyzer.data.quote_hours import market_hours
+from btc_analyzer.data.quote_hours import cached_market_hours as market_hours, warm_market_hours
 
 UTC = timezone.utc
 MAX_BYTES = 512_000
@@ -541,6 +541,8 @@ class MarketContextService:
                     delay = 30  # Stock streams share one socket; REST only seeds/falls back.
                 if key in SYMBOLS:
                     phase, boundary = market_hours(SYMBOLS[key], now)
+                    if phase == "unknown" and not self._closed:
+                        warm_market_hours(SYMBOLS[key], now, self._executor)
                     if phase == "closed" and boundary:
                         # Five-minute quiet refresh, with the next open checked
                         # within ten seconds. Streams and other feeds stay independent.

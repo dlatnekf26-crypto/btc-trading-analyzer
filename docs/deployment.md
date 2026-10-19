@@ -173,10 +173,14 @@ BTC_AI_MODEL = "gpt-4.1-mini"
 
 초기 OHLCV는 기존 CCXT의 공식 public klines를 바로 호출해 exchangeInfo 전체 목록 로딩을 생략합니다. 정상TLS·환경프록시·요청 제한/오류 처리·페이지 전진·확정 봉/누락 검사는 유지하며 새 도메인/키/운영 패키지는 없습니다. 시세 iframe을 보낸 다음 필요한 DataService를 불러옵니다.
 
-`chart-preview.js`는 기존 SVG 가격/지표/거래량을 RAF로 변환합니다. 이동 중에는 전체 Plotly 축 재계산을 하지 않고 손을 놓으면 원래 스타일을 돌리고 축/오토를 반영합니다. 취소는 임시 이동을 버리며 연속 손가락 변경은 마지막 표시 위치를 잇습니다. 정확한 축 반영이 끝날 때까지 해당 plot의 실시간 갱신을 보류하고 다른 시세는 계속 받습니다. 새 JS는 기존 iframe 안에 합치며 패키징/체크아웃 세대 해시에 포함합니다. Service worker에 시세/예측을 저장하지 않습니다.
+`chart-canvas.js`는 원본 OHLCV/지표 배열과 Plotly 축을 재사용해 시장 차트를 네 Canvas pane에 그립니다. 가시 범위만 그리며 지원 불가 환경은 원래 SVG로 복구합니다. `chart-preview.js`는 Canvas 픽셀 갱신과 예측/SVG의 RAF 변환을 연결합니다. 이동 중에는 전체 Plotly 축 재계산을 하지 않고 손을 놓으면 최종 축/오토를 반영한 뒤 임시 표시를 정리합니다. 취소는 임시 이동을 버리며 연속 손가락 변경은 마지막 표시 위치를 잇습니다. 정확한 축 반영이 끝날 때까지 해당 plot의 실시간 갱신을 보류하고 다른 시세는 계속 받습니다. 새 JS는 기존 iframe 안에 합치며 패키징/체크아웃 세대 해시에 포함합니다. Service worker에 시세/예측을 저장하지 않습니다.
 
-`benchmark_chart_gestures.py --app-url <개발 fixture> --cpu 4 --repeats 2`로 실제 브라우저 재배치 횟수·프레임 간격을 기록하고, `check_chart_preview.py`로 캔들의 실제 이동 거리·종료/취소·한손/두손 연속과 추가 Python0을 검사합니다. 실제 시장/물리기기나 호스팅의 휴면 후 기동 시간을 이 측정에 포함하지 않습니다.
+`benchmark_chart_gestures.py --app-url <개발 fixture의 ?market=BTC&view=chart 주소> --cpu 4 --repeats 3`로 실제 브라우저 재배치 횟수·프레임 간격을 기록하고, `check_chart_preview.py`로 캔들의 실제 이동 거리·종료/취소·한손/두손 연속과 추가 Python0을 검사합니다. 실제 시장/물리기기나 호스팅의 휴면 후 기동 시간을 이 측정에 포함하지 않습니다.
 
+
+native `st.App`의 `GZipMiddleware`는 설치 메타데이터 주입 바깥에서 정적 응답을 압축합니다. 압축 해제된 HTML/JS 내용과 manifest/worker 경로는 유지합니다. legacy Streamlit 서버에는 `enableWebsocketCompression`을 켰습니다. 실제 공개 호스팅이 협상하는 압축·휴면 기동은 해당 환경에서 확인해야 합니다. 새 운영 의존성/도메인/키는 없습니다.
+
+`check_canvas_charts.py --app-url <서버 루트>`는 390/820/1440px의7봉·대표9시장 원가격 대비 실제 캔들 픽셀과4pane를, `--widths 390 --fallback`은 Canvas 지원 불가 경로를 검사합니다. `benchmark_dashboard.py --app-url <서버 루트> --output <json>`은 새 브라우저의 목록/시세/상세/봉·예측 전환을 따로 측정합니다. `socket_bytes`는 브라우저가 받은 디코딩된 WebSocket 프레임 크기이며 wire 압축량이 아닙니다.
 
 ## 카드형 시세 목록과 상세 화면
 

@@ -45,6 +45,10 @@ const chartReader = (() => {
     const candle=plot.data.find(t=>t.type==='candlestick');
     if(candle?.x?.length){
       const ts=times(candle.x,axis),i=nearest(ts,x);
+      let cache=cards.get(node);if(!cache){cache={};cards.set(node,cache);}
+      const key=[i,mode,plot.data,candle.open,candle.high,candle.low,candle.close,meta.overlays,plot.dataset.liveEvent,plot.layout.uirevision];
+      if(cache.inspected&&key.every((n,j)=>Object.is(n,cache.inspected[j])))return;
+      cache.inspected=key;
       for(const key of ['open','high','low','close'])number(node,key,values(candle[key])[i]);
       for(const [index,key] of Object.entries(meta.overlays??{})){
         const trace=plot.data[index],tx=times(trace.x,axis),j=nearest(tx,ts[i]);
@@ -192,7 +196,7 @@ const chartReader = (() => {
     if(!s.preview)s.preview={drawing:ChartPreview.create(g.plot)};
     s.preview.range=range;s.preview.yRange=updates['yaxis.range']??g.yRange;
     if(!s.preview.drawing.supported){apply(g.plot,range,yRange);return;}
-    s.preview.drawing.show(range,updates);g.plot.dataset.gesturePreview='true';
+    s.preview.drawing.show(range,updates);if(g.plot.dataset.gesturePreview!=='true')g.plot.dataset.gesturePreview='true';
   }
   function queue(work){pending=work;if(raf===null)raf=root.requestAnimationFrame(()=>{raf=null;const work=pending;pending=null;work?.();});}
   function cancel(keepPreview=false,commit=false){
@@ -200,12 +204,21 @@ const chartReader = (() => {
     if(pressTimer!==null)root.clearTimeout(pressTimer);pressTimer=null;if(raf!==null)root.cancelAnimationFrame(raf);raf=null;pending=null;
     const g=active;active=null;if(!g)return;
     const view=g.state.preview;
-    if(!keepPreview){view?.drawing.clear();g.state.preview=null;delete g.plot.dataset.gesturePreview;}
     const release=()=>{if(active?.plot!==g.plot)liveAnalysis.hold(g.plot,false);};
-    if(commit&&view&&currentGesture(g))Promise.resolve(apply(g.plot,view.range,view.yRange)).finally(release);else release();
+    if(keepPreview){release();return;}
+    g.state.preview=null;
+    if(commit&&view&&currentGesture(g)){
+      g.state.committing=view;
+      Promise.resolve(apply(g.plot,view.range,view.yRange)).finally(()=>{
+        if(g.state.committing===view){view.drawing.clear();g.state.committing=null;delete g.plot.dataset.gesturePreview;}
+        release();
+      });
+    }else{view?.drawing.clear();delete g.plot.dataset.gesturePreview;release();}
   }
   const point=t=>({x:t.clientX,y:t.clientY});
   function begin(part,points,mode,view) {
+    const s=state(part.plot);
+    if(s.committing){s.committing.drawing.clear();s.committing=null;delete part.plot.dataset.gesturePreview;}
     const box=part.rect.getBoundingClientRect(),first=points[0],last=points.at(-1);
     const mid={x:(first.x+last.x)/2,y:(first.y+last.y)/2};
     active={...part,state:state(part.plot),data:part.plot.data,revision:part.plot.layout?.uirevision,mode,x:mid.x,y:mid.y,box,range:view?.range??part.axis.range.map(n=>part.axis.r2c(n)),yRange:view?.yRange??part.yaxis.range.map(Number),bounds:bounds(part.plot),distance:Math.max(10,Math.hypot(last.x-first.x,last.y-first.y))};
@@ -247,7 +260,14 @@ const chartReader = (() => {
     event.stopPropagation();if(active.mode!=='pending'&&event.cancelable)event.preventDefault();
     const g=active;queue(()=>g.mode==='pan'?pan(p,g):show({...g,...p}));
   }
-  function currentGesture(g){return g.plot.isConnected&&g.plot.data===g.data&&reader(g.plot)&&g.plot.layout?.uirevision===g.revision;}
+  function currentGesture(g){
+    if(!g.plot.isConnected||!reader(g.plot)||g.plot.layout?.uirevision!==g.revision)return false;
+    if(g.plot.data!==g.data){
+      if(!g.plot.layout.meta?.btcLive?.canvasOnly||g.plot.dataset.canvasRendering!=='ready')return false;
+      g.data=g.plot.data;g.bounds=bounds(g.plot);
+    }
+    return true;
+  }
   function end(event){
     const previous=active;
     if(previous){event.stopPropagation();if(pending){const work=pending;pending=null;work();}}
@@ -301,8 +321,10 @@ const chartReader = (() => {
     const range=plot._fullLayout.xaxis.range.map(n=>plot._fullLayout.xaxis.r2c(n));apply(plot,range);clearCursor();
   }
   function refresh(plot) {
+    ChartCanvas.refresh(plot);
     if(!reader(plot)||active?.plot===plot||!plot._fullLayout?.xaxis)return;
-    const s=state(plot),candle=plot.data.find(t=>t.type==='candlestick'),lastAt=candle?times(candle.x,plot._fullLayout.xaxis).at(-1):null;
+    const s=state(plot);if(s.committing)return;
+    const candle=plot.data.find(t=>t.type==='candlestick'),lastAt=candle?times(candle.x,plot._fullLayout.xaxis).at(-1):null;
     const version=`${plot.dataset.liveEvent??''}-${plot.data.length}-${plot.data.at(-1)?.meta?.btcAI??''}`;
     const changed=s.data!==plot.data||s.lastAt!==lastAt||s.version!==version;
     if(!changed)return;
@@ -319,5 +341,6 @@ const chartReader = (() => {
   const listeners=[['visibilitychange',hidden,{}],['touchstart',start,{capture:true,passive:false}],['touchmove',move,{capture:true,passive:false}],['touchend',end,{capture:true,passive:true}],['touchcancel',abort,{capture:true,passive:true}],['mousemove',mouse,{capture:true,passive:true}],['mousedown',mouseStart,{capture:true,passive:false}],['mouseup',end,{capture:true,passive:true}],['wheel',wheel,{capture:true,passive:false}],['contextmenu',context,{capture:true}],['click',controls,{}]];
   for(const [name,handler,options] of listeners)doc.addEventListener(name,handler,options);
   root.addEventListener('blur',abort);
-  return {inspect,refresh,currentQuote,isInteracting:plot=>active?.plot===plot,dispose(){disposed=true;abort();root.removeEventListener('blur',abort);for(const [name,handler,options] of listeners)doc.removeEventListener(name,handler,options);doc.querySelectorAll('.btc-crosshair').forEach(n=>n.remove());}};
+  root.addEventListener('resize',abort);
+  return {inspect,refresh,currentQuote,isInteracting:plot=>active?.plot===plot||Boolean(states.get(plot)?.committing),dispose(){disposed=true;abort();ChartCanvas.dispose();PlotData.dispose();root.removeEventListener('blur',abort);root.removeEventListener('resize',abort);for(const [name,handler,options] of listeners)doc.removeEventListener(name,handler,options);doc.querySelectorAll('.btc-crosshair').forEach(n=>n.remove());}};
 })();

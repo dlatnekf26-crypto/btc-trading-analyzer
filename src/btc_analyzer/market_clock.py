@@ -1,6 +1,7 @@
 """Continuity and close times for 24/7 candles or an explicit exchange calendar."""
 
 from functools import lru_cache
+from operator import index as integer
 
 import numpy as np
 import pandas as pd
@@ -8,6 +9,18 @@ import pandas as pd
 from btc_analyzer.assets import SESSION_MARKETS
 
 from btc_analyzer.candles import candle_close
+
+
+class SessionTimes(tuple):
+    """Immutable integer epochs; pandas metadata copies can safely share them."""
+
+    __slots__ = ()
+
+    def __new__(cls, values):
+        return super().__new__(cls, map(integer, values))
+
+    def __deepcopy__(self, memo):
+        return self
 
 
 @lru_cache(maxsize=24)

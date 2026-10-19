@@ -8,6 +8,7 @@
   /* AI_FORECAST_BRIDGE */
   /* PWA_BRIDGE */
   const MAX_POINTS = 61, STALE_MS = 15000, DRAW_MS = 50;
+  const BRIDGE_ONLY=document.body.dataset.bridgeOnly==='true';
   const MARKET_ASSETS = [['BTC','binance','비트코인',2],['ETH','ethereum','이더리움',2],['SOL','solana','솔라나',2],['XRP','ripple','리플',4]];
   try {
     const initial=window.parent.document.getElementById('btc-live-selection')?.dataset.symbol;
@@ -138,7 +139,7 @@
           `${fresh(selected)?(selected.transport==='ws'?'실시간':'조회 시세'):'수신 지연 · 마지막 가격'} · ${clock(selected.lastEvent)} KST`:'현재가 연결 중');
       }
       if(selected) liveAnalysis.paint({symbol:ACTIVE_SYMBOL,price:selected.price,event:selected.lastEvent,fresh:fresh(selected)});
-      try{for(const plot of window.parent.document.querySelectorAll('.js-plotly-plot'))if(plot.isConnected&&plot.getClientRects().length){chartReader.refresh(plot);if(!chartReader.isInteracting(plot))aiForecast.paint(plot);}}catch(_){}
+      try{for(const plot of window.parent.document.querySelectorAll('.js-plotly-plot'))if(PlotData.visible(plot)){chartReader.refresh(plot);if(!chartReader.isInteracting(plot))aiForecast.paint(plot);}}catch(_){}
     }, DRAW_MS);
   }
   function addPoint(s, time, price) {
@@ -170,6 +171,13 @@
     schedulePaint();
   }
   function draw(s) {
+    if(BRIDGE_ONLY){
+      const canvas=s.el.querySelector('canvas');
+      write(canvas.dataset,'samples',String(s.points.length));
+      write(canvas.dataset,'span',String(s.points.length>1?s.points.at(-1)[0]-s.points[0][0]:0));
+      write(s.el.dataset,'history',s.historyReady?'ready':s.historyFailures?'retry':'loading');
+      return;
+    }
     const canvas=s.el.querySelector('canvas'), width=canvas.clientWidth, height=42;
     const scale=Math.min(window.devicePixelRatio || 1,2);
     if (canvas.width!==Math.round(width*scale) || canvas.height!==Math.round(height*scale)) {
@@ -364,6 +372,7 @@
   }
   window.addEventListener('online',online);
   const observer=new ResizeObserver(()=>{
+    if(BRIDGE_ONLY)return;
     try {
       const frame=window.frameElement,height=Math.ceil(document.body.scrollHeight)+'px';
       if(frame) {

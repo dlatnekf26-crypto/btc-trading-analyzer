@@ -2,11 +2,14 @@
 
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
+from collections import OrderedDict
+from threading import RLock
 from zoneinfo import ZoneInfo
 
 from btc_analyzer.assets import SESSION_MARKETS, EXCHANGE_HISTORY
 
 VENUES = {asset.symbol: EXCHANGE_HISTORY[code] for code, asset in SESSION_MARKETS.items()}
+_ready, _pending, _lock = OrderedDict(), set(), RLock()
 
 
 @lru_cache(maxsize=16)
@@ -49,21 +52,68 @@ def _windows(calendar, day, extended):
     return tuple(windows)
 
 
-def market_hours(symbol, now=None):
-    """Return current phase and next boundary; unknown calendars never hide quotes."""
+def _key(symbol, now):
     venue = VENUES.get(symbol)
-    if venue is None:
-        return "unknown", None
-    now = now or datetime.now(timezone.utc)
-    try:
-        windows = _windows(
-            venue.calendar, now.astimezone(ZoneInfo(venue.timezone)).date(), venue.kind == "EQUITY"
+    return (
+        (
+            venue.calendar,
+            now.astimezone(ZoneInfo(venue.timezone)).date(),
+            venue.calendar == "NYSE" and venue.kind == "EQUITY",
         )
-        for opened, closed, phase in windows:
-            if opened <= now < closed:
-                return phase, closed
-            if now < opened:
-                return "closed", opened
+        if venue
+        else None
+    )
+
+
+def _phase(windows, now):
+    for opened, closed, phase in windows:
+        if opened <= now < closed:
+            return phase, closed
+        if now < opened:
+            return "closed", opened
+    return "unknown", None
+
+
+def market_hours(symbol, now=None):
+    """Build exchange hours on a worker; unknown calendars never hide quotes."""
+    now = now or datetime.now(timezone.utc)
+    key = _key(symbol, now)
+    if key is None:
+        return "unknown", None
+    try:
+        windows = _windows(*key)
+        with _lock:
+            _ready[key] = windows
+            _ready.move_to_end(key)
+            while len(_ready) > 16:
+                _ready.popitem(last=False)
+        return _phase(windows, now)
     except (ValueError, KeyError, IndexError, TypeError, OverflowError):
         pass
     return "unknown", None
+
+
+def cached_market_hours(symbol, now=None):
+    """UI reads never construct a holiday calendar or wait for its construction."""
+    now = now or datetime.now(timezone.utc)
+    with _lock:
+        windows = _ready.get(_key(symbol, now))
+    return _phase(windows, now) if windows is not None else ("unknown", None)
+
+
+def warm_market_hours(symbol, now, executor):
+    """Deduplicate calendar jobs on the existing bounded quote executor."""
+    key = _key(symbol, now)
+    with _lock:
+        if key is None or key in _ready or key in _pending:
+            return
+        _pending.add(key)
+
+    def finished(_future):
+        with _lock:
+            _pending.discard(key)
+
+    try:
+        executor.submit(market_hours, symbol, now).add_done_callback(finished)
+    except RuntimeError:  # A released/reloaded service may already be closing.
+        finished(None)

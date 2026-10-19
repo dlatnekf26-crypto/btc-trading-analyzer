@@ -136,6 +136,7 @@ function makeLiveAnalysis(root) {
     const up=directions.filter(n=>n>0).length,down=directions.filter(n=>n<0).length;
     text(card?.querySelector('.btc-live-forecast-reason'),`${up}개 시간대 20봉선 위 · ${down}개 아래. 현재가로 출발점을 바꾸고 기존 지표·유사 사례의 수익률 경로/방향 비중을 유지해요. 잠정 지표는 관찰 근거이며 추가 가격 가중치로 쓰지 않아요.`);
     const xs=meta.offsets.map(t=>displayDate(quote.event+t,meta.timezone));
+    if(!PlotData.visible(plot))return;
     update(plot,`${Math.floor(quote.event/60000)}-${quote.price}`,async()=>{
       const indices=[...meta.liveIndices], xValues=[xs,xs,xs], yValues=[upper,lower,center];
       if(meta.indicatorSeed){
@@ -202,10 +203,11 @@ function makeLiveAnalysis(root) {
       }
     }
     for(const plot of doc.querySelectorAll('.js-plotly-plot')) {
-      if(!plot.isConnected || !plot.data?.length || !plot.getClientRects().length || held.has(plot)) continue;
+      if(!plot.isConnected || !plot.data?.length || held.has(plot)) continue;
       const meta=plot.layout?.meta?.btcLive;
       if(meta?.symbol && meta.symbol!==symbol) continue;
       if(meta?.kind==='market') {
+        if(!PlotData.visible(plot))continue;
         market(plot,meta,books[meta.timeframe],now);
         if(!current(books[meta.timeframe],now) && plot.dataset.liveEvent)
           text(doc.querySelector('.btc-chart-summary span'),`${meta.label} · ${status(books[meta.timeframe],now)}`);

@@ -28,6 +28,7 @@ def quotes_document():
         (
             "CHART_READER_BRIDGE",
             browser_asset("chart-viewport.js")
+            + browser_asset("chart-canvas.js")
             + browser_asset("chart-preview.js")
             + browser_asset("chart-reader.js"),
         ),

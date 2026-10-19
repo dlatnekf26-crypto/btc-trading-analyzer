@@ -6,7 +6,7 @@ import json
 import streamlit as st
 
 from btc_analyzer.data.market_context import MacroQuote, SYMBOLS
-from btc_analyzer.data.quote_hours import market_hours
+from btc_analyzer.data.quote_hours import cached_market_hours as market_hours
 
 
 def quote_display(value):

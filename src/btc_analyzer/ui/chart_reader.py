@@ -1,7 +1,5 @@
 """Candle inspection stays in the browser; no requests or Python reruns."""
 
-from btc_analyzer.ui.browser_assets import browser_asset
-
 from html import escape
 import math
 
@@ -89,6 +87,3 @@ def reader_html(frame, timeframe, asset_code, averages, bands):
         f'<div class="btc-chart-key" aria-label="차트 선 색상">{legend}</div>'
         "</section>"
     )
-
-
-CHART_READER_JS = browser_asset("chart-viewport.js") + browser_asset("chart-reader.js")

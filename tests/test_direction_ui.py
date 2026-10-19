@@ -1,6 +1,7 @@
 """Public forecast default, comparison/model switching and independent what-ifs."""
 
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -23,9 +24,23 @@ def control(app, label):
     return next(item for item in app.get("button_group") if item.label == label)
 
 
-def test_default_compares_three_directions_and_model_switch_keeps_original_forecast():
+def ready_forecast():
     app = analysis_app(ROOT / "web_app.py", default_timeout=30).run()
-    rerun(app)
+    deadline = time.monotonic() + 5
+    while True:
+        rerun(app)
+        assert not app.exception and not app.error
+        if any(
+            'aria-label="우세 방향 이유"' in item.value and "뉴스 가정" in item.value for item in app.markdown
+        ):
+            return app
+        if time.monotonic() >= deadline:
+            pytest.fail("Fixture news did not arrive before comparing forecast modes")
+        time.sleep(0.01)
+
+
+def test_default_compares_three_directions_and_model_switch_keeps_original_forecast():
+    app = ready_forecast()
     assert not app.exception and not app.error
     assert len(app.get("plotly_chart")) == 1
     before = chart(app)
@@ -72,8 +87,7 @@ def test_default_compares_three_directions_and_model_switch_keeps_original_forec
 
 
 def test_release_assumption_does_not_change_direction_ranking_or_branch_prices():
-    app = analysis_app(ROOT / "web_app.py", default_timeout=30).run()
-    rerun(app)
+    app = ready_forecast()
     for _ in range(3):
         if any(item.label == "발표 결과를 가정해 보기" for item in app.get("button_group")):
             break

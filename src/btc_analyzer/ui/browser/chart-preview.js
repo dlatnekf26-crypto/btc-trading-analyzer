@@ -7,11 +7,15 @@ const ChartPreview = (()=>{
   }
   function create(plot){
     const layers=[];
-    for(const [key,axes] of Object.entries(plot._fullLayout._plots)){
+    const canvas=plot.layout?.meta?.btcLive?.canvasOnly&&plot.dataset?.canvasRendering==='ready';
+    for(const [key,axes] of canvas?[]:Object.entries(plot._fullLayout._plots)){
       const group=plot.querySelector(`.subplot.${key} .overplot > g.${key}`);
       if(!group)continue;
       const x=axes.xaxis,y=axes.yaxis;
       for(const node of group.children){
+        if(node.classList.contains('btc-canvas-layer'))continue;
+        const traces=[...node.querySelectorAll('.trace')];
+        if(traces.length&&traces.every(trace=>trace.style.opacity==='0'))continue;
         if(node.childElementCount===0)continue;
         layers.push({node,x:x.range.map(n=>x.r2c(n)),y:y.range.map(Number),width:x._length,height:y._length,
           axis:y._name ?? Object.keys(plot._fullLayout).find(k=>/^yaxis\d*$/.test(k)&&plot._fullLayout[k]===y) ?? 'yaxis',transform:node.style.transform,origin:node.style.transformOrigin});
@@ -19,6 +23,7 @@ const ChartPreview = (()=>{
     }
     return {
       show(range,updates){
+        ChartCanvas.preview(plot,range,updates);
         const transforms=new Map();
         for(const layer of layers){
           if(!transforms.has(layer.axis)){
@@ -31,8 +36,8 @@ const ChartPreview = (()=>{
           layer.node.style.transformOrigin='0 0';layer.node.style.transform=transform;layer.applied=transform;
         }
       },
-      clear(){for(const layer of layers){layer.node.style.transform=layer.transform;layer.node.style.transformOrigin=layer.origin;layer.applied=null;}},
-      supported:layers.length>0
+      clear(){for(const layer of layers){layer.node.style.transform=layer.transform;layer.node.style.transformOrigin=layer.origin;layer.applied=null;}ChartCanvas.clear(plot);},
+      supported:layers.length>0||Boolean(plot.layout?.meta?.btcLive?.canvasTraces)
     };
   }
   return {matrix,create};

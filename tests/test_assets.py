@@ -49,7 +49,7 @@ def test_four_assets_switch_complete_dashboard_forecast_and_back_without_cross_a
         assert not app.exception and not app.error
         assert any(ASSETS[code].symbol in caption.value for caption in app.caption)
         widget = app.get("iframe")[0].proto.srcdoc
-        assert widget == live_prices_html("BTC")
+        assert widget == live_prices_html("BTC", bridge_only=True)
         assert any(
             f'id="btc-live-selection" data-symbol="{ASSETS[code].stream_symbol}"' in item.value
             for item in app.markdown

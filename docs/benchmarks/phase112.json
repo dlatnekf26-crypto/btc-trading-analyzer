@@ -1,0 +1,1067 @@
+{
+  "baseline_commit": "295cce7060125ffadb02349ffceb9f687bb274c6",
+  "candidate": "Phase112 final source",
+  "measured_at_utc": "2026-10-19T00:15:18.920284+00:00",
+  "method": {
+    "viewport": [
+      390,
+      1000
+    ],
+    "cpu_throttle": 4,
+    "repeats_each": 3,
+    "gestures": "600 bars, four panes, 72 touch moves, three drags",
+    "readiness": "All four visible-data panes drawn, not axes alone",
+    "short_chart_cutoff_utc": "2026-10-18T23:55:00Z",
+    "canonical_sha256": "93b78db8af21c2eca87f1b192dd1be434431f7c623b30d741685775a9f5c36df",
+    "flow": "Fresh browser contexts, server caches prepared by gesture runs",
+    "server": "Separate fresh AppTest processes; cold board, three-second idle, three warm reruns",
+    "network": "Loopback static assets and controlled market fixtures; no external latency claim",
+    "socket_bytes": "Decoded browser WebSocket frame bytes, not compressed wire bytes"
+  },
+  "medians": {
+    "before": {
+      "gestures": {
+        "ready_s": 9.0622,
+        "gesture_s": 6.3669,
+        "relayout_median_ms": 553.9,
+        "relayout_p95_ms": 617.1,
+        "frame_p95_ms": 33.4,
+        "frames_over_50ms": 9,
+        "input_p95_ms": 2.6,
+        "long_tasks": 10,
+        "long_max_ms": 621
+      },
+      "cpu_ms": {
+        "TaskDuration": 5074.53,
+        "ScriptDuration": 2767.52,
+        "LayoutDuration": 463.07,
+        "RecalcStyleDuration": 265.71
+      },
+      "flow": {
+        "board": 1.8109,
+        "quotes": 0.8566,
+        "detail": 6.6811,
+        "timeframe_5m": 2.7636,
+        "timeframe_1d": 2.952,
+        "forecast": 1.6841,
+        "forecast_3mo": 1.7673
+      },
+      "static_bytes": 8201089,
+      "nodes": 1817,
+      "paths": 895
+    },
+    "after": {
+      "gestures": {
+        "ready_s": 8.9999,
+        "gesture_s": 4.902,
+        "relayout_median_ms": 138.7,
+        "relayout_p95_ms": 185.7,
+        "frame_p95_ms": 33.3,
+        "frames_over_50ms": 6,
+        "input_p95_ms": 20.3,
+        "long_tasks": 8,
+        "long_max_ms": 212
+      },
+      "cpu_ms": {
+        "TaskDuration": 3015.69,
+        "ScriptDuration": 1834.84,
+        "LayoutDuration": 106.08,
+        "RecalcStyleDuration": 96.55
+      },
+      "flow": {
+        "board": 1.9717,
+        "quotes": 0.875,
+        "detail": 6.5992,
+        "timeframe_5m": 1.4522,
+        "timeframe_1d": 1.2909,
+        "forecast": 1.9907,
+        "forecast_3mo": 1.7356
+      },
+      "static_bytes": 2842168,
+      "nodes": 366,
+      "paths": 59
+    }
+  },
+  "runs": {
+    "gestures": {
+      "before": [
+        {
+          "width": 390,
+          "cpu_rate": 4,
+          "data_sha256": "93b78db8af21c2eca87f1b192dd1be434431f7c623b30d741685775a9f5c36df",
+          "ready_s": 10.2845,
+          "gesture_s": 6.276,
+          "relayouts": 3,
+          "relayout_median_ms": 553.9,
+          "relayout_p95_ms": 617.1,
+          "frame_p95_ms": 33.4,
+          "frames_over_50ms": 8,
+          "frames": 248,
+          "input_p95_ms": 2.6,
+          "long_tasks": 10,
+          "long_max_ms": 621,
+          "cpu_ms": {
+            "TaskDuration": 5074.53,
+            "ScriptDuration": 2767.52,
+            "LayoutDuration": 463.07,
+            "RecalcStyleDuration": 262.15
+          },
+          "js_errors": []
+        },
+        {
+          "width": 390,
+          "cpu_rate": 4,
+          "data_sha256": "93b78db8af21c2eca87f1b192dd1be434431f7c623b30d741685775a9f5c36df",
+          "ready_s": 8.6674,
+          "gesture_s": 6.3669,
+          "relayouts": 3,
+          "relayout_median_ms": 546.4,
+          "relayout_p95_ms": 585.6,
+          "frame_p95_ms": 33.4,
+          "frames_over_50ms": 9,
+          "frames": 250,
+          "input_p95_ms": 2.2,
+          "long_tasks": 10,
+          "long_max_ms": 590,
+          "cpu_ms": {
+            "TaskDuration": 4876.36,
+            "ScriptDuration": 2551.14,
+            "LayoutDuration": 456.17,
+            "RecalcStyleDuration": 265.71
+          },
+          "js_errors": []
+        },
+        {
+          "width": 390,
+          "cpu_rate": 4,
+          "data_sha256": "93b78db8af21c2eca87f1b192dd1be434431f7c623b30d741685775a9f5c36df",
+          "ready_s": 9.0622,
+          "gesture_s": 6.7877,
+          "relayouts": 3,
+          "relayout_median_ms": 584.2,
+          "relayout_p95_ms": 648.9,
+          "frame_p95_ms": 50.1,
+          "frames_over_50ms": 14,
+          "frames": 248,
+          "input_p95_ms": 3,
+          "long_tasks": 16,
+          "long_max_ms": 653,
+          "cpu_ms": {
+            "TaskDuration": 5428.41,
+            "ScriptDuration": 2848.2,
+            "LayoutDuration": 508.03,
+            "RecalcStyleDuration": 315.48
+          },
+          "js_errors": []
+        }
+      ],
+      "after": [
+        {
+          "width": 390,
+          "cpu_rate": 4,
+          "data_sha256": "93b78db8af21c2eca87f1b192dd1be434431f7c623b30d741685775a9f5c36df",
+          "ready_s": 9.1681,
+          "gesture_s": 4.8982,
+          "relayouts": 3,
+          "relayout_median_ms": 135.9,
+          "relayout_p95_ms": 185.7,
+          "frame_p95_ms": 33.3,
+          "frames_over_50ms": 6,
+          "frames": 255,
+          "input_p95_ms": 20.3,
+          "long_tasks": 8,
+          "long_max_ms": 212,
+          "cpu_ms": {
+            "TaskDuration": 3015.69,
+            "ScriptDuration": 1784.97,
+            "LayoutDuration": 106.08,
+            "RecalcStyleDuration": 96.55
+          },
+          "js_errors": []
+        },
+        {
+          "width": 390,
+          "cpu_rate": 4,
+          "data_sha256": "93b78db8af21c2eca87f1b192dd1be434431f7c623b30d741685775a9f5c36df",
+          "ready_s": 8.9926,
+          "gesture_s": 4.9631,
+          "relayouts": 3,
+          "relayout_median_ms": 138.7,
+          "relayout_p95_ms": 221.2,
+          "frame_p95_ms": 33.3,
+          "frames_over_50ms": 8,
+          "frames": 244,
+          "input_p95_ms": 20.6,
+          "long_tasks": 11,
+          "long_max_ms": 261,
+          "cpu_ms": {
+            "TaskDuration": 3244.47,
+            "ScriptDuration": 1991.94,
+            "LayoutDuration": 108.05,
+            "RecalcStyleDuration": 102.59
+          },
+          "js_errors": []
+        },
+        {
+          "width": 390,
+          "cpu_rate": 4,
+          "data_sha256": "93b78db8af21c2eca87f1b192dd1be434431f7c623b30d741685775a9f5c36df",
+          "ready_s": 8.9999,
+          "gesture_s": 4.902,
+          "relayouts": 3,
+          "relayout_median_ms": 152.4,
+          "relayout_p95_ms": 163.6,
+          "frame_p95_ms": 33.3,
+          "frames_over_50ms": 5,
+          "frames": 252,
+          "input_p95_ms": 16.5,
+          "long_tasks": 6,
+          "long_max_ms": 190,
+          "cpu_ms": {
+            "TaskDuration": 2972.12,
+            "ScriptDuration": 1834.84,
+            "LayoutDuration": 92.4,
+            "RecalcStyleDuration": 82.83
+          },
+          "js_errors": []
+        }
+      ]
+    },
+    "flow": {
+      "before": [
+        {
+          "width": 390,
+          "cpu_rate": 4,
+          "stages": [
+            {
+              "stage": "board",
+              "seconds": 1.8109,
+              "socket_bytes": 226331
+            },
+            {
+              "stage": "quotes",
+              "seconds": 0.9728,
+              "socket_bytes": 0
+            },
+            {
+              "stage": "detail",
+              "seconds": 6.6113,
+              "socket_bytes": 364700
+            },
+            {
+              "stage": "timeframe_5m",
+              "seconds": 2.8885,
+              "socket_bytes": 345450
+            },
+            {
+              "stage": "timeframe_1d",
+              "seconds": 2.952,
+              "socket_bytes": 88697
+            },
+            {
+              "stage": "forecast",
+              "seconds": 1.6841,
+              "socket_bytes": 47386
+            },
+            {
+              "stage": "forecast_3mo",
+              "seconds": 1.6853,
+              "socket_bytes": 86989
+            }
+          ],
+          "static_bytes": 8201089,
+          "chart": {
+            "nodes": 1817,
+            "paths": 895
+          },
+          "resources": [
+            {
+              "name": "PlotlyChart.Dv4dc5oY.js",
+              "bytes": 4692051,
+              "duration": 177.2999999821186
+            },
+            {
+              "name": "protobuf.C6yfp4JF.js",
+              "bytes": 832733,
+              "duration": 105.40000000596046
+            },
+            {
+              "name": "index.CKCTizkM.js",
+              "bytes": 449225,
+              "duration": 59.20000001788139
+            },
+            {
+              "name": "MaterialSymbols-Rounded.BatTDZwB.woff2",
+              "bytes": 373320,
+              "duration": 78
+            },
+            {
+              "name": "lib.Dd69Svmo.js",
+              "bytes": 258897,
+              "duration": 22.5
+            },
+            {
+              "name": "StreamlitMarkdown.abRW1By9.js",
+              "bytes": 226308,
+              "duration": 119.59999999403954
+            },
+            {
+              "name": "rehype-raw.C0zIPPaY.js",
+              "bytes": 188592,
+              "duration": 126.90000000596046
+            },
+            {
+              "name": "SourceSansVF-Upright.ttf.BsWL4Kly.woff2",
+              "bytes": 170188,
+              "duration": 61.099999994039536
+            }
+          ],
+          "errors": []
+        },
+        {
+          "width": 390,
+          "cpu_rate": 4,
+          "stages": [
+            {
+              "stage": "board",
+              "seconds": 1.96,
+              "socket_bytes": 226340
+            },
+            {
+              "stage": "quotes",
+              "seconds": 0.763,
+              "socket_bytes": 0
+            },
+            {
+              "stage": "detail",
+              "seconds": 6.8393,
+              "socket_bytes": 364265
+            },
+            {
+              "stage": "timeframe_5m",
+              "seconds": 2.6255,
+              "socket_bytes": 366140
+            },
+            {
+              "stage": "timeframe_1d",
+              "seconds": 3.1203,
+              "socket_bytes": 226568
+            },
+            {
+              "stage": "forecast",
+              "seconds": 1.5695,
+              "socket_bytes": 47907
+            },
+            {
+              "stage": "forecast_3mo",
+              "seconds": 1.7673,
+              "socket_bytes": 87101
+            }
+          ],
+          "static_bytes": 8201089,
+          "chart": {
+            "nodes": 1817,
+            "paths": 895
+          },
+          "resources": [
+            {
+              "name": "PlotlyChart.Dv4dc5oY.js",
+              "bytes": 4692051,
+              "duration": 250.90000000596046
+            },
+            {
+              "name": "protobuf.C6yfp4JF.js",
+              "bytes": 832733,
+              "duration": 87.40000000596046
+            },
+            {
+              "name": "index.CKCTizkM.js",
+              "bytes": 449225,
+              "duration": 79.19999998807907
+            },
+            {
+              "name": "MaterialSymbols-Rounded.BatTDZwB.woff2",
+              "bytes": 373320,
+              "duration": 170.69999998807907
+            },
+            {
+              "name": "lib.Dd69Svmo.js",
+              "bytes": 258897,
+              "duration": 22
+            },
+            {
+              "name": "StreamlitMarkdown.abRW1By9.js",
+              "bytes": 226308,
+              "duration": 102.5
+            },
+            {
+              "name": "rehype-raw.C0zIPPaY.js",
+              "bytes": 188592,
+              "duration": 11.900000005960464
+            },
+            {
+              "name": "SourceSansVF-Upright.ttf.BsWL4Kly.woff2",
+              "bytes": 170188,
+              "duration": 74.2999999821186
+            }
+          ],
+          "errors": []
+        },
+        {
+          "width": 390,
+          "cpu_rate": 4,
+          "stages": [
+            {
+              "stage": "board",
+              "seconds": 1.6361,
+              "socket_bytes": 226346
+            },
+            {
+              "stage": "quotes",
+              "seconds": 0.8566,
+              "socket_bytes": 0
+            },
+            {
+              "stage": "detail",
+              "seconds": 6.6811,
+              "socket_bytes": 364259
+            },
+            {
+              "stage": "timeframe_5m",
+              "seconds": 2.7636,
+              "socket_bytes": 367501
+            },
+            {
+              "stage": "timeframe_1d",
+              "seconds": 2.8574,
+              "socket_bytes": 67233
+            },
+            {
+              "stage": "forecast",
+              "seconds": 1.8563,
+              "socket_bytes": 47907
+            },
+            {
+              "stage": "forecast_3mo",
+              "seconds": 1.9938,
+              "socket_bytes": 97423
+            }
+          ],
+          "static_bytes": 8201089,
+          "chart": {
+            "nodes": 1817,
+            "paths": 895
+          },
+          "resources": [
+            {
+              "name": "PlotlyChart.Dv4dc5oY.js",
+              "bytes": 4692051,
+              "duration": 251
+            },
+            {
+              "name": "protobuf.C6yfp4JF.js",
+              "bytes": 832733,
+              "duration": 74.59999999403954
+            },
+            {
+              "name": "index.CKCTizkM.js",
+              "bytes": 449225,
+              "duration": 57.80000001192093
+            },
+            {
+              "name": "MaterialSymbols-Rounded.BatTDZwB.woff2",
+              "bytes": 373320,
+              "duration": 140
+            },
+            {
+              "name": "lib.Dd69Svmo.js",
+              "bytes": 258897,
+              "duration": 33.29999998211861
+            },
+            {
+              "name": "StreamlitMarkdown.abRW1By9.js",
+              "bytes": 226308,
+              "duration": 98.39999997615814
+            },
+            {
+              "name": "rehype-raw.C0zIPPaY.js",
+              "bytes": 188592,
+              "duration": 76
+            },
+            {
+              "name": "SourceSansVF-Upright.ttf.BsWL4Kly.woff2",
+              "bytes": 170188,
+              "duration": 60.69999998807907
+            }
+          ],
+          "errors": []
+        }
+      ],
+      "after": [
+        {
+          "width": 390,
+          "cpu_rate": 4,
+          "stages": [
+            {
+              "stage": "board",
+              "seconds": 2.0145,
+              "socket_bytes": 238383
+            },
+            {
+              "stage": "quotes",
+              "seconds": 0.5194,
+              "socket_bytes": 0
+            },
+            {
+              "stage": "detail",
+              "seconds": 6.3201,
+              "socket_bytes": 375701
+            },
+            {
+              "stage": "timeframe_5m",
+              "seconds": 1.4522,
+              "socket_bytes": 336610
+            },
+            {
+              "stage": "timeframe_1d",
+              "seconds": 1.2844,
+              "socket_bytes": 155909
+            },
+            {
+              "stage": "forecast",
+              "seconds": 1.9907,
+              "socket_bytes": 79541
+            },
+            {
+              "stage": "forecast_3mo",
+              "seconds": 1.6516,
+              "socket_bytes": 113356
+            }
+          ],
+          "static_bytes": 2842168,
+          "chart": {
+            "nodes": 366,
+            "paths": 59
+          },
+          "resources": [
+            {
+              "name": "PlotlyChart.Dv4dc5oY.js",
+              "bytes": 1419512,
+              "duration": 385.80000001192093
+            },
+            {
+              "name": "MaterialSymbols-Rounded.BatTDZwB.woff2",
+              "bytes": 373320,
+              "duration": 153.19999998807907
+            },
+            {
+              "name": "SourceSansVF-Upright.ttf.BsWL4Kly.woff2",
+              "bytes": 170188,
+              "duration": 36.400000005960464
+            },
+            {
+              "name": "index.CKCTizkM.js",
+              "bytes": 138005,
+              "duration": 92
+            },
+            {
+              "name": "SourceSansVF-Italic.ttf.Bt9VkdQ3.woff2",
+              "bytes": 137996,
+              "duration": 123.09999999403954
+            },
+            {
+              "name": "protobuf.C6yfp4JF.js",
+              "bytes": 100416,
+              "duration": 112.2000000178814
+            },
+            {
+              "name": "StreamlitMarkdown.abRW1By9.js",
+              "bytes": 70444,
+              "duration": 140.59999999403954
+            },
+            {
+              "name": "lib.Dd69Svmo.js",
+              "bytes": 63004,
+              "duration": 25.099999994039536
+            }
+          ],
+          "errors": []
+        },
+        {
+          "width": 390,
+          "cpu_rate": 4,
+          "stages": [
+            {
+              "stage": "board",
+              "seconds": 1.9717,
+              "socket_bytes": 238393
+            },
+            {
+              "stage": "quotes",
+              "seconds": 0.875,
+              "socket_bytes": 0
+            },
+            {
+              "stage": "detail",
+              "seconds": 6.7313,
+              "socket_bytes": 344518
+            },
+            {
+              "stage": "timeframe_5m",
+              "seconds": 1.9665,
+              "socket_bytes": 389573
+            },
+            {
+              "stage": "timeframe_1d",
+              "seconds": 1.5691,
+              "socket_bytes": 167166
+            },
+            {
+              "stage": "forecast",
+              "seconds": 2.1514,
+              "socket_bytes": 58753
+            },
+            {
+              "stage": "forecast_3mo",
+              "seconds": 2.1933,
+              "socket_bytes": 113774
+            }
+          ],
+          "static_bytes": 2842168,
+          "chart": {
+            "nodes": 366,
+            "paths": 59
+          },
+          "resources": [
+            {
+              "name": "PlotlyChart.Dv4dc5oY.js",
+              "bytes": 1419512,
+              "duration": 363.90000000596046
+            },
+            {
+              "name": "MaterialSymbols-Rounded.BatTDZwB.woff2",
+              "bytes": 373320,
+              "duration": 134.5
+            },
+            {
+              "name": "SourceSansVF-Upright.ttf.BsWL4Kly.woff2",
+              "bytes": 170188,
+              "duration": 44.19999998807907
+            },
+            {
+              "name": "index.CKCTizkM.js",
+              "bytes": 138005,
+              "duration": 85.40000000596046
+            },
+            {
+              "name": "SourceSansVF-Italic.ttf.Bt9VkdQ3.woff2",
+              "bytes": 137996,
+              "duration": 142.80000001192093
+            },
+            {
+              "name": "protobuf.C6yfp4JF.js",
+              "bytes": 100416,
+              "duration": 100.2999999821186
+            },
+            {
+              "name": "StreamlitMarkdown.abRW1By9.js",
+              "bytes": 70444,
+              "duration": 133.09999999403954
+            },
+            {
+              "name": "lib.Dd69Svmo.js",
+              "bytes": 63004,
+              "duration": 50
+            }
+          ],
+          "errors": []
+        },
+        {
+          "width": 390,
+          "cpu_rate": 4,
+          "stages": [
+            {
+              "stage": "board",
+              "seconds": 1.7708,
+              "socket_bytes": 238387
+            },
+            {
+              "stage": "quotes",
+              "seconds": 0.8855,
+              "socket_bytes": 0
+            },
+            {
+              "stage": "detail",
+              "seconds": 6.5992,
+              "socket_bytes": 375701
+            },
+            {
+              "stage": "timeframe_5m",
+              "seconds": 1.3486,
+              "socket_bytes": 336191
+            },
+            {
+              "stage": "timeframe_1d",
+              "seconds": 1.2909,
+              "socket_bytes": 177853
+            },
+            {
+              "stage": "forecast",
+              "seconds": 1.8132,
+              "socket_bytes": 47918
+            },
+            {
+              "stage": "forecast_3mo",
+              "seconds": 1.7356,
+              "socket_bytes": 113355
+            }
+          ],
+          "static_bytes": 2842168,
+          "chart": {
+            "nodes": 366,
+            "paths": 59
+          },
+          "resources": [
+            {
+              "name": "PlotlyChart.Dv4dc5oY.js",
+              "bytes": 1419512,
+              "duration": 403.7000000178814
+            },
+            {
+              "name": "MaterialSymbols-Rounded.BatTDZwB.woff2",
+              "bytes": 373320,
+              "duration": 168
+            },
+            {
+              "name": "SourceSansVF-Upright.ttf.BsWL4Kly.woff2",
+              "bytes": 170188,
+              "duration": 60
+            },
+            {
+              "name": "index.CKCTizkM.js",
+              "bytes": 138005,
+              "duration": 94.7999999821186
+            },
+            {
+              "name": "SourceSansVF-Italic.ttf.Bt9VkdQ3.woff2",
+              "bytes": 137996,
+              "duration": 162.69999998807907
+            },
+            {
+              "name": "protobuf.C6yfp4JF.js",
+              "bytes": 100416,
+              "duration": 112.09999999403954
+            },
+            {
+              "name": "StreamlitMarkdown.abRW1By9.js",
+              "bytes": 70444,
+              "duration": 155.7000000178814
+            },
+            {
+              "name": "lib.Dd69Svmo.js",
+              "bytes": 63004,
+              "duration": 31.19999998807907
+            }
+          ],
+          "errors": []
+        }
+      ]
+    }
+  },
+  "server_runs": {
+    "before": {
+      "checkout": "/tmp/btc-110-baseline",
+      "settle_before_warm_s": 3.0,
+      "stages": [
+        {
+          "stage": "board_first",
+          "seconds": 1.9162,
+          "chart_bytes": 0,
+          "charts": 0
+        },
+        {
+          "stage": "board_warm",
+          "seconds": 0.0267,
+          "chart_bytes": 0,
+          "charts": 0
+        },
+        {
+          "stage": "board_warm",
+          "seconds": 0.024,
+          "chart_bytes": 0,
+          "charts": 0
+        },
+        {
+          "stage": "board_warm",
+          "seconds": 0.0202,
+          "chart_bytes": 0,
+          "charts": 0
+        },
+        {
+          "stage": "btc_detail_first",
+          "seconds": 0.5083,
+          "chart_bytes": 140104,
+          "charts": 1
+        },
+        {
+          "stage": "btc_detail_warm",
+          "seconds": 0.0729,
+          "chart_bytes": 140104,
+          "charts": 1
+        },
+        {
+          "stage": "btc_detail_warm",
+          "seconds": 0.0678,
+          "chart_bytes": 140104,
+          "charts": 1
+        },
+        {
+          "stage": "btc_detail_warm",
+          "seconds": 0.0669,
+          "chart_bytes": 140104,
+          "charts": 1
+        },
+        {
+          "stage": "btc_5m_first",
+          "seconds": 0.2673,
+          "chart_bytes": 306660,
+          "charts": 1
+        },
+        {
+          "stage": "btc_1d_return",
+          "seconds": 0.0737,
+          "chart_bytes": 140104,
+          "charts": 1
+        },
+        {
+          "stage": "btc_prediction_first",
+          "seconds": 0.2618,
+          "chart_bytes": 22409,
+          "charts": 1
+        },
+        {
+          "stage": "btc_prediction_warm",
+          "seconds": 0.0688,
+          "chart_bytes": 22409,
+          "charts": 1
+        },
+        {
+          "stage": "btc_prediction_warm",
+          "seconds": 0.0676,
+          "chart_bytes": 22409,
+          "charts": 1
+        },
+        {
+          "stage": "btc_prediction_warm",
+          "seconds": 0.069,
+          "chart_bytes": 22409,
+          "charts": 1
+        },
+        {
+          "stage": "btc_prediction_3mo",
+          "seconds": 0.2091,
+          "chart_bytes": 52754,
+          "charts": 1
+        },
+        {
+          "stage": "btc_comparison_first",
+          "seconds": 0.0878,
+          "chart_bytes": 7277,
+          "charts": 1
+        },
+        {
+          "stage": "aapl_board_prepare",
+          "seconds": 0.116,
+          "chart_bytes": 0,
+          "charts": 0
+        },
+        {
+          "stage": "aapl_detail_first",
+          "seconds": 1.0583,
+          "chart_bytes": 310767,
+          "charts": 1
+        },
+        {
+          "stage": "aapl_detail_warm",
+          "seconds": 0.2243,
+          "chart_bytes": 310767,
+          "charts": 1
+        },
+        {
+          "stage": "aapl_detail_warm",
+          "seconds": 0.212,
+          "chart_bytes": 310767,
+          "charts": 1
+        },
+        {
+          "stage": "aapl_detail_warm",
+          "seconds": 0.2121,
+          "chart_bytes": 310767,
+          "charts": 1
+        }
+      ],
+      "medians": {
+        "board_first": 1.9162,
+        "board_warm": 0.024,
+        "btc_detail_first": 0.5083,
+        "btc_detail_warm": 0.0678,
+        "btc_5m_first": 0.2673,
+        "btc_1d_return": 0.0737,
+        "btc_prediction_first": 0.2618,
+        "btc_prediction_warm": 0.0688,
+        "btc_prediction_3mo": 0.2091,
+        "btc_comparison_first": 0.0878,
+        "aapl_board_prepare": 0.116,
+        "aapl_detail_first": 1.0583,
+        "aapl_detail_warm": 0.2121
+      }
+    },
+    "after": {
+      "checkout": "/workspace/btc-trading-analyzer",
+      "settle_before_warm_s": 3.0,
+      "stages": [
+        {
+          "stage": "board_first",
+          "seconds": 0.2679,
+          "chart_bytes": 0,
+          "charts": 0
+        },
+        {
+          "stage": "board_warm",
+          "seconds": 0.0242,
+          "chart_bytes": 0,
+          "charts": 0
+        },
+        {
+          "stage": "board_warm",
+          "seconds": 0.0213,
+          "chart_bytes": 0,
+          "charts": 0
+        },
+        {
+          "stage": "board_warm",
+          "seconds": 0.0221,
+          "chart_bytes": 0,
+          "charts": 0
+        },
+        {
+          "stage": "btc_detail_first",
+          "seconds": 0.5001,
+          "chart_bytes": 141188,
+          "charts": 1
+        },
+        {
+          "stage": "btc_detail_warm",
+          "seconds": 0.0681,
+          "chart_bytes": 141188,
+          "charts": 1
+        },
+        {
+          "stage": "btc_detail_warm",
+          "seconds": 0.0671,
+          "chart_bytes": 141188,
+          "charts": 1
+        },
+        {
+          "stage": "btc_detail_warm",
+          "seconds": 0.068,
+          "chart_bytes": 141188,
+          "charts": 1
+        },
+        {
+          "stage": "btc_5m_first",
+          "seconds": 0.2638,
+          "chart_bytes": 307744,
+          "charts": 1
+        },
+        {
+          "stage": "btc_1d_return",
+          "seconds": 0.0696,
+          "chart_bytes": 141188,
+          "charts": 1
+        },
+        {
+          "stage": "btc_prediction_first",
+          "seconds": 0.2591,
+          "chart_bytes": 22407,
+          "charts": 1
+        },
+        {
+          "stage": "btc_prediction_warm",
+          "seconds": 0.071,
+          "chart_bytes": 22407,
+          "charts": 1
+        },
+        {
+          "stage": "btc_prediction_warm",
+          "seconds": 0.0694,
+          "chart_bytes": 22407,
+          "charts": 1
+        },
+        {
+          "stage": "btc_prediction_warm",
+          "seconds": 0.0673,
+          "chart_bytes": 22407,
+          "charts": 1
+        },
+        {
+          "stage": "btc_prediction_3mo",
+          "seconds": 0.1996,
+          "chart_bytes": 52790,
+          "charts": 1
+        },
+        {
+          "stage": "btc_comparison_first",
+          "seconds": 0.0859,
+          "chart_bytes": 7277,
+          "charts": 1
+        },
+        {
+          "stage": "aapl_board_prepare",
+          "seconds": 0.1199,
+          "chart_bytes": 0,
+          "charts": 0
+        },
+        {
+          "stage": "aapl_detail_first",
+          "seconds": 0.6562,
+          "chart_bytes": 311851,
+          "charts": 1
+        },
+        {
+          "stage": "aapl_detail_warm",
+          "seconds": 0.0761,
+          "chart_bytes": 311851,
+          "charts": 1
+        },
+        {
+          "stage": "aapl_detail_warm",
+          "seconds": 0.0673,
+          "chart_bytes": 311851,
+          "charts": 1
+        },
+        {
+          "stage": "aapl_detail_warm",
+          "seconds": 0.0678,
+          "chart_bytes": 311851,
+          "charts": 1
+        }
+      ],
+      "medians": {
+        "board_first": 0.2679,
+        "board_warm": 0.0221,
+        "btc_detail_first": 0.5001,
+        "btc_detail_warm": 0.068,
+        "btc_5m_first": 0.2638,
+        "btc_1d_return": 0.0696,
+        "btc_prediction_first": 0.2591,
+        "btc_prediction_warm": 0.0694,
+        "btc_prediction_3mo": 0.1996,
+        "btc_comparison_first": 0.0859,
+        "aapl_board_prepare": 0.1199,
+        "aapl_detail_first": 0.6562,
+        "aapl_detail_warm": 0.0678
+      }
+    }
+  }
+}

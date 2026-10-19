@@ -401,6 +401,10 @@ if __name__ == "__main__":
 
 def select_market(page, label):
     """The chart's compact market selector opens a searchable native list."""
+    expected = page.locator(".board-asset").evaluate_all(
+        """(nodes,label)=>nodes.find(n=>n.querySelector('.board-symbol')?.textContent===label||n.querySelector('.board-identity strong')?.textContent===label)?.dataset.quoteSymbol""",
+        label,
+    )
     control = page.get_by_role("combobox", name="분석할 시장", exact=True)
     dialog = page.get_by_role("dialog")
     if dialog.count():
@@ -408,3 +412,8 @@ def select_market(page, label):
     control.click()
     control.fill(label)
     page.get_by_role("option", name=label, exact=True).click()
+    if expected:
+        page.wait_for_function(
+            "symbol=>document.querySelector('#btc-live-selection')?.dataset.symbol===symbol&&document.querySelector('.board-detail')?.dataset.quoteSymbol===symbol",
+            arg=expected,
+        )

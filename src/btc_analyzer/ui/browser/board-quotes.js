@@ -25,16 +25,23 @@
         const live=fresh(s),status=s.el?.querySelector('.status span')?.textContent||'시세 연결 중…';
         write(node.dataset,'status',live&&s.transport!=='history'?'live':'stale');
         setField(fields,'status',status+' · Binance');
-        if(s.price!==null)setField(fields,'price','$'+s.price.toLocaleString('en-US',{minimumFractionDigits:s.decimals,maximumFractionDigits:s.decimals}));
+        if(s.price!==null){
+          if(s.boardPrice!==s.price){s.boardPrice=s.price;s.boardPriceText='$'+s.price.toLocaleString('en-US',{minimumFractionDigits:s.decimals,maximumFractionDigits:s.decimals});}
+          setField(fields,'price',s.boardPriceText);
+        }
         if(s.change!==null){
           setField(fields,'change',(s.change>=0?'▲ +':'▼ ')+s.change.toFixed(2)+'% · 24시간');
           if(fields.change)write(fields.change.dataset,'direction',s.change>=0?'up':'down');
         }
         if(s.metrics){
-          const fmt=n=>n.toLocaleString('en-US',{maximumFractionDigits:s.decimals,minimumFractionDigits:s.decimals});
-          for(const key of ['high','low'])setField(fields,key,fmt(s.metrics[key]));
-          setField(fields,'volume',s.metrics.volume.toLocaleString('en-US',{maximumFractionDigits:2})+' '+s.symbol.replace('USDT',''));
-          setField(fields,'turnover',Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:2}).format(s.metrics.turnover));
+          const key=Object.values(s.metrics).join('|');
+          if(s.boardMetricsKey!==key){
+            const fmt=n=>n.toLocaleString('en-US',{maximumFractionDigits:s.decimals,minimumFractionDigits:s.decimals});
+            s.boardMetricsKey=key;s.boardMetricsText={high:fmt(s.metrics.high),low:fmt(s.metrics.low),
+              volume:s.metrics.volume.toLocaleString('en-US',{maximumFractionDigits:2})+' '+s.symbol.replace('USDT',''),
+              turnover:Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:2}).format(s.metrics.turnover)};
+          }
+          for(const [key,text] of Object.entries(s.boardMetricsText))setField(fields,key,text);
           if(fields.position){
             const span=s.metrics.high-s.metrics.low;
             const pos=span>0?Math.max(0,Math.min(100,(s.price-s.metrics.low)/span*100)):50;

@@ -129,7 +129,8 @@ def test_svg_preview_maps_data_coordinates_and_restores_original_styles():
     script = (
         source.read_text()
         + """
-const node={style:{transform:'',transformOrigin:''}},x={range:[10,20],r2c:n=>n,_length:100},y={range:[100,200],_length:100};
+const ChartCanvas={preview(){},clear(){}};
+const node={classList:{contains:()=>false},querySelectorAll:()=>[],style:{transform:'',transformOrigin:''}},x={range:[10,20],r2c:n=>n,_length:100},y={range:[100,200],_length:100};
 const plot={_fullLayout:{_plots:{xy:{xaxis:x,yaxis:y}},yaxis:y},querySelector:()=>({children:[node]})};
 const preview=ChartPreview.create(plot);
 preview.show([12,17],{'yaxis.range':[150,250]});
@@ -150,9 +151,11 @@ def test_preview_skips_empty_layers_and_unchanged_transforms_but_can_resume_afte
     program = (
         source.read_text()
         + """
+const ChartCanvas={preview(){},clear(){}};
 let writes=0;
 const style=new Proxy({transform:'',transformOrigin:''},{set(o,k,v){writes++;o[k]=v;return true;}});
-const filled={style,childElementCount:1},empty={style:{},childElementCount:0};
+const dom={classList:{contains:()=>false},querySelectorAll:()=>[]};
+const filled={...dom,style,childElementCount:1},empty={...dom,style:{},childElementCount:0};
 const x={range:[0,100],r2c:n=>n,_length:100},y={range:[0,100],_length:100,_name:'yaxis'};
 const plot={_fullLayout:{_plots:{xy:{xaxis:x,yaxis:y}},yaxis:y},querySelector:()=>({children:[empty,filled]})};
 const p=ChartPreview.create(plot);p.show([0,50],{});const first=writes;p.show([0,50],{});

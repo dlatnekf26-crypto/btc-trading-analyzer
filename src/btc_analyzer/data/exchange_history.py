@@ -9,7 +9,7 @@ import pandas as pd
 
 from btc_analyzer.assets import SESSION_MARKETS, EXCHANGE_HISTORY
 from btc_analyzer.data.market_context import _download
-from btc_analyzer.market_clock import session_index
+from btc_analyzer.market_clock import session_index, SessionTimes
 
 YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/"
 
@@ -156,8 +156,8 @@ def parse_history(payload, timeframe, now, market="NQ"):
     frame.attrs.update(
         market=market,
         timeframe=timeframe,
-        bar_starts=tuple(map(int, starts.asi8)),
-        bar_ends=tuple(map(int, ends.asi8)),
+        bar_starts=SessionTimes(starts.asi8),
+        bar_ends=SessionTimes(ends.asi8),
         source=f"Yahoo Finance · {venue.source}",
     )
     return frame
