@@ -108,7 +108,7 @@
 [data-testid="stDialog"] .btc-reader-values>div{min-width:66px}
 [data-testid="stDialog"] .btc-reader-values span{font-size:9px}
 [data-testid="stDialog"] .btc-reader-values b{font-size:11px}
-[data-testid="stDialog"] .btc-chart-key{padding-top:4px;font-size:9px;gap:3px 10px}
+[data-testid="stDialog"] .btc-chart-key{padding-top:4px;padding-bottom:8px;font-size:9px;gap:3px 10px}
 [data-testid="stDialog"] [data-testid="stButtonGroup"] button{min-height:32px;font-size:12px}
 @media(max-width:640px){.st-key-detail_header [data-testid="stHorizontalBlock"]{grid-template-columns:minmax(0,1fr) 108px 38px;gap:6px}.board-detail .board-icon{width:27px;height:27px;font-size:15px}.board-detail .board-identity strong{font-size:18px}.board-detail .board-price b{font-size:27px!important}.board-detail .board-change{font-size:10px!important}.board-detail .board-status{font-size:9px!important}.st-key-detail_header [data-testid="stSelectbox"] [data-baseweb="select"]{font-size:11px}[data-testid="stDialog"] [data-testid="stVerticalBlock"]{gap:8px}}
 

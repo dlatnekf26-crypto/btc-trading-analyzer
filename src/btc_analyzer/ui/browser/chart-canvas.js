@@ -1,10 +1,11 @@
 /* Four Canvas panes share canonical Plotly arrays, axes and viewport controls. */
 const ChartCanvas = (()=>{
-  const states=new WeakMap(),mounted=new Set(),svg='http://www.w3.org/2000/svg';
+  const states=new WeakMap(),mounted=new Set();
   const {values,times}=PlotData;
   const extents=new WeakMap();
   let disposed=false;
   const attr=(node,key,value)=>{value=String(value);if(node.getAttribute(key)!==value)node.setAttribute(key,value);};
+  const style=(node,key,value)=>{if(node.style[key]!==value)node.style[key]=value;};
   function fallback(plot,state,indices){
     if(state.restoring)return;
     state.restoring=true;state.disabled=true;attr(plot,'data-canvas-rendering','fallback-pending');
@@ -25,7 +26,7 @@ const ChartCanvas = (()=>{
     const ratio=Math.min(window.parent.devicePixelRatio||1,2,Math.sqrt(2500000/(width*height)));
     const key=[...traces.flatMap(t=>[...[t.x,t.y,t.open,t.high,t.low,t.close].map(a=>a?.bdata??a),t.marker?.color,t.line?.color,t.line?.dash,t.line?.width,t.increasing?.fillcolor,t.decreasing?.fillcolor,t.fillcolor,t.opacity]),...xr,...yr,width,height,ratio,plot.dataset.liveEvent];
     if(pane.key&&key.length===pane.key.length&&key.every((n,i)=>Object.is(n,pane.key[i])))return;
-    pane.key=key;attr(pane.node,'width',width);attr(pane.node,'height',height);
+    pane.key=key;
     const w=Math.ceil(width*ratio),h=Math.ceil(height*ratio);
     if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;canvas.style.width=width+'px';canvas.style.height=height+'px';}
     ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,width,height);ctx.save();
@@ -105,18 +106,27 @@ const ChartCanvas = (()=>{
     if(state.disabled){if(indices.some(i=>plot.data[i]?.visible===false))fallback(plot,state,indices);return;}
     const groups=new Map();
     for(const index of indices){const t=plot.data[index];if(!t)continue;const key=(t.xaxis||'x')+(t.yaxis||'y');if(!groups.has(key))groups.set(key,[]);groups.get(key).push(t);}
+    const host=plot.querySelector('.svg-container');if(!host)return;
+    if(!host.style.position)host.style.position='relative';
     let painted=0;
     for(const [subplot,traces] of groups){
       const axes=plot._fullLayout._plots[subplot],group=plot.querySelector(`.subplot.${subplot} .overplot>g.${subplot}`);if(!axes||!group)continue;
       let pane=state.panes.get(subplot);
       if(!pane?.node.isConnected){
-        const node=group.ownerDocument.createElementNS(svg,'foreignObject');node.setAttribute('class','btc-canvas-layer');node.style.pointerEvents='none';
-        const canvas=group.ownerDocument.createElementNS('http://www.w3.org/1999/xhtml','canvas');canvas.setAttribute('role','img');canvas.setAttribute('aria-label',subplot==='xy'?'가격·이평선·볼린저·일목':subplot==='x2y2'?'거래량':subplot==='x3y3'?'RSI':'MACD');
-        canvas.dataset.pane=subplot;node.append(canvas);group.prepend(node);const context=canvas.getContext('2d');
+        // HTML layers use explicit axis offsets. SVG foreignObject descendants
+        // can ignore ancestor transforms in WebKit and stack every pane at y=0.
+        const node=host.ownerDocument.createElement('div');node.setAttribute('class','btc-canvas-layer');
+        Object.assign(node.style,{position:'absolute',overflow:'hidden',contain:'paint',pointerEvents:'none',zIndex:'1'});
+        const canvas=host.ownerDocument.createElement('canvas');
+        Object.assign(canvas.style,{display:'block',pointerEvents:'none'});canvas.setAttribute('role','img');canvas.setAttribute('aria-label',subplot==='xy'?'가격·이평선·볼린저·일목':subplot==='x2y2'?'거래량':subplot==='x3y3'?'RSI':'MACD');
+        canvas.dataset.pane=subplot;node.append(canvas);host.append(node);const context=canvas.getContext('2d');
         if(!context){for(const p of state.panes.values())p.node.remove();node.remove();fallback(plot,state,indices);return;}
         pane={node,canvas,context,key:null};state.panes.set(subplot,pane);
       }
-      const x=axes.xaxis,y=axes.yaxis;draw(pane,traces,x,y,range||x.range.map(n=>x.r2c(n)),updates[y._name+'.range']||y.range.map(Number),plot);
+      if(pane.node.parentElement!==host)host.append(pane.node);
+      const x=axes.xaxis,y=axes.yaxis;
+      for(const [key,value] of Object.entries({left:x._offset,top:y._offset,width:x._length,height:y._length}))style(pane.node,key,value+'px');
+      draw(pane,traces,x,y,range||x.range.map(n=>x.r2c(n)),updates[y._name+'.range']||y.range.map(Number),plot);
       painted++;
     }
     if(painted!==groups.size)return;

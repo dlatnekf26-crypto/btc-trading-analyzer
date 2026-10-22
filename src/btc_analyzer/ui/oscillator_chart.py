@@ -51,7 +51,11 @@ def add_oscillators(fig, frame, x):
         fig.add_hline(y=level, line_width=1, line_dash="dot", line_color="#c6ceda", row=3, col=1)
     fig.add_hrect(y0=30, y1=70, line_width=0, fillcolor="rgba(140,101,218,.045)", row=3, col=1)
     fig.add_hline(y=0, line_width=1, line_color="#c6ceda", row=4, col=1)
-    for row, label in ((3, "RSI 14 · 기준 30 / 70"), (4, "MACD 12·26·9 · 파랑 MACD / 주황 시그널")):
+    for row, label in (
+        (2, "거래량"),
+        (3, "RSI 14 · 기준 30 / 70"),
+        (4, "MACD 12·26·9 · 파랑 MACD / 주황 시그널"),
+    ):
         fig.add_annotation(
             x=0,
             y=1,
