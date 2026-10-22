@@ -4,6 +4,8 @@ function makeLiveAnalysis(root) {
   let host=null,payload=null,cfg=null,books={},symbol=null,dirty=true,lastPaint=0,disposed=false,timer=null,latestQuote=null;
   const plots=new WeakMap(),held=new WeakSet(),invalidWatch=new WeakSet(),formatters=new Map();
   const array=PlotData.values;
+  const prices=Object.fromEntries([2,4].map(n=>[n,new Intl.NumberFormat('en-US',{minimumFractionDigits:n,maximumFractionDigits:n})]));
+  const money=n=>prices[n<10?4:2].format(n);
   const clock=new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
   function text(node,value) {if(node && node.textContent!==value) node.textContent=value;}
   function displayDate(time,zone='Asia/Seoul',numeric=false) {
@@ -65,12 +67,21 @@ function makeLiveAnalysis(root) {
   function update(plot,key,work) {
     let state=plots.get(plot);
     if(!state || (!state.busy && (state.data!==plot.data || state.revision!==plot.layout.uirevision))) {
-      state={key:null,busy:false,base:null,data:plot.data,revision:plot.layout.uirevision};plots.set(plot,state);
+      state={key:null,busy:false,base:null,data:plot.data,revision:plot.layout.uirevision,meta:plot.layout.meta?.btcLive};plots.set(plot,state);
     }
+    // A model-only replacement invalidates the rendered key, but cannot turn
+    // already appended live candles into the historical calculation base.
+    if(!state.busy && state.meta!==plot.layout.meta?.btcLive){state.key=null;state.meta=plot.layout.meta?.btcLive;}
     if(state.busy || state.key===key) return;
     state.busy=true;
     const meta=plot.layout.meta?.btcLive;
-    Promise.resolve().then(()=>work(state)).then(()=>{
+    Promise.resolve().then(()=>{
+      // A queued tick must not write into a replacement market/forecast or a
+      // detached chart. Keep the old key unset so the current view can retry.
+      if(disposed||!plot.isConnected||plot.layout.meta?.btcLive!==meta)return false;
+      return Promise.resolve(work(state)).then(()=>true);
+    }).then(applied=>{
+      if(!applied)return;
       if(plot.layout.meta?.btcLive===meta){state.key=key;state.data=plot.data;}
     }).catch(()=>{}).finally(()=>{state.busy=false;});
   }
@@ -128,16 +139,18 @@ function makeLiveAnalysis(root) {
     const active=LiveCandles.analysisFrames.filter(tf=>current(books[tf],now));
     text(card?.querySelector('.btc-live-status'),live ? `현재가 출발 · ${clock.format(new Date(quote.event))} KST · 잠정 지표 ${active.length}/5` : '시세 수신 대기/지연 · 조건부 경로 갱신 보류');
     if(!live) return;
-    const ratio=quote.price/meta.anchor, center=meta.center.map(y=>y*ratio), lower=meta.lower.map(y=>y*ratio), upper=meta.upper.map(y=>y*ratio);
-    const money=n=>n.toLocaleString('en-US',{maximumFractionDigits:n<10 ? 4 : 2,minimumFractionDigits:n<10 ? 4 : 2});
-    text(card?.querySelector('strong'),`${money(center.at(-1))} USDT`);
-    text(card?.querySelector('.btc-live-forecast-range'),`현재 ${money(quote.price)} → ${meta.label} · 범위 ${money(lower.at(-1))} ~ ${money(upper.at(-1))}`);
+    const ratio=quote.price/meta.anchor;
+    // The card only needs endpoint prices, even when its chart is off screen.
+    text(card?.querySelector('strong'),`${money(meta.center.at(-1)*ratio)} USDT`);
+    text(card?.querySelector('.btc-live-forecast-range'),`현재 ${money(quote.price)} → ${meta.label} · 범위 ${money(meta.lower.at(-1)*ratio)} ~ ${money(meta.upper.at(-1)*ratio)}`);
     const directions=active.map(tf=>metrics(books[tf].features,books[tf].candle.row[4]).trend);
     const up=directions.filter(n=>n>0).length,down=directions.filter(n=>n<0).length;
     text(card?.querySelector('.btc-live-forecast-reason'),`${up}개 시간대 20봉선 위 · ${down}개 아래. 현재가로 출발점을 바꾸고 기존 지표·유사 사례의 수익률 경로/방향 비중을 유지해요. 잠정 지표는 관찰 근거이며 추가 가격 가중치로 쓰지 않아요.`);
-    const xs=meta.offsets.map(t=>displayDate(quote.event+t,meta.timezone));
     if(!PlotData.visible(plot))return;
     update(plot,`${Math.floor(quote.event/60000)}-${quote.price}`,async()=>{
+      // Decode/format a full path only when a visible plot actually changes.
+      const xs=meta.offsets.map(t=>displayDate(quote.event+t,meta.timezone));
+      const center=meta.center.map(y=>y*ratio),lower=meta.lower.map(y=>y*ratio),upper=meta.upper.map(y=>y*ratio);
       const indices=[...meta.liveIndices], xValues=[xs,xs,xs], yValues=[upper,lower,center];
       if(meta.indicatorSeed){
         const projected=projectIndicators(meta.indicatorSeed,center);

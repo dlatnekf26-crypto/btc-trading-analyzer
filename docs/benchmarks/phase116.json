@@ -1,0 +1,843 @@
+{
+  "baseline": "ef40300ff6a6d276a9b8caaec34155b5815f1af9",
+  "date": "2026-10-22",
+  "method": {
+    "gesture": "Chromium 390x1000, CPU throttle 4, 600 canonical candles (x normalized to origin for SHA256), 4 panes, 72 moves/3 drags, 3 runs each, actual pane readiness",
+    "flow": "fresh browser context, warmed fixture server, 3 sequential runs, no simultaneous tests",
+    "micro": "Node deterministic 181-point path, 20 updates per scenario, 3 processes; operation counts, not device FPS",
+    "limitations": [
+      "Local fixture data, not external feed latency",
+      "No physical Safari or public deployment verification",
+      "No guarantee of initial loading or overall FPS speedup",
+      "Earlier intermediate runs excluded after final correctness change"
+    ]
+  },
+  "gestures": {
+    "before": [
+      {
+        "width": 390,
+        "cpu_rate": 4.0,
+        "data_sha256": "93b78db8af21c2eca87f1b192dd1be434431f7c623b30d741685775a9f5c36df",
+        "ready_s": 8.6591,
+        "gesture_s": 4.8592,
+        "relayouts": 3,
+        "relayout_median_ms": 59.4,
+        "relayout_p95_ms": 100.8,
+        "frame_p95_ms": 33.4,
+        "frames_over_50ms": 7,
+        "frames": 262,
+        "input_p95_ms": 17.6,
+        "long_tasks": 12,
+        "long_max_ms": 113,
+        "cpu_ms": {
+          "TaskDuration": 2779.14,
+          "ScriptDuration": 1720.32,
+          "LayoutDuration": 97.37,
+          "RecalcStyleDuration": 72.64
+        },
+        "js_errors": []
+      },
+      {
+        "width": 390,
+        "cpu_rate": 4.0,
+        "data_sha256": "93b78db8af21c2eca87f1b192dd1be434431f7c623b30d741685775a9f5c36df",
+        "ready_s": 7.9273,
+        "gesture_s": 4.5346,
+        "relayouts": 3,
+        "relayout_median_ms": 44.9,
+        "relayout_p95_ms": 91.5,
+        "frame_p95_ms": 33.3,
+        "frames_over_50ms": 6,
+        "frames": 252,
+        "input_p95_ms": 16.1,
+        "long_tasks": 9,
+        "long_max_ms": 97,
+        "cpu_ms": {
+          "TaskDuration": 2612.36,
+          "ScriptDuration": 1609.18,
+          "LayoutDuration": 84.11,
+          "RecalcStyleDuration": 69.64
+        },
+        "js_errors": []
+      },
+      {
+        "width": 390,
+        "cpu_rate": 4.0,
+        "data_sha256": "93b78db8af21c2eca87f1b192dd1be434431f7c623b30d741685775a9f5c36df",
+        "ready_s": 8.1867,
+        "gesture_s": 4.5036,
+        "relayouts": 3,
+        "relayout_median_ms": 59.2,
+        "relayout_p95_ms": 88.8,
+        "frame_p95_ms": 33.2,
+        "frames_over_50ms": 6,
+        "frames": 254,
+        "input_p95_ms": 16.6,
+        "long_tasks": 8,
+        "long_max_ms": 98,
+        "cpu_ms": {
+          "TaskDuration": 2547.99,
+          "ScriptDuration": 1488.81,
+          "LayoutDuration": 95.35,
+          "RecalcStyleDuration": 63.45
+        },
+        "js_errors": []
+      }
+    ],
+    "after": [
+      {
+        "width": 390,
+        "cpu_rate": 4.0,
+        "data_sha256": "93b78db8af21c2eca87f1b192dd1be434431f7c623b30d741685775a9f5c36df",
+        "ready_s": 8.8309,
+        "gesture_s": 4.6184,
+        "relayouts": 3,
+        "relayout_median_ms": 58.7,
+        "relayout_p95_ms": 73.9,
+        "frame_p95_ms": 33.4,
+        "frames_over_50ms": 7,
+        "frames": 253,
+        "input_p95_ms": 18.3,
+        "long_tasks": 7,
+        "long_max_ms": 109,
+        "cpu_ms": {
+          "TaskDuration": 2567.94,
+          "ScriptDuration": 1518.25,
+          "LayoutDuration": 91.45,
+          "RecalcStyleDuration": 68.29
+        },
+        "js_errors": []
+      },
+      {
+        "width": 390,
+        "cpu_rate": 4.0,
+        "data_sha256": "93b78db8af21c2eca87f1b192dd1be434431f7c623b30d741685775a9f5c36df",
+        "ready_s": 8.623,
+        "gesture_s": 4.5066,
+        "relayouts": 3,
+        "relayout_median_ms": 65.2,
+        "relayout_p95_ms": 82.4,
+        "frame_p95_ms": 16.8,
+        "frames_over_50ms": 5,
+        "frames": 259,
+        "input_p95_ms": 16.1,
+        "long_tasks": 9,
+        "long_max_ms": 89,
+        "cpu_ms": {
+          "TaskDuration": 2405.52,
+          "ScriptDuration": 1360.97,
+          "LayoutDuration": 88.84,
+          "RecalcStyleDuration": 69.08
+        },
+        "js_errors": []
+      },
+      {
+        "width": 390,
+        "cpu_rate": 4.0,
+        "data_sha256": "93b78db8af21c2eca87f1b192dd1be434431f7c623b30d741685775a9f5c36df",
+        "ready_s": 8.7245,
+        "gesture_s": 4.6645,
+        "relayouts": 3,
+        "relayout_median_ms": 50.5,
+        "relayout_p95_ms": 79.1,
+        "frame_p95_ms": 16.8,
+        "frames_over_50ms": 3,
+        "frames": 264,
+        "input_p95_ms": 15.4,
+        "long_tasks": 7,
+        "long_max_ms": 88,
+        "cpu_ms": {
+          "TaskDuration": 2620.49,
+          "ScriptDuration": 1568.19,
+          "LayoutDuration": 91.5,
+          "RecalcStyleDuration": 65.76
+        },
+        "js_errors": []
+      }
+    ]
+  },
+  "flow": {
+    "before": [
+      {
+        "width": 390,
+        "cpu_rate": 4,
+        "stages": [
+          {
+            "stage": "board",
+            "seconds": 1.8527,
+            "socket_bytes": 238376
+          },
+          {
+            "stage": "quotes",
+            "seconds": 0.7472,
+            "socket_bytes": 0
+          },
+          {
+            "stage": "detail",
+            "seconds": 6.9838,
+            "socket_bytes": 397531
+          },
+          {
+            "stage": "timeframe_5m",
+            "seconds": 1.8558,
+            "socket_bytes": 380241
+          },
+          {
+            "stage": "timeframe_1d",
+            "seconds": 1.3332,
+            "socket_bytes": 155992
+          },
+          {
+            "stage": "forecast",
+            "seconds": 2.0474,
+            "socket_bytes": 79575
+          },
+          {
+            "stage": "forecast_3mo",
+            "seconds": 2.9442,
+            "socket_bytes": 92716
+          }
+        ],
+        "static_bytes": 2842168,
+        "chart": {
+          "nodes": 378,
+          "paths": 63
+        },
+        "resources": [
+          {
+            "name": "PlotlyChart.Dv4dc5oY.js",
+            "bytes": 1419512,
+            "duration": 489.09999999403954
+          },
+          {
+            "name": "MaterialSymbols-Rounded.BatTDZwB.woff2",
+            "bytes": 373320,
+            "duration": 95.80000001192093
+          },
+          {
+            "name": "SourceSansVF-Upright.ttf.BsWL4Kly.woff2",
+            "bytes": 170188,
+            "duration": 64.5
+          },
+          {
+            "name": "index.CKCTizkM.js",
+            "bytes": 138005,
+            "duration": 63.80000001192093
+          },
+          {
+            "name": "SourceSansVF-Italic.ttf.Bt9VkdQ3.woff2",
+            "bytes": 137996,
+            "duration": 171.80000001192093
+          },
+          {
+            "name": "protobuf.C6yfp4JF.js",
+            "bytes": 100416,
+            "duration": 103.59999999403954
+          },
+          {
+            "name": "StreamlitMarkdown.abRW1By9.js",
+            "bytes": 70444,
+            "duration": 126.19999998807907
+          },
+          {
+            "name": "lib.Dd69Svmo.js",
+            "bytes": 63004,
+            "duration": 80
+          }
+        ],
+        "errors": []
+      },
+      {
+        "width": 390,
+        "cpu_rate": 4,
+        "stages": [
+          {
+            "stage": "board",
+            "seconds": 1.7838,
+            "socket_bytes": 238381
+          },
+          {
+            "stage": "quotes",
+            "seconds": 0.6478,
+            "socket_bytes": 0
+          },
+          {
+            "stage": "detail",
+            "seconds": 6.6114,
+            "socket_bytes": 397938
+          },
+          {
+            "stage": "timeframe_5m",
+            "seconds": 1.287,
+            "socket_bytes": 336147
+          },
+          {
+            "stage": "timeframe_1d",
+            "seconds": 1.4013,
+            "socket_bytes": 167216
+          },
+          {
+            "stage": "forecast",
+            "seconds": 1.6366,
+            "socket_bytes": 47894
+          },
+          {
+            "stage": "forecast_3mo",
+            "seconds": 1.788,
+            "socket_bytes": 113863
+          }
+        ],
+        "static_bytes": 2842168,
+        "chart": {
+          "nodes": 378,
+          "paths": 63
+        },
+        "resources": [
+          {
+            "name": "PlotlyChart.Dv4dc5oY.js",
+            "bytes": 1419512,
+            "duration": 450.40000000596046
+          },
+          {
+            "name": "MaterialSymbols-Rounded.BatTDZwB.woff2",
+            "bytes": 373320,
+            "duration": 172.7000000178814
+          },
+          {
+            "name": "SourceSansVF-Upright.ttf.BsWL4Kly.woff2",
+            "bytes": 170188,
+            "duration": 37.19999998807907
+          },
+          {
+            "name": "index.CKCTizkM.js",
+            "bytes": 138005,
+            "duration": 59.099999994039536
+          },
+          {
+            "name": "SourceSansVF-Italic.ttf.Bt9VkdQ3.woff2",
+            "bytes": 137996,
+            "duration": 118.2999999821186
+          },
+          {
+            "name": "protobuf.C6yfp4JF.js",
+            "bytes": 100416,
+            "duration": 80
+          },
+          {
+            "name": "StreamlitMarkdown.abRW1By9.js",
+            "bytes": 70444,
+            "duration": 107.59999999403954
+          },
+          {
+            "name": "lib.Dd69Svmo.js",
+            "bytes": 63004,
+            "duration": 27.900000005960464
+          }
+        ],
+        "errors": []
+      },
+      {
+        "width": 390,
+        "cpu_rate": 4,
+        "stages": [
+          {
+            "stage": "board",
+            "seconds": 1.6804,
+            "socket_bytes": 238381
+          },
+          {
+            "stage": "quotes",
+            "seconds": 0.8912,
+            "socket_bytes": 0
+          },
+          {
+            "stage": "detail",
+            "seconds": 6.1665,
+            "socket_bytes": 397939
+          },
+          {
+            "stage": "timeframe_5m",
+            "seconds": 1.597,
+            "socket_bytes": 357420
+          },
+          {
+            "stage": "timeframe_1d",
+            "seconds": 1.0887,
+            "socket_bytes": 155992
+          },
+          {
+            "stage": "forecast",
+            "seconds": 1.6575,
+            "socket_bytes": 59118
+          },
+          {
+            "stage": "forecast_3mo",
+            "seconds": 1.6573,
+            "socket_bytes": 92724
+          }
+        ],
+        "static_bytes": 2842168,
+        "chart": {
+          "nodes": 378,
+          "paths": 63
+        },
+        "resources": [
+          {
+            "name": "PlotlyChart.Dv4dc5oY.js",
+            "bytes": 1419512,
+            "duration": 434.90000000596046
+          },
+          {
+            "name": "MaterialSymbols-Rounded.BatTDZwB.woff2",
+            "bytes": 373320,
+            "duration": 146.30000001192093
+          },
+          {
+            "name": "SourceSansVF-Upright.ttf.BsWL4Kly.woff2",
+            "bytes": 170188,
+            "duration": 28.599999994039536
+          },
+          {
+            "name": "index.CKCTizkM.js",
+            "bytes": 138005,
+            "duration": 68.40000000596046
+          },
+          {
+            "name": "SourceSansVF-Italic.ttf.Bt9VkdQ3.woff2",
+            "bytes": 137996,
+            "duration": 140.7000000178814
+          },
+          {
+            "name": "protobuf.C6yfp4JF.js",
+            "bytes": 100416,
+            "duration": 114.80000001192093
+          },
+          {
+            "name": "StreamlitMarkdown.abRW1By9.js",
+            "bytes": 70444,
+            "duration": 139.90000000596046
+          },
+          {
+            "name": "lib.Dd69Svmo.js",
+            "bytes": 63004,
+            "duration": 39.400000005960464
+          }
+        ],
+        "errors": []
+      }
+    ],
+    "after": [
+      {
+        "width": 390,
+        "cpu_rate": 4,
+        "stages": [
+          {
+            "stage": "board",
+            "seconds": 1.9237,
+            "socket_bytes": 239400
+          },
+          {
+            "stage": "quotes",
+            "seconds": 0.5752,
+            "socket_bytes": 0
+          },
+          {
+            "stage": "detail",
+            "seconds": 6.2684,
+            "socket_bytes": 355562
+          },
+          {
+            "stage": "timeframe_5m",
+            "seconds": 1.1229,
+            "socket_bytes": 356621
+          },
+          {
+            "stage": "timeframe_1d",
+            "seconds": 1.5988,
+            "socket_bytes": 156091
+          },
+          {
+            "stage": "forecast",
+            "seconds": 2.1122,
+            "socket_bytes": 79566
+          },
+          {
+            "stage": "forecast_3mo",
+            "seconds": 1.5011,
+            "socket_bytes": 103335
+          }
+        ],
+        "static_bytes": 2842168,
+        "chart": {
+          "nodes": 378,
+          "paths": 63
+        },
+        "resources": [
+          {
+            "name": "PlotlyChart.Dv4dc5oY.js",
+            "bytes": 1419512,
+            "duration": 357.7000000178814
+          },
+          {
+            "name": "MaterialSymbols-Rounded.BatTDZwB.woff2",
+            "bytes": 373320,
+            "duration": 146.40000000596046
+          },
+          {
+            "name": "SourceSansVF-Upright.ttf.BsWL4Kly.woff2",
+            "bytes": 170188,
+            "duration": 48
+          },
+          {
+            "name": "index.CKCTizkM.js",
+            "bytes": 138005,
+            "duration": 81
+          },
+          {
+            "name": "SourceSansVF-Italic.ttf.Bt9VkdQ3.woff2",
+            "bytes": 137996,
+            "duration": 89.69999998807907
+          },
+          {
+            "name": "protobuf.C6yfp4JF.js",
+            "bytes": 100416,
+            "duration": 109.2999999821186
+          },
+          {
+            "name": "StreamlitMarkdown.abRW1By9.js",
+            "bytes": 70444,
+            "duration": 157.7999999821186
+          },
+          {
+            "name": "lib.Dd69Svmo.js",
+            "bytes": 63004,
+            "duration": 25.30000001192093
+          }
+        ],
+        "errors": []
+      },
+      {
+        "width": 390,
+        "cpu_rate": 4,
+        "stages": [
+          {
+            "stage": "board",
+            "seconds": 1.825,
+            "socket_bytes": 239395
+          },
+          {
+            "stage": "quotes",
+            "seconds": 0.7678,
+            "socket_bytes": 0
+          },
+          {
+            "stage": "detail",
+            "seconds": 6.7304,
+            "socket_bytes": 376835
+          },
+          {
+            "stage": "timeframe_5m",
+            "seconds": 1.3543,
+            "socket_bytes": 336191
+          },
+          {
+            "stage": "timeframe_1d",
+            "seconds": 1.2472,
+            "socket_bytes": 188616
+          },
+          {
+            "stage": "forecast",
+            "seconds": 1.7956,
+            "socket_bytes": 47909
+          },
+          {
+            "stage": "forecast_3mo",
+            "seconds": 1.6677,
+            "socket_bytes": 113517
+          }
+        ],
+        "static_bytes": 2842168,
+        "chart": {
+          "nodes": 378,
+          "paths": 63
+        },
+        "resources": [
+          {
+            "name": "PlotlyChart.Dv4dc5oY.js",
+            "bytes": 1419512,
+            "duration": 223.7999999821186
+          },
+          {
+            "name": "MaterialSymbols-Rounded.BatTDZwB.woff2",
+            "bytes": 373320,
+            "duration": 163.69999998807907
+          },
+          {
+            "name": "SourceSansVF-Upright.ttf.BsWL4Kly.woff2",
+            "bytes": 170188,
+            "duration": 63.80000001192093
+          },
+          {
+            "name": "index.CKCTizkM.js",
+            "bytes": 138005,
+            "duration": 85.59999999403954
+          },
+          {
+            "name": "SourceSansVF-Italic.ttf.Bt9VkdQ3.woff2",
+            "bytes": 137996,
+            "duration": 138.59999999403954
+          },
+          {
+            "name": "protobuf.C6yfp4JF.js",
+            "bytes": 100416,
+            "duration": 118.69999998807907
+          },
+          {
+            "name": "StreamlitMarkdown.abRW1By9.js",
+            "bytes": 70444,
+            "duration": 142
+          },
+          {
+            "name": "lib.Dd69Svmo.js",
+            "bytes": 63004,
+            "duration": 23.400000005960464
+          }
+        ],
+        "errors": []
+      },
+      {
+        "width": 390,
+        "cpu_rate": 4,
+        "stages": [
+          {
+            "stage": "board",
+            "seconds": 1.8331,
+            "socket_bytes": 239400
+          },
+          {
+            "stage": "quotes",
+            "seconds": 0.5928,
+            "socket_bytes": 0
+          },
+          {
+            "stage": "detail",
+            "seconds": 6.4398,
+            "socket_bytes": 376830
+          },
+          {
+            "stage": "timeframe_5m",
+            "seconds": 1.4573,
+            "socket_bytes": 357464
+          },
+          {
+            "stage": "timeframe_1d",
+            "seconds": 1.0801,
+            "socket_bytes": 188621
+          },
+          {
+            "stage": "forecast",
+            "seconds": 1.5015,
+            "socket_bytes": 47905
+          },
+          {
+            "stage": "forecast_3mo",
+            "seconds": 1.6903,
+            "socket_bytes": 91734
+          }
+        ],
+        "static_bytes": 2842168,
+        "chart": {
+          "nodes": 378,
+          "paths": 63
+        },
+        "resources": [
+          {
+            "name": "PlotlyChart.Dv4dc5oY.js",
+            "bytes": 1419512,
+            "duration": 474.7999999821186
+          },
+          {
+            "name": "MaterialSymbols-Rounded.BatTDZwB.woff2",
+            "bytes": 373320,
+            "duration": 109.90000000596046
+          },
+          {
+            "name": "SourceSansVF-Upright.ttf.BsWL4Kly.woff2",
+            "bytes": 170188,
+            "duration": 45.5
+          },
+          {
+            "name": "index.CKCTizkM.js",
+            "bytes": 138005,
+            "duration": 62
+          },
+          {
+            "name": "SourceSansVF-Italic.ttf.Bt9VkdQ3.woff2",
+            "bytes": 137996,
+            "duration": 146.39999997615814
+          },
+          {
+            "name": "protobuf.C6yfp4JF.js",
+            "bytes": 100416,
+            "duration": 114.7000000178814
+          },
+          {
+            "name": "StreamlitMarkdown.abRW1By9.js",
+            "bytes": 70444,
+            "duration": 139.59999999403954
+          },
+          {
+            "name": "lib.Dd69Svmo.js",
+            "bytes": 63004,
+            "duration": 35.599999994039536
+          }
+        ],
+        "errors": []
+      }
+    ]
+  },
+  "forecast_work": {
+    "before": [
+      {
+        "scenarios": {
+          "unchanged": {
+            "formats": 3620,
+            "restyles": 1,
+            "ms": 32.436305,
+            "card": "280.00 USDT"
+          },
+          "offscreen": {
+            "formats": 3620,
+            "restyles": 0,
+            "ms": 20.03655099999999,
+            "card": "282.80 USDT"
+          }
+        },
+        "resumed": {
+          "formats": 7421,
+          "restyles": 2,
+          "center": 282.8
+        },
+        "replacement": 282.8,
+        "detachedWrites": 1
+      },
+      {
+        "scenarios": {
+          "unchanged": {
+            "formats": 3620,
+            "restyles": 1,
+            "ms": 27.656380999999996,
+            "card": "280.00 USDT"
+          },
+          "offscreen": {
+            "formats": 3620,
+            "restyles": 0,
+            "ms": 18.387079,
+            "card": "282.80 USDT"
+          }
+        },
+        "resumed": {
+          "formats": 7421,
+          "restyles": 2,
+          "center": 282.8
+        },
+        "replacement": 282.8,
+        "detachedWrites": 1
+      },
+      {
+        "scenarios": {
+          "unchanged": {
+            "formats": 3620,
+            "restyles": 1,
+            "ms": 27.465214999999993,
+            "card": "280.00 USDT"
+          },
+          "offscreen": {
+            "formats": 3620,
+            "restyles": 0,
+            "ms": 18.209563000000003,
+            "card": "282.80 USDT"
+          }
+        },
+        "resumed": {
+          "formats": 7421,
+          "restyles": 2,
+          "center": 282.8
+        },
+        "replacement": 282.8,
+        "detachedWrites": 1
+      }
+    ],
+    "after": [
+      {
+        "scenarios": {
+          "unchanged": {
+            "formats": 181,
+            "restyles": 1,
+            "ms": 4.795448999999998,
+            "card": "280.00 USDT"
+          },
+          "offscreen": {
+            "formats": 0,
+            "restyles": 0,
+            "ms": 0.5132809999999992,
+            "card": "282.80 USDT"
+          }
+        },
+        "resumed": {
+          "formats": 362,
+          "restyles": 2,
+          "center": 282.8
+        },
+        "replacement": 565.6,
+        "detachedWrites": 0
+      },
+      {
+        "scenarios": {
+          "unchanged": {
+            "formats": 181,
+            "restyles": 1,
+            "ms": 5.401699000000001,
+            "card": "280.00 USDT"
+          },
+          "offscreen": {
+            "formats": 0,
+            "restyles": 0,
+            "ms": 0.24987500000000296,
+            "card": "282.80 USDT"
+          }
+        },
+        "resumed": {
+          "formats": 362,
+          "restyles": 2,
+          "center": 282.8
+        },
+        "replacement": 565.6,
+        "detachedWrites": 0
+      },
+      {
+        "scenarios": {
+          "unchanged": {
+            "formats": 181,
+            "restyles": 1,
+            "ms": 3.921687999999996,
+            "card": "280.00 USDT"
+          },
+          "offscreen": {
+            "formats": 0,
+            "restyles": 0,
+            "ms": 0.32046100000000166,
+            "card": "282.80 USDT"
+          }
+        },
+        "resumed": {
+          "formats": 362,
+          "restyles": 2,
+          "center": 282.8
+        },
+        "replacement": 565.6,
+        "detachedWrites": 0
+      }
+    ]
+  }
+}

@@ -23,8 +23,8 @@ const ChartCanvas = (()=>{
   function draw(pane,traces,x,y,xr,yr,plot){
     const {canvas,context:ctx}=pane,width=x._length,height=y._length;
     const ratio=Math.min(window.parent.devicePixelRatio||1,2,Math.sqrt(2500000/(width*height)));
-    const key=[...traces.flatMap(t=>[t.x,t.y,t.open,t.high,t.low,t.close,t.marker?.color,t.line?.color,t.line?.dash,t.fillcolor,t.opacity]),...xr,...yr,width,height,ratio,plot.dataset.liveEvent];
-    if(pane.key&&key.every((n,i)=>Object.is(n,pane.key[i])))return;
+    const key=[...traces.flatMap(t=>[...[t.x,t.y,t.open,t.high,t.low,t.close].map(a=>a?.bdata??a),t.marker?.color,t.line?.color,t.line?.dash,t.line?.width,t.increasing?.fillcolor,t.decreasing?.fillcolor,t.fillcolor,t.opacity]),...xr,...yr,width,height,ratio,plot.dataset.liveEvent];
+    if(pane.key&&key.length===pane.key.length&&key.every((n,i)=>Object.is(n,pane.key[i])))return;
     pane.key=key;attr(pane.node,'width',width);attr(pane.node,'height',height);
     const w=Math.ceil(width*ratio),h=Math.ceil(height*ratio);
     if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;canvas.style.width=width+'px';canvas.style.height=height+'px';}

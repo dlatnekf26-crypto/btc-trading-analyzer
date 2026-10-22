@@ -115,6 +115,13 @@ def verify(browser, width, url, events):
     )
     page.wait_for_timeout(650)
     assert page.evaluate("window.__oscCalls") == 2
+    # Metadata-only refresh keeps the immutable pre-live base: otherwise the
+    # same provisional candle can be appended twice after cache invalidation.
+    plot.evaluate("p=>p.layout.meta.btcLive={...p.layout.meta.btcLive}")
+    page.wait_for_timeout(650)
+    assert plot.evaluate(
+        "p=>{const x=p.data.find(t=>t.type==='candlestick').x;return new Set(x).size===x.length;}"
+    ), "Metadata refresh duplicated the provisional candle"
     gesture_check(page, cdp, plot, events, "four-panel price")
     for row in (1, 2, 3):
         box = subplot(page, plot, row)
