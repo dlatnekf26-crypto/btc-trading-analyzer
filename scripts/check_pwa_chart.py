@@ -34,18 +34,17 @@ def installability(playwright, url):
         errors = cdp.send("Page.getInstallabilityErrors")["installabilityErrors"]
         assert not errors, errors
         keys = page.evaluate(
-            "caches.open('crypto-signal-shell-v1').then(c=>c.keys()).then(rs=>rs.map(r=>new URL(r.url).pathname).sort())"
+            "caches.keys().then(names=>{const active=names.filter(n=>n.startsWith('crypto-signal-shell-'));if(active.length!==1)throw new Error('Stale or missing shell cache');return caches.open(active[0]);}).then(c=>c.keys()).then(rs=>rs.map(r=>new URL(r.url).pathname).sort())"
         )
         assert keys == ["/app-assets/icon-192.png", "/app-assets/icon-512.png", "/app-assets/offline.html"], (
             keys
         )
         context.set_offline(True)
         page.reload(wait_until="domcontentloaded")
-        assert page.title() == "연결 대기 · Crypto Signal"
-        assert page.get_by_text("인터넷에 연결해 주세요").is_visible()
+        assert page.title() == "연결 복구 · Crypto Signal"
+        assert page.get_by_text("연결을 다시 확인하고 있어요").is_visible()
         assert not page.locator("#btc-live-analysis, #btc-chart-reader").count()
         context.set_offline(False)
-        page.get_by_role("link", name="다시 연결하기").click()
         page.get_by_role("button", name="비트코인 차트 열기", exact=True).wait_for(timeout=45000)
         page.get_by_role("button", name="비트코인 차트 열기", exact=True).click()
         page.locator("#btc-chart-reader").wait_for(timeout=45000)

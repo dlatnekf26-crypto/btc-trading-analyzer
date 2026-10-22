@@ -1,0 +1,11 @@
+# Optional always-on hosting. Applying this Blueprint provisions a PAID service.
+# This file does not deploy or change the existing Streamlit Community Cloud app.
+services:
+  - type: web
+    name: crypto-signal-lab
+    runtime: docker
+    plan: starter
+    branch: main
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /_stcore/health
+    autoDeploy: true

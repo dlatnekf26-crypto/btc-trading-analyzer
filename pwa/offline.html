@@ -1,4 +1,53 @@
 <!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#ffffff"><title>연결 대기 · Crypto Signal</title>
-<style>body{margin:0;background:#fff;color:#191f28;font-family:system-ui,sans-serif;min-height:100vh;display:grid;place-items:center}main{max-width:340px;padding:32px}img{border-radius:22px}h1{font-size:27px;letter-spacing:-1px}p{color:#6b7684;line-height:1.7}a{display:inline-block;background:#3182f6;color:#fff;border-radius:14px;padding:15px 22px;text-decoration:none;margin-top:16px}</style>
-</head><body><main><img src="/app-assets/icon-192.png" width="72" height="72" alt=""><h1>인터넷에 연결해 주세요</h1><p>실시간 가격과 분석을 불러오려면 연결이 필요해요. 연결되면 최신 데이터로 다시 시작할 수 있어요.</p><a href="/">다시 연결하기</a></main></body></html>
+<meta name="theme-color" content="#ffffff"><title>연결 복구 · Crypto Signal</title>
+<style>body{margin:0;background:#f6f8fb;color:#191f28;font-family:system-ui,sans-serif;min-height:100vh;display:grid;place-items:center}main{max-width:360px;padding:32px}img{border-radius:22px}h1{font-size:27px;letter-spacing:-1px}p{color:#6b7684;line-height:1.7}a{display:inline-block;background:#3182f6;color:#fff;border-radius:14px;padding:15px 22px;text-decoration:none;margin-top:16px}small{display:block;color:#8793a4;line-height:1.6;margin-top:20px}</style>
+</head><body><main><img src="/app-assets/icon-192.png" width="72" height="72" alt=""><h1>연결을 다시 확인하고 있어요</h1><p id="status" role="status" aria-live="polite">인터넷 연결이나 서버 시작을 기다리고 있어요. 연결되면 최신 화면으로 돌아갈게요.</p><a id="retry" href="/">다시 연결하기</a><small>연결 중에는 시세와 예측을 표시하지 않아요. 호스팅의 휴면 해제가 필요하면 다음 화면의 깨우기 버튼을 눌러 주세요.</small></main>
+<script>
+(()=>{
+  'use strict';
+  const status=document.getElementById('status'),link=document.getElementById('retry');
+  const target=new URL(location.href),key='crypto-signal-recovery-at';
+  if(target.pathname==='/app-assets/offline.html'){target.pathname='/';target.search='';target.hash='';}
+  link.href=target.href;
+  let attempts=0,timer=null,controller=null,paused=false;
+  function stop(){clearTimeout(timer);timer=null;controller?.abort();}
+  function schedule(delay=0){
+    if(paused||document.hidden||timer!==null||controller)return;
+    timer=setTimeout(()=>{timer=null;check();},delay);
+  }
+  function canReload(){
+    try{
+      const last=Number(sessionStorage.getItem(key));
+      if(Number.isFinite(last)&&Date.now()-last<60000)return false;
+      sessionStorage.setItem(key,String(Date.now()));return true;
+    }catch(_){return false;}
+  }
+  async function check(){
+    if(paused||document.hidden||controller)return;
+    if(!navigator.onLine){status.textContent='인터넷 연결이 끊겼어요. 연결되면 자동으로 다시 확인할게요.';return;}
+    if(attempts>=8){status.textContent='서버 연결이 늦어지고 있어요. 잠시 후 다시 연결하기를 눌러 주세요.';return;}
+    attempts++;
+    const request=new AbortController();controller=request;
+    const timeout=setTimeout(()=>request.abort(),4000);
+    let ready=false;
+    try{
+      const response=await fetch('/_stcore/health',{cache:'no-store',credentials:'same-origin',signal:request.signal});
+      ready=response.ok&&(await response.text()).trim()==='ok';
+    }catch(_){}finally{clearTimeout(timeout);if(controller===request)controller=null;}
+    if(paused||document.hidden)return;
+    if(ready){
+      if(canReload()){location.replace(target.href);return;}
+      status.textContent='서버가 응답했어요. 다시 연결하기를 눌러 화면을 열어 주세요.';return;
+    }
+    status.textContent='서버가 시작되거나 연결이 복구되기를 기다리고 있어요…';
+    schedule(Math.min(30000,2000*2**(attempts-1)));
+  }
+  function resume(){paused=false;schedule();}
+  window.addEventListener('online',()=>{attempts=0;resume();});
+  window.addEventListener('offline',()=>{stop();status.textContent='인터넷 연결이 끊겼어요. 연결되면 자동으로 다시 확인할게요.';});
+  document.addEventListener('visibilitychange',()=>{if(document.hidden){paused=true;stop();}else resume();});
+  window.addEventListener('pagehide',()=>{paused=true;stop();});
+  window.addEventListener('pageshow',resume);
+  schedule();
+})();
+</script></body></html>

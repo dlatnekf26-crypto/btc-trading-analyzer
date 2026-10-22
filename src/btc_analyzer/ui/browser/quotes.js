@@ -38,7 +38,7 @@
   const streams=configs.filter(c=>c.market==='binance').flatMap(c=>[c.symbol.toLowerCase()+'@aggTrade',c.symbol.toLowerCase()+'@ticker']);
   const klineStreams=symbol=>SESSION_SYMBOLS.includes(symbol)?[]:LiveCandles.frames.map(tf=>symbol.toLowerCase()+'@kline_'+tf);
   let subscribedSymbol=null,subscriptionId=0,lastSubscriptionAt=0,selectionTimer=null;
-  let disposed = false, paintTimer = null;
+  let disposed = false, paintTimer = null, restoringPage = false;
   const states = configs.map(config => ({...config, el:document.getElementById(config.id), points:[],
     socketRef:null, retryTimer:null, retries:0, connectedAt:0, lastRx:0, lastEvent:0,
     lastPoll:0, lastWs:0, historyAt:0, transport:'', price:null, change:null, pending:false,
@@ -382,6 +382,13 @@
     for (const s of states) {s.dirty=true;s.plotDirty=true;} schedulePaint();
   });
   observer.observe(document.body);
+  // A frozen history/PWA document restores the disposed bridge too. Reload
+  // that saved document once so Streamlit and every feed start a fresh session.
+  window.addEventListener('pageshow',event=>{
+    if(!event.persisted || !disposed || restoringPage)return;
+    restoringPage=true;
+    try{window.parent.location.reload();}catch(_){window.location.reload();}
+  });
   window.addEventListener('pagehide',()=>{
     window.removeEventListener('online',online);
     chartReader.dispose();
