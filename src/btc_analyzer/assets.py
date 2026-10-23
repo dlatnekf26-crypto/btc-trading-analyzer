@@ -60,6 +60,7 @@ INDEX_MARKETS = {
     "SP500": Asset("SP500", "S&P 500", "macro-sp500", 2, date(1957, 3, 4), "", "^GSPC"),
 }
 MACRO_MARKETS = {
+    "GOLD": Asset("GOLD", "금 선물", "macro-gold", 2, date(2000, 8, 30), "", "GC=F"),
     "OIL": Asset("OIL", "WTI 원유 선물", "macro-oil", 2, date(2000, 8, 23), "", "CL=F"),
     "TNX": Asset("TNX", "미국채 10년 금리", "macro-tnx", 3, date(1962, 1, 2), "", "^TNX"),
     "TYX": Asset("TYX", "미국채 30년 금리", "macro-tyx", 3, date(1977, 2, 15), "", "^TYX"),
@@ -80,6 +81,15 @@ class ExchangeHistory:
 
 
 EXCHANGE_HISTORY = {
+    "GOLD": ExchangeHistory(
+        "USD",
+        "America/New_York",
+        "COMEX",
+        "금 연속 선물",
+        "CMEGlobex_EnergyAndMetals",
+        "FUTURE",
+        "USD/트로이온스",
+    ),
     "OIL": ExchangeHistory(
         "USD", "America/New_York", "NYMEX", "WTI 연속 선물", "CMEGlobex_EnergyAndMetals", "FUTURE", "USD/배럴"
     ),

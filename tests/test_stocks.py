@@ -155,7 +155,7 @@ def test_sp500_is_the_actual_index_with_regular_us_sessions():
             parse_quote(wrong, "^GSPC", NOW.to_pydatetime())
 
 
-@pytest.mark.parametrize("code", [*STOCK_MARKETS, "SP500", "OIL", "TNX", "TYX"])
+@pytest.mark.parametrize("code", [*STOCK_MARKETS, "SP500", "OIL", "TNX", "TYX", "GOLD"])
 def test_stock_cards_open_shared_chart_and_forecast_with_correct_units(code, offline_dashboard, monkeypatch):
     from scripts.offline_ui_fixture import analysis_app
     from btc_analyzer.data.service import DataService

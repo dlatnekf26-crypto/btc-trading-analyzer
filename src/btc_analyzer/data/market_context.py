@@ -137,7 +137,7 @@ def parse_quote(payload: dict, symbol: str, now: datetime) -> MacroQuote:
     meta = result["meta"]
     if symbol not in SYMBOLS.values() or meta["symbol"] != symbol:
         raise ValueError("Unexpected instrument")
-    if symbol in ("NQ=F", "CL=F") and (
+    if symbol in ("NQ=F", "CL=F", "GC=F") and (
         meta.get("instrumentType", "FUTURE") != "FUTURE" or meta.get("currency", "USD") != "USD"
     ):
         raise ValueError("Expected USD futures")

@@ -262,7 +262,7 @@ def render_board(on_open):
         '<div class="board-nav"><b>전체 시세</b><span>종목을 누르면 상세 차트가 열려요</span></div>',
         unsafe_allow_html=True,
     )
-    section_heading("유가 · 국채 금리", len(MACRO_MARKETS), "국채는 채권 가격이 아닌 금리(%)")
+    section_heading("금 · 유가 · 국채 금리", len(MACRO_MARKETS), "국채는 채권 가격이 아닌 금리(%)")
     with st.container(key="board_sessions_macro"):
         render_session_cards(on_open, tuple(MACRO_MARKETS))
     for title, codes, subtitle in (
