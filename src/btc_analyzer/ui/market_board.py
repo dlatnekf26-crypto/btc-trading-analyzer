@@ -11,11 +11,12 @@ from btc_analyzer.assets import (
     SESSION_MARKETS,
     STOCK_MARKETS,
     INDEX_MARKETS,
+    MACRO_MARKETS,
     EXCHANGE_HISTORY,
 )
 from btc_analyzer.data.market_context import MacroQuote, UTC
 from btc_analyzer.ui.browser_assets import browser_asset
-from btc_analyzer.ui.market_context import current_context, render_macro_quotes
+from btc_analyzer.ui.market_context import current_context
 from btc_analyzer.ui.quote_snapshot import render_quote_snapshot, quote_display
 
 BOARD_CSS = "<style>" + browser_asset("board.css") + "</style>"
@@ -261,18 +262,19 @@ def render_board(on_open):
         '<div class="board-nav"><b>전체 시세</b><span>종목을 누르면 상세 차트가 열려요</span></div>',
         unsafe_allow_html=True,
     )
-    with st.container(key="board_macro"):
-        render_macro_quotes(("oil", "tnx", "tyx"))
+    section_heading("유가 · 국채 금리", len(MACRO_MARKETS), "국채는 채권 가격이 아닌 금리(%)")
+    with st.container(key="board_sessions_macro"):
+        render_session_cards(on_open, tuple(MACRO_MARKETS))
     for title, codes, subtitle in (
         (
             "국내 주식",
             tuple(code for code in STOCK_MARKETS if EXCHANGE_HISTORY[code].calendar == "KRX"),
-            "KRX 보통주 · 원화",
+            "KRX · 원화 · NXT 20시 거래 미제공",
         ),
         (
             "미국 주식",
             tuple(code for code in STOCK_MARKETS if EXCHANGE_HISTORY[code].calendar == "NYSE"),
-            "NASDAQ · USD · 장전·장후 자료 포함",
+            "NASDAQ · USD · 장전·장후 포함 · 야간 미제공",
         ),
     ):
         section_heading(title, len(codes), subtitle)

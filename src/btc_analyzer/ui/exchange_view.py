@@ -55,9 +55,9 @@ def render_exchange_market(market):
     tabs = st.tabs(["시장 개요", "미래 예측"], key="dashboard_tab", on_change="rerun")
     st.caption(
         f"{asset.symbol} · {venue.source} · 공개 지연 자료 · 1분마다 확정 봉 확인"
-        + (" · 롤오버 가격 차이 포함" if market == "NQ" else f" · {venue.unit}")
+        + (" · 롤오버 가격 차이 포함" if venue.kind == "FUTURE" else f" · {venue.unit}")
         + (
-            " · 현재가는 장외 포함, 차트·분석은 정규장 기준"
+            " · 분봉: 장전·장후 포함 · 일·주·월봉: 정규장 · 심야 거래 미제공"
             if venue.kind == "EQUITY" and venue.calendar == "NYSE"
             else ""
         )
@@ -131,7 +131,7 @@ def render_exchange_market(market):
                         if market == "NQ"
                         else "한국 거래일·거래시간 기준. 주·월봉은 확정 일봉을 합산해요."
                         if venue.calendar == "KRX"
-                        else "미국 정규장·단축장 기준. 주·월봉은 확정 일봉을 합산해요."
+                        else "분봉은 공급원 거래시간 기준. 주·월봉은 확정 일봉을 합산해요."
                     )
                     + " 휴장일은 가짜 봉으로 채우지 않아요."
                 )

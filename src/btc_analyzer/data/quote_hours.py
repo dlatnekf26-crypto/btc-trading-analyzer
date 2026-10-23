@@ -25,7 +25,10 @@ def _windows(calendar, day, extended):
             (row.market_open.to_pydatetime(), row.market_close.to_pydatetime(), "regular")
             for row in table.itertuples()
         )
-    table = schedule(calendar, str(day - timedelta(days=1)), str(end))
+    table = schedule("NYSE" if calendar == "US_YIELD" else calendar, str(day - timedelta(days=1)), str(end))
+    if calendar == "US_YIELD":
+        table["market_open"] -= timedelta(minutes=70)
+        table["market_close"] -= timedelta(hours=1)
     windows = []
     for row in table.itertuples():
         opened, closed = row.market_open.to_pydatetime(), row.market_close.to_pydatetime()
@@ -42,8 +45,8 @@ def _windows(calendar, day, extended):
             else:
                 windows.append((opened, closed, "regular"))
         else:
-            pause, resume = row.break_start, row.break_end
-            if pause < resume:
+            pause, resume = getattr(row, "break_start", None), getattr(row, "break_end", None)
+            if pause is not None and pause < resume:
                 windows.extend(
                     ((opened, pause.to_pydatetime(), "regular"), (resume.to_pydatetime(), closed, "regular"))
                 )

@@ -47,6 +47,16 @@ def verify(browser, width, url, events):
         == "rgb(239, 63, 80)"
     )
     assert page.evaluate("document.documentElement.scrollWidth<=innerWidth")
+    boxes = page.locator(".board-sentiment,.board-fx").evaluate_all(
+        "els=>els.map(e=>{const r=e.getBoundingClientRect();return {x:r.x,y:r.y,right:r.right,bottom:r.bottom,height:r.height,scroll:e.scrollHeight,client:e.clientHeight}})"
+    )
+    assert len(boxes) == 3
+    for i, a in enumerate(boxes):
+        assert a["scroll"] <= a["client"] + 1, boxes
+        for b in boxes[i + 1 :]:
+            assert (
+                a["right"] <= b["x"] or b["right"] <= a["x"] or a["bottom"] <= b["y"] or b["bottom"] <= a["y"]
+            ), boxes
     page.screenshot(path=f"/tmp/btc-board-{width}.png", full_page=True)
     for code, name, symbol in (
         ("BTC", "비트코인", "BTCUSDT"),
@@ -55,6 +65,15 @@ def verify(browser, width, url, events):
         ("XRP", "리플", "XRPUSDT"),
         ("NQ", "나스닥100 선물", "NQ=F"),
         ("KOSPI", "코스피", "^KS11"),
+        ("MSTR", "스트래티지", "MSTR"),
+        ("GOOGL", "알파벳", "GOOGL"),
+        ("TSLA", "테슬라", "TSLA"),
+        ("META", "메타", "META"),
+        ("HYUNDAI", "현대차", "005380.KS"),
+        ("LGES", "LG에너지솔루션", "373220.KS"),
+        ("OIL", "WTI 원유 선물", "CL=F"),
+        ("TNX", "미국채 10년 금리", "^TNX"),
+        ("TYX", "미국채 30년 금리", "^TYX"),
     ):
         button = page.get_by_role("button", name=name + " 차트 열기", exact=True)
         button.scroll_into_view_if_needed()
@@ -118,7 +137,8 @@ def verify(browser, width, url, events):
     return {
         "width": width,
         "landing_history_jobs": 0,
-        "six_card_details": True,
+        "fifteen_card_details": True,
+        "overview_no_overlap": True,
         "touch_and_scroll": True,
         "shared_bridge": True,
         "errors": errors,

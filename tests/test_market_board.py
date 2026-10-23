@@ -28,23 +28,9 @@ def test_landing_never_collects_candles_or_forecasts(monkeypatch):
     assert not app.exception and not app.error
     assert len(app.get("iframe")) == 1
     assert not app.tabs and not app.get("plotly_chart")
-    assert {button.key for button in app.button} == {
-        "open_BTC",
-        "open_ETH",
-        "open_SOL",
-        "open_XRP",
-        "open_NQ",
-        "open_KOSPI",
-        "open_SAMSUNG",
-        "open_SKHYNIX",
-        "open_AAPL",
-        "open_NVDA",
-        "open_MU",
-        "open_SNDK",
-        "open_SAMSUNG_EM",
-        "open_LS_ELECTRIC",
-        "open_SP500",
-    }
+    from btc_analyzer.assets import MARKETS
+
+    assert {button.key for button in app.button} == {"open_" + code for code in MARKETS}
     app.run()
     assert not app.exception and not app.get("plotly_chart")
 

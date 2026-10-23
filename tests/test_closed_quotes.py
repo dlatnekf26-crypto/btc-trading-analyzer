@@ -99,13 +99,14 @@ def test_daily_fallback_uses_previous_session_not_monthly_chart_reference():
 def test_quiet_refreshes_reduce_calls_and_resume_at_next_open():
     clock, calls = [at("2026-10-18T08:00")], []
     market_hours("AAPL", clock[0])  # Steady-state quiet refresh, after async calendar warm-up.
+    market_hours("CL=F", clock[0])
     service = MarketContextService(lambda key, now: calls.append(key), lambda: clock[0], keys=("aapl", "oil"))
     try:
         await_idle(service)
         for seconds in (30, 60, 120, 299):
             clock[0] = at("2026-10-18T08:00") + timedelta(seconds=seconds)
             await_idle(service)
-        assert calls.count("aapl") == 1 and calls.count("oil") == 5
+        assert calls.count("aapl") == 1 and calls.count("oil") == 1
         clock[0] = at("2026-10-18T08:05")
         await_idle(service)
         assert calls.count("aapl") == 2

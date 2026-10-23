@@ -21,21 +21,23 @@ def calendar_bars(start_year, end_year, timeframe, market="NQ"):
         from btc_analyzer.data.kospi import calendar_bars as kospi_bars
 
         return kospi_bars(start_year, end_year, timeframe)
-    if venue.calendar == "NYSE":
+    if venue.calendar in ("NYSE", "US_YIELD"):
         from btc_analyzer.data.equity_sessions import calendar_bars as equity_bars
 
-        return equity_bars(start_year, end_year, timeframe)
+        return equity_bars(
+            start_year, end_year, timeframe, extended=venue.kind == "EQUITY", yields=market in ("TNX", "TYX")
+        )
     from btc_analyzer.data.trading_calendar import schedule as calendar_schedule
 
     start = f"{start_year}-01-01" if isinstance(start_year, int) else str(start_year)
     end = f"{end_year}-12-31" if isinstance(end_year, int) else str(end_year)
-    schedule = calendar_schedule("CME_Equity", start, end)
+    schedule = calendar_schedule(venue.calendar, start, end)
     if timeframe in ("5m", "15m", "1h", "4h"):
         starts, ends = [], []
         for row in schedule.itertuples():
             span = pd.Timedelta(minutes={"5m": 5, "15m": 15, "1h": 60, "4h": 60}[timeframe])
             hours = pd.date_range(row.market_open, row.market_close, freq=span, inclusive="left")
-            if pd.notna(row.break_start) and row.break_start < row.break_end:
+            if pd.notna(getattr(row, "break_start", pd.NaT)) and row.break_start < row.break_end:
                 hours = hours[(hours < row.break_start) | (hours >= row.break_end)]
             starts.extend(hours)
             ends.extend(min(t + span, row.market_close) for t in hours)
@@ -165,6 +167,8 @@ def parse_history(payload, timeframe, now, market="NQ"):
 
 def fetch_history(timeframe, now, market="NQ"):
     params = {"interval": timeframe, "range": "1mo" if timeframe in ("5m", "15m") else "6mo"}
+    if EXCHANGE_HISTORY[market].kind == "EQUITY":
+        params["includePrePost"] = "true"
     if timeframe == "1d":
         params = {
             "interval": "1d",

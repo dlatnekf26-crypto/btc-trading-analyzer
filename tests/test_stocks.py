@@ -101,9 +101,14 @@ def test_stock_identity_quote_and_closed_daily_bars(code, pair, currency):
 def test_us_equity_holidays_early_close_and_forecast_use_cash_sessions(tf, market):
     starts, ends = calendar_bars("2026-11-26", "2026-11-27", tf, market)
     assert len(starts) > 0
-    assert starts[0].tz_convert("America/New_York").strftime("%Y-%m-%d %H:%M") == "2026-11-27 09:30"
+    extended = market == "AAPL" and tf in ("5m", "15m", "1h", "4h")
+    assert starts[0].tz_convert("America/New_York").strftime("%Y-%m-%d %H:%M") == (
+        "2026-11-27 04:00" if extended else "2026-11-27 09:30"
+    )
     # Thanksgiving is absent; Friday's last bar closes at 13:00, including daily bars.
-    assert ends[-1].tz_convert("America/New_York").strftime("%Y-%m-%d %H:%M") == "2026-11-27 13:00"
+    assert ends[-1].tz_convert("America/New_York").strftime("%Y-%m-%d %H:%M") == (
+        "2026-11-27 17:00" if extended else "2026-11-27 13:00"
+    )
     assert (ends > starts).all()
 
 
@@ -150,7 +155,7 @@ def test_sp500_is_the_actual_index_with_regular_us_sessions():
             parse_quote(wrong, "^GSPC", NOW.to_pydatetime())
 
 
-@pytest.mark.parametrize("code", [*STOCK_MARKETS, "SP500"])
+@pytest.mark.parametrize("code", [*STOCK_MARKETS, "SP500", "OIL", "TNX", "TYX"])
 def test_stock_cards_open_shared_chart_and_forecast_with_correct_units(code, offline_dashboard, monkeypatch):
     from scripts.offline_ui_fixture import analysis_app
     from btc_analyzer.data.service import DataService
@@ -225,3 +230,48 @@ def test_short_sandisk_history_withholds_long_forecasts_instead_of_inventing_pri
     assert not app.get("plotly_chart")
     assert any("서로 겹치지 않는 유사 사례가 3개 이상" in item.value for item in app.info)
     assert not any('id="btc-forecast-reader"' in item.value for item in app.markdown)
+
+
+@pytest.mark.parametrize("code", ["MSTR", "GOOGL", "TSLA", "META", "HYUNDAI", "LGES", "OIL", "TNX", "TYX"])
+def test_new_markets_keep_identity_and_all_chart_intervals(code):
+    for tf in ("5m", "15m", "1h", "1d"):
+        frame = parse_history(stock_payload(code, tf), tf, NOW, code)
+        assert not frame.empty and frame.attrs["market"] == code
+        assert (bar_closes(frame, frame.index, tf) <= NOW).all()
+
+
+def test_us_extended_hourly_windows_preserve_regular_alignment_and_dst():
+    for day, utc_hour in (("2026-03-06", 9), ("2026-03-09", 8)):
+        starts, ends = calendar_bars(day, day, "1h", "AAPL")
+        assert starts[0].hour == utc_hour
+        local = starts.tz_convert("America/New_York")
+        assert local.strftime("%H:%M").tolist() == [
+            "04:00",
+            "05:00",
+            "06:00",
+            "07:00",
+            "08:00",
+            "09:00",
+            "09:30",
+            "10:30",
+            "11:30",
+            "12:30",
+            "13:30",
+            "14:30",
+            "15:30",
+            "16:00",
+            "17:00",
+            "18:00",
+            "19:00",
+        ]
+        assert ends[-1].tz_convert("America/New_York").hour == 20
+        assert (ends[:-1] <= starts[1:]).all()
+
+
+def test_yield_and_oil_use_their_own_hours_and_units():
+    starts, ends = calendar_bars("2026-10-22", "2026-10-22", "1h", "TNX")
+    assert starts[0].strftime("%H:%M") == "12:20"
+    assert ends[-1].strftime("%H:%M") == "19:00"
+    assert EXCHANGE_HISTORY["TNX"].unit == "%"
+    starts, ends = calendar_bars("2026-10-22", "2026-10-22", "1h", "OIL")
+    assert len(starts) == 23 and starts[0].day == 21 and ends[-1].hour == 21

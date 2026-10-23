@@ -26,18 +26,8 @@ MAX_BYTES = 512_000
 NEWS_MAX_AGE = timedelta(hours=24)
 QUOTE_REFRESH_SECONDS = 10
 NEWS_REFRESH_SECONDS = 30
-SYMBOLS = {a.card_id.removeprefix("macro-"): a.symbol for a in STOCK_MARKETS.values()}
-SYMBOLS.update(
-    {
-        "sp500": "^GSPC",
-        "kospi": "^KS11",
-        "nq": "NQ=F",
-        "tnx": "^TNX",
-        "fx": "KRW=X",
-        "oil": "CL=F",
-        "tyx": "^TYX",
-    }
-)
+SYMBOLS = {a.card_id.removeprefix("macro-"): a.symbol for a in SESSION_MARKETS.values()}
+SYMBOLS["fx"] = "KRW=X"
 STOCK_SYMBOLS = {a.symbol: EXCHANGE_HISTORY[code] for code, a in STOCK_MARKETS.items()}
 MARKET_CODES = {asset.symbol: code for code, asset in SESSION_MARKETS.items()}
 TOPICS = {

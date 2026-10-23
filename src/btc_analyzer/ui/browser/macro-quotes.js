@@ -43,7 +43,7 @@
     return value;
   }
   const macros=Object.fromEntries([
-    ...SESSION_ASSETS.map(([code,symbol,id,unit,currency,decimals])=>[symbol,id,unit,false,currency,decimals,unit!=='pt']),
+    ...SESSION_ASSETS.map(([code,symbol,id,unit,currency,decimals])=>[symbol,id,unit,false,currency,decimals,['USD','KRW'].includes(unit)]),
     ['CL=F','oil','USD/배럴 · WTI 선물',false,'USD',2,false],
     ['^TNX','tnx','% · 10년물 금리',true,'USD',2,false],['^TYX','tyx','% · 30년물 금리',true,'USD',2,false]
   ].map(([symbol,id,label,yieldIndex,currency,decimals,equity])=>[symbol,{
