@@ -131,6 +131,8 @@ def render_exchange_market(market):
                         if market == "NQ"
                         else "한국 거래일·거래시간 기준. 주·월봉은 확정 일봉을 합산해요."
                         if venue.calendar == "KRX"
+                        else "일본 거래일·점심 휴장 기준. 주·월봉은 확정 일봉을 합산해요."
+                        if venue.calendar == "JPX"
                         else "분봉은 공급원 거래시간 기준. 주·월봉은 확정 일봉을 합산해요."
                     )
                     + " 휴장일은 가짜 봉으로 채우지 않아요."

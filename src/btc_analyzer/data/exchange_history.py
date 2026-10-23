@@ -17,6 +17,10 @@ YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/"
 @lru_cache(maxsize=24)
 def calendar_bars(start_year, end_year, timeframe, market="NQ"):
     venue = EXCHANGE_HISTORY[market]
+    if venue.calendar == "JPX":
+        from btc_analyzer.data.japan import calendar_bars as japan_bars
+
+        return japan_bars(start_year, end_year, timeframe)
     if venue.calendar == "KRX":
         from btc_analyzer.data.kospi import calendar_bars as kospi_bars
 

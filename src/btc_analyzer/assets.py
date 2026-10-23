@@ -55,6 +55,7 @@ STOCK_MARKETS = {
     )
 }
 INDEX_MARKETS = {
+    "NIKKEI": Asset("NIKKEI", "니케이225", "macro-nikkei", 2, date(1984, 1, 4), "", "^N225"),
     "NQ": Asset("NQ", "나스닥100 선물", "macro-nq", 2, date(1999, 6, 21), "", "NQ=F"),
     "KOSPI": Asset("KOSPI", "코스피", "macro-kospi", 2, date(1999, 1, 1), "", "^KS11"),
     "SP500": Asset("SP500", "S&P 500", "macro-sp500", 2, date(1957, 3, 4), "", "^GSPC"),
@@ -81,6 +82,7 @@ class ExchangeHistory:
 
 
 EXCHANGE_HISTORY = {
+    "NIKKEI": ExchangeHistory("JPY", "Asia/Tokyo", "JPX", "니케이225 현물지수", "JPX", "INDEX"),
     "GOLD": ExchangeHistory(
         "USD",
         "America/New_York",

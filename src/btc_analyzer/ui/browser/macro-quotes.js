@@ -115,7 +115,7 @@
         (macros[value.symbol]?.yieldIndex && value.price>30) ||
         (value.symbol==='KRW=X' && (value.currency ? value.currency!=='KRW' : value.exchange!=='CCY')) ||
         ((macros[value.symbol]?.currency==='KRW'||macros[value.symbol]?.equity) && value.currency!==macros[value.symbol]?.currency) ||
-        (value.symbol!=='KRW=X' && macros[value.symbol]?.currency!=='KRW' && value.currency && value.currency!=='USD')) return;
+        (value.symbol!=='KRW=X' && macros[value.symbol]?.currency!=='KRW' && value.currency && value.currency!==macros[value.symbol]?.currency)) return;
     if (value.symbol==='KRW=X') {
       if (value.time<fx.asOf || Date.now()-value.time>180000) return;
       saveRate(fx,{rate:value.price,asOf:value.time,source:'Yahoo 시장',market:true,daily:false});

@@ -147,6 +147,12 @@ def parse_quote(payload: dict, symbol: str, now: datetime) -> MacroQuote:
         raise ValueError("Expected Treasury yield index")
     if symbol == "KRW=X" and (meta.get("instrumentType") != "CURRENCY" or meta.get("currency") != "KRW"):
         raise ValueError("Expected USD/KRW market quote")
+    if symbol == "^N225" and (
+        meta.get("instrumentType") != "INDEX"
+        or meta.get("currency") != "JPY"
+        or meta.get("exchangeTimezoneName") != "Asia/Tokyo"
+    ):
+        raise ValueError("Expected Nikkei 225 index · JPY · Asia/Tokyo")
     if symbol == "^KS11" and (
         meta.get("instrumentType") != "INDEX"
         or meta.get("currency") != "KRW"
