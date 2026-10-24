@@ -310,7 +310,9 @@ def test_blocked_provider_does_not_block_fast_quotes_or_spawn_duplicate_requests
         assert snapshot.feed("tnx").value.price == 4.25
         from btc_analyzer.data.market_context import SYMBOLS
 
-        assert sorted(calls) == sorted([*SYMBOLS, "fear", "news_en", "news_ko"])
+        from btc_analyzer.data.board_references import REFERENCE_KEYS
+
+        assert sorted(calls) == sorted([*SYMBOLS, "fear", "news_en", "news_ko", *REFERENCE_KEYS])
     finally:
         release.set()
         service.close()

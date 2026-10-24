@@ -230,6 +230,60 @@ def render_board_sentiment():
         )
 
 
+@st.fragment(run_every=30)
+def render_stock_references():
+    from btc_analyzer.data.board_references import StockMood, WonRates
+
+    context = current_context()
+    with st.container(key="board_references"):
+        for column, key, name in zip(
+            st.columns(2, gap="small"), ("mood_us", "mood_kr"), ("미국 주식", "국내 주식")
+        ):
+            feed = context.feed(key)
+            value = feed.value
+            score = value.score if isinstance(value, StockMood) else None
+            level = (
+                "극단적 공포"
+                if score is not None and score < 25
+                else "공포"
+                if score is not None and score < 45
+                else "중립"
+                if score is not None and score <= 55
+                else "탐욕"
+                if score is not None and score < 75
+                else "극단적 탐욕"
+            )
+            stamp = (
+                value.as_of.astimezone(ZoneInfo("Asia/Seoul")).strftime("%m.%d %H:%M KST")
+                if isinstance(value, StockMood)
+                else "자료 연결 대기"
+            )
+            with column:
+                st.markdown(
+                    f'<div class="board-sentiment"><span>{name} 공포·탐욕 · 자체 추정</span><b>{score if score is not None else "—"}</b><small>{level if score is not None else "산출 대기"} · {stamp}{" · 갱신 지연" if feed.error else ""}</small></div>',
+                    unsafe_allow_html=True,
+                )
+        feed = context.feed("fx_extra")
+        value = feed.value
+        for column, name, amount in zip(
+            st.columns(2, gap="small"),
+            ("엔화 · 100 JPY", "유로화 · 1 EUR"),
+            (getattr(value, "yen100", None), getattr(value, "euro", None)),
+        ):
+            price = f"₩{amount:,.2f}" if isinstance(value, WonRates) else "—"
+            stamp = (
+                f"{value.as_of:%m.%d} 기준 · ECB 일별" if isinstance(value, WonRates) else "자료 연결 대기"
+            )
+            with column:
+                st.markdown(
+                    f'<div class="board-fx"><span>{name}</span><b>{price}</b><small>{stamp}{" · 갱신 지연" if feed.error else ""}</small></div>',
+                    unsafe_allow_html=True,
+                )
+    st.caption(
+        "주식 공탐: S&P 500·코스피의 가격 위치·모멘텀·추세·변동성 기반 자체 추정(0 공포~100 탐욕). 공식 공탐지수가 아니며 표시 시각의 확정 일봉 기준입니다."
+    )
+
+
 def market_columns(codes):
     """Wrap added markets into another row instead of truncating the catalog."""
     values = list(codes)
@@ -258,6 +312,7 @@ def render_board(on_open):
                 '<div class="board-fx" data-reference="premium"><span>김치프리미엄 <small>BTC</small></span><b data-reference-field="price">—</b><small data-reference-field="status">환산 시세 연결 중</small></div>',
                 unsafe_allow_html=True,
             )
+    render_stock_references()
     st.markdown(
         '<div class="board-nav"><b>전체 시세</b><span>종목을 누르면 상세 차트가 열려요</span></div>',
         unsafe_allow_html=True,

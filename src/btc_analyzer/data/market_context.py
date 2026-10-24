@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 import requests
 from btc_analyzer.assets import asset_news, STOCK_MARKETS, SESSION_MARKETS, EXCHANGE_HISTORY
 
+from btc_analyzer.data.board_references import REFERENCE_KEYS, StockMood, WonRates, fetch_reference
 from btc_analyzer.data.economic_calendar import EconomicEvent
 from btc_analyzer.data.sentiment import FEAR_API, FEAR_REFRESH_SECONDS, FearGreed, parse_fear_greed
 from btc_analyzer.data.extended_quotes import ExtendedQuote, extended_quote
@@ -71,7 +72,15 @@ class NewsItem:
 @dataclass(frozen=True)
 class FeedState:
     key: str
-    value: MacroQuote | FearGreed | tuple[NewsItem, ...] | tuple[EconomicEvent, ...] | None = None
+    value: (
+        MacroQuote
+        | FearGreed
+        | StockMood
+        | WonRates
+        | tuple[NewsItem, ...]
+        | tuple[EconomicEvent, ...]
+        | None
+    ) = None
     updated_at: datetime | None = None
     error: str = ""
     loading: bool = False
@@ -452,6 +461,8 @@ def _download(url: str, *, max_bytes=MAX_BYTES) -> bytes:
 
 
 def fetch_feed(key: str, now: datetime):
+    if key in REFERENCE_KEYS:
+        return fetch_reference(key, now)
     if key == "fear":
         return parse_fear_greed(json.loads(_download(FEAR_API)), now)
     if key in SYMBOLS:
@@ -503,7 +514,9 @@ class MarketContextService:
         self._executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="market-context")
         self._states = {
             key: FeedState(key)
-            for key in (keys if keys is not None else (*SYMBOLS, "news_ko", "news_en", "fear"))
+            for key in (
+                keys if keys is not None else (*SYMBOLS, "news_ko", "news_en", "fear", *REFERENCE_KEYS)
+            )
         }
         self._refresh_intervals = refresh_intervals or {}
         self._next = dict.fromkeys(self._states, datetime.min.replace(tzinfo=UTC))
@@ -529,6 +542,8 @@ class MarketContextService:
                 self._states[key] = FeedState(key, value, now)
                 self._failures[key] = 0
                 delay = NEWS_REFRESH_SECONDS if key.startswith("news") else QUOTE_REFRESH_SECONDS
+                if key in REFERENCE_KEYS:
+                    delay = 900 if key == "fx_extra" else 300
                 if key == "fear":
                     delay = FEAR_REFRESH_SECONDS
                     if isinstance(value, FearGreed) and value.next_update is not None:

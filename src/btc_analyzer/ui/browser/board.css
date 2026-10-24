@@ -121,3 +121,6 @@
 .board-fx{display:grid;grid-template-columns:minmax(0,1fr);align-content:start;gap:6px}
 .board-fx>small{width:auto;overflow-wrap:anywhere}
 .st-key-board_overview [data-testid="stMarkdownContainer"]{margin-bottom:0!important}
+
+.st-key-board_references [data-testid="stMarkdownContainer"]{margin-bottom:0!important}
+@media(max-width:640px){.st-key-board_references [data-testid="stHorizontalBlock"]{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.st-key-board_references [data-testid="stColumn"]{width:100%;min-width:0}}
