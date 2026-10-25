@@ -46,7 +46,7 @@ def short_fixture_rows(timeframe, boundary):
     import numpy as np
 
     span = pd.Timedelta(minutes=5 if timeframe == "5m" else 15)
-    index = pd.date_range(end=pd.Timestamp(boundary) - span, periods=800, freq=span)
+    index = pd.date_range(end=pd.Timestamp(boundary) - span, periods=1750, freq=span)
     x = np.arange(len(index))
     close = 90000 * np.exp(0.012 * np.sin(x / 17) + 0.005 * np.cos(x / 7))
     return [

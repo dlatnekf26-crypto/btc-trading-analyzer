@@ -94,12 +94,9 @@ def dashboard(asset_code: str) -> None:
             from btc_analyzer.ui.market_view import render_market_chart
 
             render_market_chart(
-                bundle=bundle,
-                enriched=enriched,
                 cfg=cfg,
                 display_timezone=display_timezone,
                 average_lines=average_lines,
-                quote_currency=quote_currency,
                 asset_code=asset_code,
                 cache_path=str(cache_path),
             )

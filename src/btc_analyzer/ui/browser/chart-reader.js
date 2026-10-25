@@ -125,10 +125,11 @@ const chartReader = (() => {
     let xs;
     if(candle)xs=times(candle.x,axis);
     else xs=[...new Set(plot.data.flatMap(t=>t.x?.length?times(t.x,axis).filter(Number.isFinite):[]))].sort((a,b)=>a-b);
+    const s=state(plot),d=plot.layout.meta?.btcLive?.displacement??2;
+    if(candle&&s.bounds?.xs===xs&&s.bounds.displacement===d)return s.bounds;
     const deltas=xs.slice(1).map((n,i)=>n-xs[i]).filter(n=>n>0).sort((a,b)=>a-b);
     const step=deltas.length?deltas[Math.floor(deltas.length/2)]:86400000;
-    const d=plot.layout.meta?.btcLive?.displacement??2;
-    return {xs,step,count:xs.length,min:xs[0]-step*2,max:xs.at(-1)+step*Math.max(2,d)};
+    return s.bounds={xs,step,displacement:d,count:xs.length,min:xs[0]-step*2,max:xs.at(-1)+step*Math.max(2,d)};
   }
   function autoRange(plot,range,manualY) {
     const axis=plot._fullLayout.xaxis,candle=plot.data.find(t=>t.type==='candlestick');

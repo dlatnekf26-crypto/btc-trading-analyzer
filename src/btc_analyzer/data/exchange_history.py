@@ -170,7 +170,7 @@ def parse_history(payload, timeframe, now, market="NQ"):
 
 
 def fetch_history(timeframe, now, market="NQ"):
-    params = {"interval": timeframe, "range": "1mo" if timeframe in ("5m", "15m") else "6mo"}
+    params = {"interval": timeframe, "range": "60d" if timeframe in ("5m", "15m") else "2y"}
     if EXCHANGE_HISTORY[market].kind == "EQUITY":
         params["includePrePost"] = "true"
     if timeframe == "1d":

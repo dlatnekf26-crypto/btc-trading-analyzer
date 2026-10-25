@@ -60,7 +60,8 @@ def test_short_charts_and_six_periods_share_existing_analysis(tmp_path, monkeypa
         assert not app.exception and not app.error
         spec = json.loads(app.get("plotly_chart")[0].proto.spec)
         assert spec["layout"]["meta"]["btcLive"]["timeframe"] == tf
-        assert len(spec["data"][0]["x"]) == 600
+        assert len(spec["data"][0]["x"]) == 1500
+        assert spec["layout"]["meta"]["btcLive"]["window"] == 120
         assert any("btc-chart-seed" in m.value for m in app.markdown)
     app.session_state["dashboard_tab"] = "미래 예측"
     app.run()

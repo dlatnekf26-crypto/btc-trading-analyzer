@@ -1,13 +1,13 @@
 """Chart controls reuse closed-candle features without a separate strategy run."""
 
-from btc_analyzer.assets import ASSETS
+from btc_analyzer.assets import ASSETS, EXCHANGE_HISTORY
 
 import streamlit as st
 import pandas as pd
 
 from btc_analyzer.ui.cache_keys import MARKET_HASH_FUNCS
 
-from btc_analyzer.config import CHART_TIMEFRAMES
+from btc_analyzer.config import CHART_TIMEFRAMES, CHART_CANDLES
 from btc_analyzer.candles import candle_close
 from btc_analyzer.strategy.composite import FRAME_LABELS
 from btc_analyzer.ui.charts import price_chart, READ_CHART_CONFIG, bind_asset
@@ -86,7 +86,7 @@ def market_chart_spec(
     fig.layout.meta["btcLive"]["overlays"] = overlays
     fig.layout.meta["btcLive"]["panels"] = PANELS
     fig.layout.meta["btcLive"]["volumeIndex"] = next(i for i, t in enumerate(fig.data) if t.name == "거래량")
-    window = min(60, len(features), bars)
+    window = min(120, len(features), bars)
     fig.layout.meta["btcLive"]["window"] = window
     fig.layout.meta["btcLive"]["displacement"] = displacement
     shown = features.tail(bars)
@@ -119,15 +119,37 @@ def market_chart_spec(
     return canvas_market(fig.to_dict())
 
 
+def render_price_chart(
+    features,
+    timeframe,
+    asset_code,
+    *,
+    timezone="Asia/Seoul",
+    averages=("ema_20", "ema_50", "ema_200"),
+    displacement=26,
+):
+    """One bounded chart/reader path for crypto, stocks, indices and commodities."""
+    unit = EXCHANGE_HISTORY[asset_code].unit if asset_code in EXCHANGE_HISTORY else "USDT"
+    shown = features.tail(CHART_CANDLES)
+    st.markdown(
+        reader_html(shown, timeframe, asset_code, tuple(averages), True).replace("USDT", unit),
+        unsafe_allow_html=True,
+    )
+    spec = market_chart_spec(
+        shown, timezone, tuple(averages), True, unit, True, True, len(shown), timeframe, displacement
+    )
+    st.plotly_chart(
+        bind_asset(spec, asset_code), width="stretch", key="chart_01", theme=None, config=READ_CHART_CONFIG
+    )
+    st.caption(f"불러온 확정 봉 {len(shown):,}개 · 최대 {CHART_CANDLES:,}개 · 제공 이력 범위 내 표시")
+
+
 @st.fragment
 def render_market_chart(
     *,
-    bundle,
-    enriched,
     cfg,
     display_timezone,
     average_lines,
-    quote_currency,
     asset_code="BTC",
     cache_path="data/web/market-cache.sqlite3",
 ):
@@ -144,40 +166,24 @@ def render_market_chart(
             )
             or "1d"
         )
-    if chart_tf in ("5m", "15m"):
-        from btc_analyzer.ui.chart_data import selected_short_history
-        from btc_analyzer.data.base_provider import DataError
+    from btc_analyzer.ui.chart_data import selected_chart_history
+    from btc_analyzer.data.base_provider import DataError
 
-        try:
-            features = selected_short_history(cache_path, ASSETS[asset_code].symbol, chart_tf, cfg.indicators)
-        except DataError as exc:
-            st.info(f"{FRAME_LABELS[chart_tf]} 연결 대기 · {exc}")
-            return
-    else:
-        features = enriched.get(chart_tf)
-    if features is None or features.empty:
-        st.info("선택한 시간대의 자료를 기다리고 있습니다.")
+    try:
+        features = selected_chart_history(cache_path, ASSETS[asset_code].symbol, chart_tf, cfg.indicators)
+    except DataError as exc:
+        st.info(f"{FRAME_LABELS[chart_tf]} 연결 대기 · {exc}")
         return
     from btc_analyzer.ui.live_analysis import render_chart_seed
 
     render_chart_seed(features, chart_tf, cfg.indicators, ASSETS[asset_code].stream_symbol)
-    st.markdown(
-        reader_html(features, chart_tf, asset_code, tuple(average_lines), True), unsafe_allow_html=True
-    )
-    spec = market_chart_spec(
-        features.tail(600),
-        display_timezone,
-        tuple(average_lines),
-        True,
-        quote_currency,
-        True,
-        True,
-        min(600, len(features)),
+    render_price_chart(
+        features,
         chart_tf,
-        cfg.indicators.ichimoku_displacement,
-    )
-    st.plotly_chart(
-        bind_asset(spec, asset_code), width="stretch", key="chart_01", theme=None, config=READ_CHART_CONFIG
+        asset_code,
+        timezone=display_timezone,
+        averages=average_lines,
+        displacement=cfg.indicators.ichimoku_displacement,
     )
     st.caption(
         "드래그로 이동 · 두 손가락으로 봉 수 조절 · 길게 눌러 가격 · 오토는 보이는 봉의 가격축에 맞춰요."

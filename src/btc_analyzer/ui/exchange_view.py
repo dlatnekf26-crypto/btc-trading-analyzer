@@ -10,9 +10,7 @@ from btc_analyzer.data.exchange_history import fetch_history, aggregate
 from btc_analyzer.indicators.core import indicators
 from btc_analyzer.market_clock import bar_closes
 from btc_analyzer.strategy.composite import FRAME_LABELS
-from btc_analyzer.ui.chart_reader import reader_html
-from btc_analyzer.ui.charts import bind_asset, READ_CHART_CONFIG
-from btc_analyzer.ui.market_view import market_chart_spec
+from btc_analyzer.ui.market_view import render_price_chart
 from btc_analyzer.ui.history_view import render_history_view
 from btc_analyzer.ui.cache_keys import MARKET_HASH_FUNCS
 
@@ -83,30 +81,8 @@ def render_exchange_market(market):
                     st.caption(
                         "공개 분봉은 장 막판 자료가 빠질 수 있어요. 누락 시 지표를 다시 계산하며, 충분한 이력이 없으면 표시를 보류해요. 중장기 분석은 일봉을 권해요."
                     )
-                st.markdown(
-                    reader_html(features, tf, market, ("ema_20", "ema_50", "ema_200"), True).replace(
-                        "USDT", venue.unit
-                    ),
-                    unsafe_allow_html=True,
-                )
-                spec = market_chart_spec(
-                    features.tail(600),
-                    "Asia/Seoul",
-                    ("ema_20", "ema_50", "ema_200"),
-                    True,
-                    venue.unit,
-                    True,
-                    True,
-                    min(600, len(features)),
-                    tf,
-                    AppConfig().indicators.ichimoku_displacement,
-                )
-                st.plotly_chart(
-                    bind_asset(spec, market),
-                    width="stretch",
-                    theme=None,
-                    config=READ_CHART_CONFIG,
-                    key="chart_01",
+                render_price_chart(
+                    features, tf, market, displacement=AppConfig().indicators.ichimoku_displacement
                 )
                 close_at = bar_closes(raw, raw.index[-1], tf)
                 row = features.iloc[-1]
