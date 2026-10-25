@@ -30,6 +30,34 @@ const PlotData = (() => {
       dates.set(xs,{axis,length:xs.length,first:xs[0],last:xs.at(-1),values:Array.from(xs,x=>axis.d2c(x))});
     return dates.get(xs).values;
   }
+  function chartTime(plot,time) {
+    const map=plot.layout?.meta?.btcLive?.timeline;
+    if(!map)return time;
+    const xs=map.source;let i=nearest(xs,time);
+    if(xs[i]>time&&i>0)i--;
+    const next=Math.min(i+1,xs.length-1),span=xs[next]-xs[i]||map.step;
+    return map.origin+(i+(time-xs[i])/span)*map.step;
+  }
+  function sourceTime(plot,time) {
+    const map=plot.layout?.meta?.btcLive?.timeline;
+    if(!map)return time;
+    if(map.source.length===1)return map.source[0]+(time-map.origin);
+    const at=(time-map.origin)/map.step,i=Math.max(0,Math.min(map.source.length-2,Math.floor(at)));
+    return map.source[i]+(at-i)*(map.source[i+1]-map.source[i]);
+  }
+  function ticks(plot,range) {
+    const map=plot.layout?.meta?.btcLive?.timeline;
+    if(!map)return null;
+    const every=Math.max(1,Math.ceil((range[1]-range[0])/map.step/5));
+    const first=Math.ceil((range[0]-map.origin)/map.step/every)*every;
+    const tickvals=[],ticktext=[];
+    for(let i=first;i<=Math.ceil((range[1]-map.origin)/map.step);i+=every){
+      const x=map.origin+i*map.step;
+      const original=sourceTime(plot,x),tf=plot.layout.meta.btcLive.timeframe;
+      tickvals.push(x);ticktext.push(['5m','15m','1h','4h'].includes(tf)?ChartViewport.label(original).replace(' ','<br>'):new Date(original).toISOString().slice(2,10).replaceAll('-','.'));
+    }
+    return {tickvals,ticktext};
+  }
   function nearest(xs,x){let lo=0,hi=xs.length-1;while(lo<hi){const mid=(lo+hi)>>1;if(xs[mid]<x)lo=mid+1;else hi=mid;}return lo>0&&Math.abs(xs[lo-1]-x)<Math.abs(xs[lo]-x)?lo-1:lo;}
-  return {values,times,nearest,visible,dispose(){observer?.disconnect();watched.clear();}};
+  return {values,times,nearest,visible,chartTime,sourceTime,ticks,dispose(){observer?.disconnect();watched.clear();}};
 })();

@@ -27,7 +27,7 @@ function makeLiveAnalysis(root) {
         const parsed=JSON.parse(source.dataset.seeds);cfg=parsed.cfg;
         for(const [tf,seed] of Object.entries(parsed.frames)){
           const book=books[tf];
-          if(seed&&(!book||seed.at>book.seed.at)){
+          if(seed&&(!book||seed.at>book.seed.at||(seed.at===book.seed.at&&seed.count>book.seed.count))){
             const candle=book?.candle;
             books[tf]={seed,candle:candle?.at===seed.end?candle:null,features:null};
             if(books[tf].candle)books[tf].features=LiveCandles.advance(seed,candle,cfg)?.features??null;
@@ -100,7 +100,7 @@ function makeLiveAnalysis(root) {
       });
       const extra=b.seed.rows.filter(r=>r[0]>=meta.closedEnd).concat(k.closed ? [] : [k.row]);
       if(!extra.length)return;
-      const extraX=extra.map(r=>displayDate(r[0],meta.timezone,true));
+      const extraX=extra.map(r=>{const at=displayDate(r[0],meta.timezone,true);return meta.timeline?PlotData.chartTime(plot,plot._fullLayout.xaxis.d2c(at)):at;});
       const dateAxes={};
       for(const name of Object.keys(plot._fullLayout))if(/^xaxis\d*$/.test(name)){
         dateAxes[`${name}.type`]='date';dateAxes[`${name}.autorange`]=false;

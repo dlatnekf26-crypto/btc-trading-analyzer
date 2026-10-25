@@ -54,8 +54,8 @@ const chartReader = (() => {
         const trace=plot.data[index],tx=times(trace.x,axis),j=nearest(tx,ts[i]);
         number(node,key,tx[j]===ts[i]?values(trace.y)[j]:NaN);
       }
-      write(node.querySelector('[data-reader-time]'),`${view.label(ts[i])} KST · ${mode==='latest'?'최근 봉':'선택한 봉'}`);
-      node.dataset.index=String(i);node.dataset.at=String(ts[i]);
+      write(node.querySelector('[data-reader-time]'),`${view.label(PlotData.sourceTime(plot,ts[i]))} KST · ${mode==='latest'?'최근 봉':'선택한 봉'}`);
+      node.dataset.index=String(i);node.dataset.at=String(PlotData.sourceTime(plot,ts[i]));
     }else if(meta.kind==='forecast'){
       for(const [index,key] of Object.entries(meta.indicatorOverlays??{})){
         const trace=plot.data[index],tx=times(trace.x,axis),i=nearest(tx,x);
@@ -116,7 +116,7 @@ const chartReader = (() => {
     point.plot.dataset.cursorPercent=pct===null?'':String(pct);
     const t=layer.querySelector('.btc-crosshair-time');
     Object.assign(t.style,{top:bottom-19+'px',left:Math.max(left,Math.min(left+bounds.width-128,left+px-64))+'px'});
-    write(t,view.label(x));
+    write(t,view.label(PlotData.sourceTime(point.plot,x)));
     point.plot.dataset.cursorPrice=String(price);point.plot.dataset.cursorX=String(x);
     inspect(point.plot,x,'inspect');
   }
@@ -173,13 +173,20 @@ const chartReader = (() => {
     return updates;
   }
   function apply(plot,range,yRange) {
+    if(!plot.isConnected||!plot._fullLayout?._plots)return;
     range=view.limit(range,bounds(plot));
     const s=state(plot);s.next={range,yRange};
     if(s.busy)return s.promise;
     const next=s.next;s.next=null;s.busy=true;
+    s.range=next.range.slice();if(next.yRange)s.manualRange=next.yRange.slice();
     const xaxis=plot._fullLayout.xaxis;
     const updates={'xaxis.range':next.range.map(n=>xaxis.c2d(n)),'yaxis.autorange':false};
     for(const axis of Object.keys(plot._fullLayout))if(/^xaxis\d+$/.test(axis))updates[axis+'.range']=updates['xaxis.range'];
+    const ticks=PlotData.ticks(plot,next.range);
+    if(ticks)for(const axis of Object.keys(plot._fullLayout))if(/^xaxis\d*$/.test(axis)){
+      const previous=plot._fullLayout[axis];
+      if(ticks.tickvals.length!==previous.tickvals?.length||ticks.tickvals.some((x,i)=>x!==previous.tickvals[i])||ticks.ticktext.some((text,i)=>text!==previous.ticktext?.[i])){updates[axis+'.tickvals']=ticks.tickvals;updates[axis+'.ticktext']=ticks.ticktext;}
+    }
     Object.assign(updates,s.auto?autoRange(plot,next.range):next.yRange?autoRange(plot,next.range,next.yRange):{});
     plot.dataset.autoScale=String(s.auto);
     for(const key of Object.keys(updates)){
@@ -266,7 +273,7 @@ const chartReader = (() => {
     const g=active;queue(()=>g.mode==='pan'?pan(p,g):show({...g,...p}));
   }
   function currentGesture(g){
-    if(!g.plot.isConnected||!reader(g.plot)||g.plot.layout?.uirevision!==g.revision)return false;
+    if(!g.plot.isConnected||!g.plot._fullLayout?._plots||!reader(g.plot)||g.plot.layout?.uirevision!==g.revision)return false;
     if(g.plot.data!==g.data){
       if(!g.plot.layout.meta?.btcLive?.canvasOnly||g.plot.dataset.canvasRendering!=='ready')return false;
       g.data=g.plot.data;g.bounds=bounds(g.plot);
@@ -328,18 +335,21 @@ const chartReader = (() => {
   function refresh(plot) {
     ChartCanvas.refresh(plot);
     if(!reader(plot)||active?.plot===plot||!plot._fullLayout?.xaxis)return;
+    const candle=plot.data.find(t=>t.type==='candlestick'),xs=candle?times(candle.x,plot._fullLayout.xaxis):null,lastAt=xs?.at(-1)??null;
+    const timeline=plot.layout.meta?.btcLive?.timeline;
+    // Plotly may replace layout before its previous trace arrays are replaced.
+    if(timeline&&((xs?.length>1&&xs[1]-xs[0]!==timeline.step)||lastAt<timeline.last||lastAt>timeline.last+timeline.step*32))return;
     const s=state(plot);if(s.committing)return;
-    const candle=plot.data.find(t=>t.type==='candlestick'),lastAt=candle?times(candle.x,plot._fullLayout.xaxis).at(-1):null;
     const version=`${plot.dataset.liveEvent??''}-${plot.data.length}-${plot.data.at(-1)?.meta?.btcAI??''}`;
     const changed=s.data!==plot.data||s.lastAt!==lastAt||s.version!==version;
     if(!changed)return;
-    const range=plot._fullLayout.xaxis.range.map(n=>plot._fullLayout.xaxis.r2c(n));
+    const range=s.range?.slice()??plot._fullLayout.xaxis.range.map(n=>plot._fullLayout.xaxis.r2c(n));
     if(s.data===null&&candle?.x?.length&&plot.layout.meta.btcLive.kind==='market')range.splice(0,2,...view.initialRange(bounds(plot),plot._fullLayout.xaxis._length));
     if(s.follow&&s.lastAt!==null&&lastAt!==null&&lastAt>s.lastAt){const delta=lastAt-s.lastAt;range[0]+=delta;range[1]+=delta;}
     s.data=plot.data;s.lastAt=lastAt;s.version=version;
     const button=reader(plot).querySelector('[data-chart-action="auto"]');button?.setAttribute('aria-pressed',String(s.auto));
     reader(plot).querySelector('[data-chart-action="zoom"]')?.setAttribute('aria-pressed',String(Boolean(s.zoom)));
-    plot.dataset.autoScale=String(s.auto);if(s.auto)apply(plot,range);
+    plot.dataset.autoScale=String(s.auto);if(s.auto||s.range)apply(plot,range,s.auto?null:s.manualRange);
   }
   function abort(){cancel();clearCursor();}
   function hidden(){if(doc.hidden)abort();}

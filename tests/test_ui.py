@@ -104,7 +104,9 @@ def test_optional_monthly_failure_keeps_dashboard_but_vetoes_signal(monkeypatch,
     assert any("Monthly endpoint" in item.value for item in app.markdown)
     next(x for x in app.get("button_group") if x.label == "차트 시간대").set_value("1M").run()
     assert not app.exception and not app.error
-    assert any("선택한 시간대의 자료" in item.value for item in app.info)
+    # Chart history is independent of the missing composite monthly snapshot.
+    spec = json.loads(app.get("plotly_chart")[0].proto.spec)
+    assert spec["layout"]["meta"]["btcLive"]["timeframe"] == "1M"
 
 
 def test_ichimoku_view_and_overlay_controls_preserve_signal(monkeypatch, tmp_path):

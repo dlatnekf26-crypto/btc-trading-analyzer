@@ -58,6 +58,7 @@ def gesture_check(page, cdp, plot, event_log, label):
     touch(cdp, "touchStart", [(x, y)])
     touch(cdp, "touchMove", [(x + box["width"] * 0.13, y)])
     touch(cdp, "touchEnd")
+    page.wait_for_function("()=>document.querySelector('.js-plotly-plot')?.dataset.gesturePreview!=='true'")
     page.wait_for_timeout(160)
     panned = ranges(plot)
     assert panned["x"] != original["x"], (label, "pan", panned, original)
@@ -67,6 +68,7 @@ def gesture_check(page, cdp, plot, event_log, label):
     touch(cdp, "touchStart", [(x - distance, y), (x + distance, y)])
     touch(cdp, "touchMove", [(x - distance * 1.8, y), (x + distance * 1.8, y)])
     touch(cdp, "touchEnd")
+    page.wait_for_function("()=>document.querySelector('.js-plotly-plot')?.dataset.gesturePreview!=='true'")
     page.wait_for_timeout(180)
     zoomed = ranges(plot)
     assert zoomed["x"][1] - zoomed["x"][0] < (panned["x"][1] - panned["x"][0]) * 0.8, (

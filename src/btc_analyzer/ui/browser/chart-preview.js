@@ -8,7 +8,7 @@ const ChartPreview = (()=>{
   function create(plot){
     const layers=[];
     const canvas=plot.layout?.meta?.btcLive?.canvasOnly&&plot.dataset?.canvasRendering==='ready';
-    for(const [key,axes] of canvas?[]:Object.entries(plot._fullLayout._plots)){
+    for(const [key,axes] of canvas?[]:Object.entries(plot._fullLayout?._plots??{})){
       const group=plot.querySelector(`.subplot.${key} .overplot > g.${key}`);
       if(!group)continue;
       const x=axes.xaxis,y=axes.yaxis;

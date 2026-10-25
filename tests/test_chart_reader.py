@@ -44,7 +44,10 @@ def test_compact_plot_dates_keep_display_time_and_utc_close_boundary(tf):
     spec = market_chart_spec(frame, "Asia/Seoul", ("ema_20",), True, "USDT", False, False, 120, tf, 26)
     end = frame.index[-1]
     wall_time = int(end.tz_convert("Asia/Seoul").tz_localize(None).value // 1_000_000)
-    assert spec["data"][0]["x"][-1] == wall_time
-    assert all(trace["x"][-1] == wall_time for trace in spec["data"])
+    timeline = spec["layout"]["meta"]["btcLive"]["timeline"]
+    assert timeline["source"][-1] == wall_time
+    final_position = timeline["origin"] + (len(timeline["source"]) - 1) * timeline["step"]
+    assert all(trace["x"][-1] == final_position for trace in spec["data"])
     assert spec["layout"]["xaxis"]["type"] == "date"
+    assert not spec["layout"].get("transition")  # Even duration=0 starts a native axis RAF.
     assert spec["layout"]["meta"]["btcLive"]["closedEnd"] == int(candle_close(end, tf).timestamp() * 1000)

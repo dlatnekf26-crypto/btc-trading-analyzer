@@ -166,6 +166,7 @@ def test_stock_cards_open_shared_chart_and_forecast_with_correct_units(code, off
     monkeypatch.setattr(DataService, "bundle", crypto_fetch)
     app = analysis_app(Path(__file__).resolve().parents[1] / "web_app.py", default_timeout=60)
     app.query_params["market"] = code
+    app.session_state["board_search"] = code  # Search must find even a collapsed stock.
     app.run()
     assert not app.exception and not app.error and not app.warning
     assert app.button(key="open_" + code)

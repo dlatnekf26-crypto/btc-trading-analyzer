@@ -230,7 +230,6 @@ def prediction_chart(
     fig.update_layout(
         uirevision=f"forecast-{report.timeframe}-{report.window}-{report.forward}",
         margin={"t": 60, "l": 12, "r": 12},
-        transition={"duration": 150},
         legend={"y": 1.02, "yanchor": "bottom", "traceorder": "normal"},
     )
     fig.update_xaxes(

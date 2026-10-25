@@ -8,12 +8,12 @@ import pandas as pd
 from btc_analyzer.ui.cache_keys import MARKET_HASH_FUNCS
 
 from btc_analyzer.config import CHART_TIMEFRAMES, CHART_CANDLES
-from btc_analyzer.candles import candle_close
 from btc_analyzer.strategy.composite import FRAME_LABELS
 from btc_analyzer.ui.charts import price_chart, READ_CHART_CONFIG, bind_asset
 from btc_analyzer.ui.chart_reader import reader_html
 from btc_analyzer.market_clock import bar_closes
 from btc_analyzer.ui.canvas_chart import canvas_market
+from btc_analyzer.ui.chart_timeline import compact_timeline
 
 
 @st.cache_data(ttl=3600, max_entries=24, show_spinner=False, hash_funcs=MARKET_HASH_FUNCS)
@@ -47,7 +47,6 @@ def market_chart_spec(
     )
     fig.update_layout(
         uirevision=f"market-{features.attrs.get('timeframe')}-{bars}",
-        transition={"duration": 0},
         meta={
             "btcLive": {
                 "kind": "market",
@@ -96,14 +95,6 @@ def market_chart_spec(
     fig.update_yaxes(range=[low - padding, high + padding], autorange=False, row=1, col=1)
     fig.update_yaxes(range=[0, max(float(visible.volume.max()), 1) * 1.12], autorange=False, row=2, col=1)
     fig.update_yaxes(range=macd_range(visible), autorange=False, row=4, col=1)
-    step = (
-        shown.index[-1] - shown.index[-2]
-        if len(shown) > 1
-        else candle_close(shown.index[-1], timeframe) - shown.index[-1]
-    )
-    left = shown.index[-window] - step * 0.7
-    right = shown.index[-1] + step * 1.5
-    fig.update_xaxes(range=[left.tz_convert(timezone), right.tz_convert(timezone)])
     fig.update_yaxes(side="right", title_text=None, row=1, col=1)
     fig.update_yaxes(side="right", title_text=None)
     fig.update_layout(
@@ -116,7 +107,9 @@ def market_chart_spec(
             None if t is None else int(pd.Timestamp(t).tz_localize(None).value // 1_000_000) for t in trace.x
         ]
     fig.update_xaxes(type="date")
-    return canvas_market(fig.to_dict())
+    spec = fig.to_dict()
+    candles = next(t["x"] for t in spec["data"] if t["type"] == "candlestick")
+    return canvas_market(compact_timeline(spec, candles, timeframe, window))
 
 
 def render_price_chart(
@@ -141,7 +134,7 @@ def render_price_chart(
     st.plotly_chart(
         bind_asset(spec, asset_code), width="stretch", key="chart_01", theme=None, config=READ_CHART_CONFIG
     )
-    st.caption(f"불러온 확정 봉 {len(shown):,}개 · 최대 {CHART_CANDLES:,}개 · 제공 이력 범위 내 표시")
+    st.caption(f"불러온 확정 봉 {len(shown):,}개 · 최대 {CHART_CANDLES:,}개 · 휴장 공백 압축")
 
 
 @st.fragment

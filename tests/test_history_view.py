@@ -88,23 +88,23 @@ def test_live_tab_collects_only_when_open_and_controls_and_refresh_reuse_work(
 
     monkeypatch.setattr(DataService, "fetch", fetched)
     app = analysis_app(ROOT / "web_app.py", default_timeout=45).run()
-    assert not app.exception and not app.error and not calls
+    assert not app.exception and not app.error and len(calls) == 1  # Selected chart history only.
     decision = next(item.value for item in app.markdown if 'aria-label="종합 신호 근거"' in item.value)
     choose_history(app)
     assert not app.exception and not app.error
-    assert len(calls) == 1 and calls[0][1:4] == ("Binance", "BTC/USDT", "1d")
+    assert len(calls) == 2 and calls[0][1:4] == ("Binance", "BTC/USDT", "1d")
     assert calls[0][0] == tmp_path / "web/market-cache.sqlite3"
     assert any("Binance 공개 시세 API" in x.value for x in app.caption)
     assert any('aria-label="예측 요약"' in x.value for x in app.markdown)
     assert len(app.get("plotly_chart")) == 1
     next(item for item in app.get("button_group") if item.label == "예측 기간").set_value("6mo")
     choose_history(app)
-    assert len(calls) == 1
+    assert len(calls) == 2
     next(item for item in app.button if item.label == "비교 자료 새로고침").click()
     choose_history(app)
-    assert len(calls) == 2 and calls[-1][-1] is True
+    assert len(calls) == 3 and calls[-1][-1] is True
     choose_history(app)
-    assert len(calls) == 2
+    assert len(calls) == 3
     assert (
         next(item.value for item in app.markdown if 'aria-label="종합 신호 근거"' in item.value) == decision
     )
@@ -112,7 +112,7 @@ def test_live_tab_collects_only_when_open_and_controls_and_refresh_reuse_work(
     choose_history(app)
     next(item for item in app.get("button_group") if item.label == "비교 시간대").set_value("1w")
     choose_history(app)
-    assert len(calls) == 3 and calls[-1][3] == "1w"
+    assert len(calls) == 4 and calls[-1][3] == "1w"
     assert not app.exception and not app.error
     st.cache_data.clear()
 
@@ -149,15 +149,15 @@ def test_live_history_failure_is_cached_and_never_replaced_with_demo(
     monkeypatch.setattr(DataService, "fetch", failure)
     app = analysis_app(ROOT / "web_app.py", default_timeout=45).run()
     choose_history(app)
-    assert not app.exception and len(calls) == 1
+    assert not app.exception and len(calls) == 2
     assert any("과거 비교 자료" in item.value and "451" in item.value for item in app.error)
     assert not app.get("plotly_chart") and not any("가장 닮은 과거" in x.value for x in app.success)
     choose_history(app)
-    assert len(calls) == 1
+    assert len(calls) == 2
     next(item for item in app.button if item.label == "비교 자료 새로고침").click()
     choose_history(app)
     choose_history(app)
-    assert len(calls) == 2
+    assert len(calls) == 3
     assert not any("DEMO" in item.value for item in app.warning)
     st.cache_data.clear()
 
