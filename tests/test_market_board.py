@@ -30,7 +30,8 @@ def test_landing_never_collects_candles_or_forecasts(monkeypatch):
     assert not app.tabs and not app.get("plotly_chart")
     from btc_analyzer.assets import MARKETS
 
-    assert {button.key for button in app.button} == {"open_" + code for code in MARKETS}
+    assert len(app.button) == 22  # Five stocks per country, plus coins/indices/macros.
+    assert {button.key for button in app.button} <= {"open_" + code for code in MARKETS}
     app.run()
     assert not app.exception and not app.get("plotly_chart")
 
@@ -104,3 +105,20 @@ def test_a_search_and_market_filter_keep_only_matching_rows():
     app.button(key="open_MSFT").click().run()
     assert not app.exception and app.query_params["market"] == "MSFT"
     assert len(app.get("plotly_chart")) == 1
+
+
+def test_collapsed_stocks_are_not_rendered_and_search_finds_them():
+    app = AppTest.from_file(ROOT / "web_app.py", default_timeout=30).run()
+    assert not any(button.key == "open_SAMSUNG_SDI" for button in app.button)
+    app.session_state["board_more_SAMSUNG"] = True
+    app.run()
+    assert len(app.button) == 37
+    assert app.button(key="open_SAMSUNG_SDI")
+    app.session_state["board_more_SAMSUNG"] = False
+    app.run()
+    assert len(app.button) == 22
+    app.text_input(key="board_search").set_value("삼성").run()
+    assert len(app.button) == 5
+    assert not any('class="board-fx' in row.value for row in app.markdown)
+    app.button(key="open_SAMSUNG_SDI").click().run()
+    assert not app.exception and app.query_params["market"] == "SAMSUNG_SDI"

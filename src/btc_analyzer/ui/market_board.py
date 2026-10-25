@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta
 from html import escape
+import re
 from zoneinfo import ZoneInfo
 
 import streamlit as st
@@ -54,12 +55,22 @@ ICONS = {
 }
 
 
-def asset_identity(code):
+def asset_identity(code, query=""):
+    name = (
+        "".join(
+            f'<span class="board-match">{escape(part)}</span>'
+            if query and part.casefold() == query.casefold()
+            else escape(part)
+            for part in re.split(f"({re.escape(query)})", MARKETS[code].name, flags=re.I)
+        )
+        if query
+        else escape(MARKETS[code].name)
+    )
     color = COLORS.get(code, "#377de0")
     icon = ICONS.get(code, escape(code[:1]))
     return (
         f'<span class="board-icon" style="--asset-color:{color}">{icon}</span>'
-        f'<div><strong>{MARKETS[code].name}</strong><span class="board-symbol">{code}</span></div>'
+        f'<div><strong>{name}</strong><span class="board-symbol">{code}</span></div>'
     )
 
 
@@ -315,6 +326,31 @@ def matching_markets(codes, query):
     )
 
 
+def render_search_results(query, on_open):
+    codes = matching_markets(MARKETS, query)
+    with st.container(key="board_search_results"):
+        st.caption(f"검색 결과 {len(codes)}개 · 종목을 누르면 차트가 열려요")
+        for code in codes:
+            with st.container(key=f"board_search_row_{code}"):
+                st.markdown(
+                    '<div class="board-search-identity">' + asset_identity(code, query) + "</div>",
+                    unsafe_allow_html=True,
+                )
+                if st.button(
+                    f"{MARKETS[code].name} 차트 열기",
+                    key=f"open_{code}",
+                    on_click=on_open,
+                    args=(code,),
+                    width="stretch",
+                ):
+                    st.rerun(scope="app")
+        if not codes:
+            st.info("일치하는 종목이 없어요. 이름이나 티커를 다시 확인해 주세요.")
+        if query.casefold() in ("openai", "오픈ai"):
+            st.caption("OpenAI · 정식 주식 시세 미확인")
+
+
+@st.fragment
 def render_board(on_open):
     render_quote_snapshot()
     st.markdown(
@@ -322,8 +358,17 @@ def render_board(on_open):
         unsafe_allow_html=True,
     )
     query = st.text_input(
-        "종목 검색", placeholder="종목 이름 · 티커 검색", key="board_search", label_visibility="collapsed"
+        "종목 검색",
+        placeholder="종목 이름 · 티커 검색",
+        key="board_search",
+        label_visibility="collapsed",
+        type="search",
+        live="350ms",
+        icon=":material/search:",
     )
+    if query.strip():
+        render_search_results(query.strip(), on_open)
+        return
     st.markdown(
         '<div class="board-topline"><div class="board-pill"><i></i>코인 24시간 거래</div>'
         "<span>가격은 실시간으로 · 판단은 근거와 함께</span></div>",
@@ -388,7 +433,17 @@ def render_session_cards(on_open, codes):
     from btc_analyzer.data.market_caps import cap_order
 
     caps = context.feed("caps").value
-    for code in cap_order(codes, caps if isinstance(caps, dict) else {}):
+    ordered = cap_order(codes, caps if isinstance(caps, dict) else {})
+    render_quote_rows(on_open, ordered[:5], context)
+    if len(ordered) > 5:
+        key = "board_more_" + codes[0]
+        with st.expander(f"나머지 {len(ordered) - 5}개 종목 펼쳐보기", key=key, on_change="rerun"):
+            if st.session_state.get(key):
+                render_quote_rows(on_open, ordered[5:], context)
+
+
+def render_quote_rows(on_open, codes, context):
+    for code in codes:
         with st.container(key=f"board_card_{code}"):
             st.markdown(quote_fields(code, context=context), unsafe_allow_html=True)
             if st.button(
