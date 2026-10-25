@@ -10,8 +10,6 @@ from btc_analyzer.assets import (
     MARKETS,
     SESSION_MARKETS,
     STOCK_MARKETS,
-    INDEX_MARKETS,
-    MACRO_MARKETS,
     EXCHANGE_HISTORY,
 )
 from btc_analyzer.data.market_context import MacroQuote, UTC
@@ -240,13 +238,15 @@ def render_board_sentiment():
 
 @st.fragment(run_every=30)
 def render_stock_references():
-    from btc_analyzer.data.board_references import StockMood, WonRates
+    from btc_analyzer.data.board_references import StockMood
 
     context = current_context()
     with st.container(key="board_references"):
-        for column, key, name in zip(
-            st.columns(2, gap="small"), ("mood_us", "mood_kr"), ("미국 주식", "국내 주식")
-        ):
+        section_heading("공포·탐욕", 3, "코인 · 미국 · 국내")
+        coin, us, kr = st.columns(3, gap="small")
+        with coin:
+            render_board_sentiment()
+        for column, key, name in zip((us, kr), ("mood_us", "mood_kr"), ("미국 주식", "국내 주식")):
             feed = context.feed(key)
             value = feed.value
             score = value.score if key == "mood_us" and isinstance(value, StockMood) else None
@@ -267,10 +267,26 @@ def render_stock_references():
                     f'<div class="board-sentiment"><span>{name} 공포·탐욕{" · CNN" if key == "mood_us" else ""}</span><b>{format(score, "g") if score is not None else "—"}</b><small>{level} · {stamp}{" · 갱신 지연" if feed.error else ""}</small></div>',
                     unsafe_allow_html=True,
                 )
+    st.caption("미국: [CNN](https://www.cnn.com/markets/fear-and-greed) 발표값 · 국내: 자료원 확인 대기")
+
+
+@st.fragment(run_every=30)
+def render_board_fx():
+    from btc_analyzer.data.board_references import WonRates
+
+    context = current_context()
+    with st.container(key="board_currencies"):
+        section_heading("환율", 3, "각 통화당 원화")
+        dollar, yen, euro = st.columns(3, gap="small")
+        with dollar:
+            st.markdown(
+                '<div class="board-fx" data-reference="fx"><span>미국 달러 · 1 USD</span><b data-reference-field="price">—</b><small data-reference-field="status">자료 연결 중</small></div>',
+                unsafe_allow_html=True,
+            )
         feed = context.feed("fx_extra")
         value = feed.value
         for column, name, amount in zip(
-            st.columns(2, gap="small"),
+            (yen, euro),
             ("엔화 · 100 JPY", "유로화 · 1 EUR"),
             (getattr(value, "yen100", None), getattr(value, "euro", None)),
         ):
@@ -283,8 +299,10 @@ def render_stock_references():
                     f'<div class="board-fx"><span>{name}</span><b>{price}</b><small>{stamp}{" · 갱신 지연" if feed.error else ""}</small></div>',
                     unsafe_allow_html=True,
                 )
-    st.caption(
-        "미국 공탐: [CNN](https://www.cnn.com/markets/fear-and-greed) 발표값. 국내는 자료원 확인 대기. 미수신 값은 계산으로 대체하지 않습니다."
+
+    st.markdown(
+        '<div class="board-fx board-premium" data-reference="premium"><span>김치프리미엄 · BTC</span><b data-reference-field="price">—</b><small data-reference-field="status">환산 시세 연결 중</small></div>',
+        unsafe_allow_html=True,
     )
 
 
@@ -311,21 +329,8 @@ def render_board(on_open):
         "<span>가격은 실시간으로 · 판단은 근거와 함께</span></div>",
         unsafe_allow_html=True,
     )
-    with st.container(key="board_overview"):
-        sentiment, fx, premium = st.columns([2, 1.2, 1.2])
-        with sentiment:
-            render_board_sentiment()
-        with fx:
-            st.markdown(
-                '<div class="board-fx" data-reference="fx"><span>원·달러 환율 <small>USD/KRW</small></span><b data-reference-field="price">—</b><small data-reference-field="status">자료 연결 중</small></div>',
-                unsafe_allow_html=True,
-            )
-        with premium:
-            st.markdown(
-                '<div class="board-fx" data-reference="premium"><span>김치프리미엄 <small>BTC</small></span><b data-reference-field="price">—</b><small data-reference-field="status">환산 시세 연결 중</small></div>',
-                unsafe_allow_html=True,
-            )
     render_stock_references()
+    render_board_fx()
     category = st.segmented_control(
         "시장 구분",
         ("전체", "국내", "미국", "코인", "지수·원자재"),
@@ -348,8 +353,8 @@ def render_board(on_open):
             "NASDAQ · USD · 장전·장후 포함 · 야간 미제공",
         ),
         ("암호화폐", tuple(ASSETS), "Binance · 24시간 등락률"),
-        ("지수 · 선물", tuple(INDEX_MARKETS), "공개 자료 · 거래소별 지연 확인"),
-        ("금 · 유가 · 국채 금리", tuple(MACRO_MARKETS), "국채는 채권 가격이 아닌 금리(%)"),
+        ("지수 · 선물", ("SP500", "NQ", "KOSPI", "NIKKEI"), "미국 대표 · 기술주 · 국내 · 일본"),
+        ("금리 · 원자재", ("TNX", "TYX", "OIL", "GOLD"), "미국채 10년 · 30년 · 유가 · 금"),
     ):
         group = (
             "국내"
