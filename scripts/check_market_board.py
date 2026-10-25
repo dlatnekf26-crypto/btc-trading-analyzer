@@ -44,13 +44,13 @@ def verify(browser, width, url, events):
         page.locator("[data-quote-symbol=BTCUSDT] [data-quote-field=change]").evaluate(
             "e=>getComputedStyle(e).color"
         )
-        == "rgb(239, 63, 80)"
+        == "rgb(239, 101, 114)"
     )
     assert page.evaluate("document.documentElement.scrollWidth<=innerWidth")
     boxes = page.locator(".board-sentiment,.board-fx").evaluate_all(
         "els=>els.map(e=>{const r=e.getBoundingClientRect();return {x:r.x,y:r.y,right:r.right,bottom:r.bottom,height:r.height,scroll:e.scrollHeight,client:e.clientHeight}})"
     )
-    assert len(boxes) == 3
+    assert len(boxes) >= 7
     for i, a in enumerate(boxes):
         assert a["scroll"] <= a["client"] + 1, boxes
         for b in boxes[i + 1 :]:
@@ -78,7 +78,7 @@ def verify(browser, width, url, events):
         button = page.get_by_role("button", name=name + " 차트 열기", exact=True)
         button.scroll_into_view_if_needed()
         box = button.bounding_box()
-        assert box["height"] > 250, "Only a small part of the card was clickable"
+        assert box["height"] >= 70, "Quote row touch target is too small"
         page.touchscreen.tap(box["x"] + box["width"] * 0.4, box["y"] + 30)
         page.locator("#btc-chart-reader").wait_for(timeout=60000)
         page.wait_for_function(

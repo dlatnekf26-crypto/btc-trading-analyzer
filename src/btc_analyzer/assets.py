@@ -48,6 +48,7 @@ STOCK_MARKETS = {
         Asset("GOOGL", "알파벳", "macro-googl", 2, date(2004, 8, 19), "", "GOOGL"),
         Asset("TSLA", "테슬라", "macro-tsla", 2, date(2010, 6, 29), "", "TSLA"),
         Asset("META", "메타", "macro-meta", 2, date(2012, 5, 18), "", "META"),
+        Asset("MSFT", "마이크로소프트", "macro-msft", 2, date(1986, 3, 13), "", "MSFT"),
         Asset("AAPL", "애플", "macro-aapl", 2, date(1980, 12, 12), "", "AAPL"),
         Asset("NVDA", "엔비디아", "macro-nvda", 2, date(1999, 1, 22), "", "NVDA"),
         Asset("MU", "마이크론", "macro-mu", 2, date(1984, 6, 1), "", "MU"),

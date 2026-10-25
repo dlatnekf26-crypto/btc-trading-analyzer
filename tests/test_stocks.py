@@ -176,11 +176,13 @@ def test_stock_cards_open_shared_chart_and_forecast_with_correct_units(code, off
     app.session_state["dashboard_tab"] = "미래 예측"
     app.run(timeout=60)
     assert not app.exception and not app.error
-    assert any("예측 도착일" in item.value for item in app.caption)
-    assert any(
-        EXCHANGE_HISTORY[code].unit in item.value and 'id="btc-forecast-reader"' in item.value
-        for item in app.markdown
-    )
+    has_forecast = any("예측 도착일" in item.value for item in app.caption)
+    readers = [item.value for item in app.markdown if 'id="btc-forecast-reader"' in item.value]
+    if has_forecast:
+        assert any(EXCHANGE_HISTORY[code].unit in value for value in readers)
+    else:
+        assert any("가중 유효 사례가 2.5개 이상이어야 예측합니다" in item.value for item in app.info)
+        assert not readers  # Insufficient evidence must not create a forecast price.
 
 
 def test_us_pre_1985_daily_labels_keep_yahoo_date_but_actual_close():

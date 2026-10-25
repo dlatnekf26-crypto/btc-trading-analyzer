@@ -241,17 +241,13 @@ def render_stock_references():
         ):
             feed = context.feed(key)
             value = feed.value
-            score = value.score if isinstance(value, StockMood) else None
+            score = value.score if key == "mood_us" and isinstance(value, StockMood) else None
             level = (
-                "극단적 공포"
-                if score is not None and score < 25
-                else "공포"
-                if score is not None and score < 45
-                else "중립"
-                if score is not None and score <= 55
-                else "탐욕"
-                if score is not None and score < 75
-                else "극단적 탐욕"
+                value.classification
+                if score is not None
+                else "사이트 자료 미수신"
+                if key == "mood_us"
+                else "자료원 확인 대기"
             )
             stamp = (
                 value.as_of.astimezone(ZoneInfo("Asia/Seoul")).strftime("%m.%d %H:%M KST")
@@ -260,7 +256,7 @@ def render_stock_references():
             )
             with column:
                 st.markdown(
-                    f'<div class="board-sentiment"><span>{name} 공포·탐욕 · 자체 추정</span><b>{score if score is not None else "—"}</b><small>{level if score is not None else "산출 대기"} · {stamp}{" · 갱신 지연" if feed.error else ""}</small></div>',
+                    f'<div class="board-sentiment"><span>{name} 공포·탐욕{" · CNN" if key == "mood_us" else ""}</span><b>{format(score, "g") if score is not None else "—"}</b><small>{level} · {stamp}{" · 갱신 지연" if feed.error else ""}</small></div>',
                     unsafe_allow_html=True,
                 )
         feed = context.feed("fx_extra")
@@ -280,19 +276,28 @@ def render_stock_references():
                     unsafe_allow_html=True,
                 )
     st.caption(
-        "주식 공탐: S&P 500·코스피의 가격 위치·모멘텀·추세·변동성 기반 자체 추정(0 공포~100 탐욕). 공식 공탐지수가 아니며 표시 시각의 확정 일봉 기준입니다."
+        "미국 공탐: [CNN](https://www.cnn.com/markets/fear-and-greed) 발표값. 국내는 자료원 확인 대기. 미수신 값은 계산으로 대체하지 않습니다."
     )
 
 
-def market_columns(codes):
-    """Wrap added markets into another row instead of truncating the catalog."""
-    values = list(codes)
-    for start in range(0, len(values), 4):
-        yield from zip(st.columns(4, gap="small"), values[start : start + 4])
+def matching_markets(codes, query):
+    query = query.strip().casefold()
+    return tuple(
+        code
+        for code in codes
+        if not query or query in f"{code} {MARKETS[code].name} {MARKETS[code].symbol}".casefold()
+    )
 
 
 def render_board(on_open):
     render_quote_snapshot()
+    st.markdown(
+        '<div class="board-intro"><h1>시장을 한눈에</h1><p>내가 보는 종목부터, 필요한 정보만.</p></div>',
+        unsafe_allow_html=True,
+    )
+    query = st.text_input(
+        "종목 검색", placeholder="종목 이름 · 티커 검색", key="board_search", label_visibility="collapsed"
+    )
     st.markdown(
         '<div class="board-topline"><div class="board-pill"><i></i>코인 24시간 거래</div>'
         "<span>가격은 실시간으로 · 판단은 근거와 함께</span></div>",
@@ -313,13 +318,15 @@ def render_board(on_open):
                 unsafe_allow_html=True,
             )
     render_stock_references()
-    st.markdown(
-        '<div class="board-nav"><b>전체 시세</b><span>종목을 누르면 상세 차트가 열려요</span></div>',
-        unsafe_allow_html=True,
+    category = st.segmented_control(
+        "시장 구분",
+        ("전체", "국내", "미국", "코인", "지수·원자재"),
+        default="전체",
+        required=True,
+        key="board_category",
+        label_visibility="collapsed",
     )
-    section_heading("금 · 유가 · 국채 금리", len(MACRO_MARKETS), "국채는 채권 가격이 아닌 금리(%)")
-    with st.container(key="board_sessions_macro"):
-        render_session_cards(on_open, tuple(MACRO_MARKETS))
+    visible = set()
     for title, codes, subtitle in (
         (
             "국내 주식",
@@ -331,25 +338,30 @@ def render_board(on_open):
             tuple(code for code in STOCK_MARKETS if EXCHANGE_HISTORY[code].calendar == "NYSE"),
             "NASDAQ · USD · 장전·장후 포함 · 야간 미제공",
         ),
+        ("암호화폐", tuple(ASSETS), "Binance · 24시간 등락률"),
+        ("지수 · 선물", tuple(INDEX_MARKETS), "공개 자료 · 거래소별 지연 확인"),
+        ("금 · 유가 · 국채 금리", tuple(MACRO_MARKETS), "국채는 채권 가격이 아닌 금리(%)"),
     ):
+        group = (
+            "국내"
+            if title == "국내 주식"
+            else "미국"
+            if title == "미국 주식"
+            else "코인"
+            if title == "암호화폐"
+            else "지수·원자재"
+        )
+        codes = matching_markets(codes, query) if category in ("전체", group) else ()
+        if not codes:
+            continue
+        visible.update(codes)
         section_heading(title, len(codes), subtitle)
         with st.container(key="board_sessions_" + codes[0]):
             render_session_cards(on_open, codes)
-    section_heading("암호화폐", len(ASSETS), "Binance · 24시간 등락률")
-    with st.container(key="board_coins"):
-        for column, code in market_columns(ASSETS):
-            with column, st.container(key=f"board_card_{code}"):
-                st.markdown(quote_fields(code), unsafe_allow_html=True)
-                st.button(
-                    f"{MARKETS[code].name} 차트 열기",
-                    key=f"open_{code}",
-                    on_click=on_open,
-                    args=(code,),
-                    width="stretch",
-                )
-    section_heading("지수 · 선물", len(INDEX_MARKETS), "거래소 운영 시간 · 공개 자료 지연 별도")
-    with st.container(key="board_sessions"):
-        render_session_cards(on_open, tuple(INDEX_MARKETS))
+    if not visible:
+        st.info("일치하는 종목이 없어요. 이름이나 티커를 다시 확인해 주세요.")
+    if category in ("전체", "미국") and (not query or query.strip().casefold() in "openai 오픈ai"):
+        st.caption("OpenAI · 정식 주식 시세 미확인 — 공식 주식 티커 확인 후 가격·차트를 제공합니다.")
     st.markdown(
         '<p class="board-footnote">수신 시각과 지연 상태를 함께 확인하세요. 예측은 과거 자료·기술 지표에 기반한 시나리오예요.</p>',
         unsafe_allow_html=True,
@@ -358,8 +370,8 @@ def render_board(on_open):
 
 def render_session_cards(on_open, codes):
     context = current_context()
-    for column, code in market_columns(codes):
-        with column, st.container(key=f"board_card_{code}"):
+    for code in codes:
+        with st.container(key=f"board_card_{code}"):
             st.markdown(quote_fields(code, context=context), unsafe_allow_html=True)
             st.button(
                 f"{MARKETS[code].name} 차트 열기",

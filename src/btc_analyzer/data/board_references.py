@@ -4,16 +4,27 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import math
 
-import numpy as np
 
 UTC = timezone.utc
-REFERENCE_KEYS = ("mood_us", "mood_kr", "fx_extra")
+REFERENCE_KEYS = ("mood_us", "fx_extra")
+CNN_API = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
+CNN_SOURCE = "https://www.cnn.com/markets/fear-and-greed"
+MOOD_LEVELS = {
+    "extreme fear": "극단적 공포",
+    "fear": "공포",
+    "neutral": "중립",
+    "greed": "탐욕",
+    "extreme greed": "극단적 탐욕",
+}
 
 
 @dataclass(frozen=True)
 class StockMood:
-    score: int
+    score: float
     as_of: datetime
+    classification: str
+    source: str
+    url: str
 
 
 @dataclass(frozen=True)
@@ -38,25 +49,23 @@ def parse_won_rates(payload, now):
     return WonRates(100 * krw / jpy, krw, stamp)
 
 
-def stock_mood(frame):
-    """A price-based proxy, not CNN's index or a market breadth measure."""
-    close = frame.close.astype(float)
-    if len(close) < 126 or not np.isfinite(close).all() or (close <= 0).any():
-        raise ValueError("Insufficient stock mood history")
-    close = close.tail(252)
-    returns = close.pct_change()
-    vol = returns.rolling(20).std().dropna()
-    last = float(close.iloc[-1])
-    spread = float(close.max() - close.min())
-    position = 50 if spread == 0 else 100 * (last - close.min()) / spread
-    momentum = np.clip(50 + 250 * (last / close.iloc[-21] - 1), 0, 100)
-    trend = np.clip(50 + 150 * (last / close.mean() - 1), 0, 100)
-    calm = 50 if vol.max() == vol.min() else 100 * float((vol > vol.iloc[-1]).mean())
-    score = int(round(float(np.mean([position, momentum, trend, calm]))))
-    from btc_analyzer.market_clock import bar_closes
-
-    stamp = bar_closes(frame, frame.index[-1], "1d").to_pydatetime()
-    return StockMood(score, stamp)
+def parse_cnn_mood(payload, now):
+    row = payload["fear_and_greed"]
+    score = row["score"]
+    if (
+        isinstance(score, bool)
+        or not isinstance(score, (int, float))
+        or not math.isfinite(score)
+        or not 0 <= score <= 100
+    ):
+        raise ValueError("Invalid CNN score")
+    stamp = datetime.fromisoformat(row["timestamp"].replace("Z", "+00:00"))
+    if stamp.tzinfo is None or not timedelta(0) <= now - stamp <= timedelta(days=7):
+        raise ValueError("Invalid CNN publication date")
+    label = MOOD_LEVELS.get(str(row.get("rating", "")).lower().strip())
+    if label is None:
+        raise ValueError("Unknown CNN rating")
+    return StockMood(float(score), stamp, label, "CNN", CNN_SOURCE)
 
 
 def fetch_reference(key, now):
@@ -67,14 +76,6 @@ def fetch_reference(key, now):
         return parse_won_rates(
             json.loads(_download("https://api.frankfurter.dev/v1/latest?base=EUR&symbols=KRW,JPY")), now
         )
-    from btc_analyzer.assets import MARKETS
-    from btc_analyzer.data.exchange_history import parse_history, YAHOO_CHART
-    from urllib.parse import quote
-
-    market = {"mood_us": "SP500", "mood_kr": "KOSPI"}[key]
-    url = YAHOO_CHART + quote(MARKETS[market].symbol, safe="") + "?interval=1d&range=2y"
-    frame = parse_history(json.loads(_download(url)), "1d", now, market)
-    result = stock_mood(frame)
-    if not timedelta(0) <= now - result.as_of <= timedelta(days=7):
-        raise ValueError("Expired stock mood history")
-    return result
+    if key == "mood_us":
+        return parse_cnn_mood(json.loads(_download(CNN_API)), now)
+    raise ValueError("No verified index source configured")

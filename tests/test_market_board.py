@@ -95,3 +95,12 @@ def test_new_catalog_asset_appears_after_the_first_four_cards(monkeypatch):
     assert app.button(key="open_ADA").label == "에이다 차트 열기"
     assert sum(item.value.count('data-quote-symbol="ADAUSDT"') for item in app.markdown) == 1
     assert not app.get("plotly_chart")
+
+
+def test_a_search_and_market_filter_keep_only_matching_rows():
+    app = AppTest.from_file(ROOT / "web_app.py", default_timeout=30).run()
+    app.text_input(key="board_search").set_value("msft").run()
+    assert {button.key for button in app.button} == {"open_MSFT"}
+    app.button(key="open_MSFT").click().run()
+    assert not app.exception and app.query_params["market"] == "MSFT"
+    assert len(app.get("plotly_chart")) == 1
