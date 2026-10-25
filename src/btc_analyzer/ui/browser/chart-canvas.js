@@ -68,7 +68,7 @@ const ChartCanvas = (()=>{
       if(t.type==='scatter')continue;
       const gaps=[];for(let i=Math.max(1,begin);i<end;i++)if(xs[i]>xs[i-1])gaps.push(xs[i]-xs[i-1]);
       gaps.sort((a,b)=>a-b);const step=gaps.length?gaps[Math.floor(gaps.length/2)]:86400000;
-      const barWidth=Math.max(.4,Math.abs(step/(xr[1]-xr[0])*width)*(t.type==='candlestick'?.5:1-(plot.layout.bargap??.2)));
+      const barWidth=Math.max(.4,Math.abs(step/(xr[1]-xr[0])*width)*(t.type==='candlestick'?.72:1-(plot.layout.bargap??.2)));
       ctx.globalAlpha=t.opacity??1;ctx.lineWidth=1;
       if(t.type==='candlestick'){
         const o=values(t.open),hi=values(t.high),lo=values(t.low),c=values(t.close);

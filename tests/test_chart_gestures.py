@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 from scripts.offline_ui_fixture import analysis_app
 
+from btc_analyzer.ui.browser_assets import browser_asset
 from btc_analyzer.analysis.forecast import horizon_days
 from btc_analyzer.data.nasdaq import horizon_bars, trading_dates
 
@@ -61,7 +62,7 @@ def test_short_charts_and_six_periods_share_existing_analysis(tmp_path, monkeypa
         spec = json.loads(app.get("plotly_chart")[0].proto.spec)
         assert spec["layout"]["meta"]["btcLive"]["timeframe"] == tf
         assert len(spec["data"][0]["x"]) == 1500
-        assert spec["layout"]["meta"]["btcLive"]["window"] == 120
+        assert spec["layout"]["meta"]["btcLive"]["window"] == 60
         assert any("btc-chart-seed" in m.value for m in app.markdown)
     app.session_state["dashboard_tab"] = "미래 예측"
     app.run()
@@ -171,3 +172,26 @@ console.log(JSON.stringify({first,repeated,empty:empty.style,again:style.transfo
         "empty": {},
         "again": "matrix(2,0,0,1,0,0)",
     }
+
+
+def test_initial_chart_spacing_uses_screen_width_without_changing_timestamps():
+    program = (
+        browser_asset("chart-viewport.js")
+        + """
+const xs=Array.from({length:1500},(_,i)=>i*3600000);
+const bounds={xs,step:3600000};
+const widths=[280,700,1000],counts=[];
+for(const width of widths){
+ const range=ChartViewport.initialRange(bounds,width);
+ counts.push(xs.filter(x=>x>=range[0]&&x<=range[1]).length);
+ if(range[1]<=xs.at(-1)||range[0]>=xs.at(-1))throw Error('last candle off screen');
+}
+const few=ChartViewport.initialRange({xs:[10,20],step:10},280);
+console.log(JSON.stringify({counts,few,length:xs.length}));
+"""
+    )
+    result = subprocess.run(["node", "-e", program], capture_output=True, text=True, check=True)
+    data = json.loads(result.stdout)
+    assert data["counts"] == [25, 63, 72]
+    assert data["few"] == [3, 35]
+    assert data["length"] == 1500

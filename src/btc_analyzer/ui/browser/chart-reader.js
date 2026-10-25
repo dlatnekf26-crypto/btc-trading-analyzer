@@ -334,6 +334,7 @@ const chartReader = (() => {
     const changed=s.data!==plot.data||s.lastAt!==lastAt||s.version!==version;
     if(!changed)return;
     const range=plot._fullLayout.xaxis.range.map(n=>plot._fullLayout.xaxis.r2c(n));
+    if(s.data===null&&candle?.x?.length&&plot.layout.meta.btcLive.kind==='market')range.splice(0,2,...view.initialRange(bounds(plot),plot._fullLayout.xaxis._length));
     if(s.follow&&s.lastAt!==null&&lastAt!==null&&lastAt>s.lastAt){const delta=lastAt-s.lastAt;range[0]+=delta;range[1]+=delta;}
     s.data=plot.data;s.lastAt=lastAt;s.version=version;
     const button=reader(plot).querySelector('[data-chart-action="auto"]');button?.setAttribute('aria-pressed',String(s.auto));

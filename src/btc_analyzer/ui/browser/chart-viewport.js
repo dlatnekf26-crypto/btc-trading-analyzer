@@ -18,6 +18,11 @@ const ChartViewport = (() => {
     }
     return [left,left+span];
   }
+  function initialRange(bounds,width) {
+    const {xs,step}=bounds;
+    const count=Math.min(xs.length,Math.max(24,Math.min(72,Math.floor(width/11))));
+    return [xs.at(-count)-step*.7,xs.at(-1)+step*1.5];
+  }
   function priceLimit(range, prices) {
     if(!prices)return range;
     const span=range[1]-range[0],overlap=Math.min(span,prices[1]-prices[0])*.2;
@@ -37,5 +42,5 @@ const ChartViewport = (() => {
     const pad=Math.max(max-min,Math.abs(max)*.001,.000001)*.12;
     return {range:[min-pad,max+pad],prices:[min,max],begin,end};
   }
-  return {label,lower,limit,priceLimit,pinch,extent};
+  return {label,lower,limit,initialRange,priceLimit,pinch,extent};
 })();

@@ -86,7 +86,7 @@ def market_chart_spec(
     fig.layout.meta["btcLive"]["overlays"] = overlays
     fig.layout.meta["btcLive"]["panels"] = PANELS
     fig.layout.meta["btcLive"]["volumeIndex"] = next(i for i, t in enumerate(fig.data) if t.name == "거래량")
-    window = min(120, len(features), bars)
+    window = min(60, len(features), bars)
     fig.layout.meta["btcLive"]["window"] = window
     fig.layout.meta["btcLive"]["displacement"] = displacement
     shown = features.tail(bars)
