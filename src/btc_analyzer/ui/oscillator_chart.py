@@ -17,6 +17,16 @@ def macd_range(frame):
     return [low - pad, high + pad]
 
 
+def macd_colors(values):
+    values = np.asarray(values, dtype=float)
+    previous = np.r_[np.nan, values[:-1]]
+    return np.where(
+        (values > 0) & (previous <= 0),
+        "#8b5cf6",
+        np.where((values < 0) & (previous >= 0), "#f59e0b", np.where(values >= 0, "#10a878", "#e94b65")),
+    ).tolist()
+
+
 def add_oscillators(fig, frame, x):
     for key, label, color, row in (
         ("rsi", "RSI", "#ef3f50", 3),
@@ -42,7 +52,7 @@ def add_oscillators(fig, frame, x):
             y=frame.macd_hist,
             name="MACD 히스토그램",
             showlegend=False,
-            marker_color=["#10a878" if n >= 0 else "#e94b65" for n in frame.macd_hist],
+            marker_color=macd_colors(frame.macd_hist),
         ),
         row=4,
         col=1,
@@ -54,7 +64,7 @@ def add_oscillators(fig, frame, x):
     for row, label in (
         (2, "거래량"),
         (3, "RSI 14 · 기준 30 / 70"),
-        (4, "MACD 12·26·9 · 파랑 MACD / 주황 시그널"),
+        (4, "MACD · 보라: 상향 교차 / 주황: 하향 교차"),
     ):
         fig.add_annotation(
             x=0,

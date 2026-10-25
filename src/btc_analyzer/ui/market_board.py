@@ -131,7 +131,15 @@ def quote_fields(code, *, detail=False, context=None):
         f"{EXCHANGE_HISTORY[code].exchange} · {EXCHANGE_HISTORY[code].unit}" if session else "Binance · USDT"
     )
     classes = "board-detail" if detail else "board-asset" + (" btc-macro-card" if session else "")
-    heading = f'<div class="board-identity">{asset_identity(code)}</div>'
+    identity = asset_identity(code)
+    caps = context.feed("caps").value if context else None
+    cap = caps.get(code) if isinstance(caps, dict) else None
+    if cap:
+        identity = identity.replace(
+            f'<span class="board-symbol">{code}</span>',
+            f'<span class="board-symbol">{code} · 시총 {cap.value / 1e8:,.0f}억 {cap.currency} · {cap.date}</span>',
+        )
+    heading = f'<div class="board-identity">{identity}</div>'
     metrics = ""
     if not detail:
         if code in STOCK_MARKETS:
@@ -326,6 +334,7 @@ def render_board(on_open):
         key="board_category",
         label_visibility="collapsed",
     )
+    st.caption("국내·미국·코인별 공개 시총 큰 순 · 미수신 종목은 뒤에 표시 · 지수·선물은 시총 비교 제외")
     visible = set()
     for title, codes, subtitle in (
         (
@@ -368,15 +377,20 @@ def render_board(on_open):
     )
 
 
+@st.fragment(run_every=30)
 def render_session_cards(on_open, codes):
     context = current_context()
-    for code in codes:
+    from btc_analyzer.data.market_caps import cap_order
+
+    caps = context.feed("caps").value
+    for code in cap_order(codes, caps if isinstance(caps, dict) else {}):
         with st.container(key=f"board_card_{code}"):
             st.markdown(quote_fields(code, context=context), unsafe_allow_html=True)
-            st.button(
+            if st.button(
                 f"{MARKETS[code].name} 차트 열기",
                 key=f"open_{code}",
                 width="stretch",
                 on_click=on_open,
                 args=(code,),
-            )
+            ):
+                st.rerun(scope="app")

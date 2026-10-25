@@ -168,7 +168,7 @@ def price_chart(
         cols=1,
         shared_xaxes=True,
         row_heights=[0.60, 0.10, 0.14, 0.16] if oscillators else [0.78, 0.22],
-        vertical_spacing=0.025 if oscillators else 0.03,
+        vertical_spacing=0.016 if oscillators else 0.02,
     )
     fig.add_trace(
         go.Candlestick(

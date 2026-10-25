@@ -83,7 +83,9 @@ const ChartCanvas = (()=>{
         const colors=t.marker?.color,zero=py(0);
         for(let i=begin;i<end;i++){
           if(!Number.isFinite(ys[i])||ys[i]===0)continue;
-          ctx.fillStyle=typeof colors==='string'?colors:colors?.[i]||'#3182f6';const at=py(ys[i]);
+          const color=typeof colors==='string'?colors:colors?.[i]||'#3182f6';
+          if(t.name==='MACD 히스토그램'&&['#8b5cf6','#f59e0b'].includes(color)){ctx.fillStyle=color;ctx.globalAlpha=.14;ctx.fillRect(px(xs[i])-barWidth/2,0,barWidth,height);ctx.globalAlpha=t.opacity??1;}
+          ctx.fillStyle=color;const at=py(ys[i]);
           ctx.fillRect(px(xs[i])-barWidth/2,Math.min(at,zero),barWidth,Math.max(1/ratio,Math.abs(zero-at)));
         }
       }

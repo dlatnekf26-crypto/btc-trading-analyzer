@@ -543,7 +543,7 @@ class MarketContextService:
                 self._failures[key] = 0
                 delay = NEWS_REFRESH_SECONDS if key.startswith("news") else QUOTE_REFRESH_SECONDS
                 if key in REFERENCE_KEYS:
-                    delay = 900 if key == "fx_extra" else 300
+                    delay = 21600 if key == "caps" else 900 if key == "fx_extra" else 300
                 if key == "fear":
                     delay = FEAR_REFRESH_SECONDS
                     if isinstance(value, FearGreed) and value.next_update is not None:

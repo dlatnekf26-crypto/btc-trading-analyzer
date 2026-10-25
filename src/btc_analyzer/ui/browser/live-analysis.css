@@ -5,3 +5,5 @@
 .btc-live-frames b{font-size:11px;color:#66758b}.btc-live-frames strong{font-size:15px;color:#192434}.btc-live-frames span{font-size:11px;color:#66758b}.btc-live-frames article[data-direction="1"] strong{color:#09845c}.btc-live-frames article[data-direction="-1"] strong{color:#d63851}
 .btc-live-forecast strong{font-size:20px;color:#09845c;font-variant-numeric:tabular-nums}.btc-live-forecast .btc-live-status{display:block}
 @media(max-width:600px){.btc-live-frames{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.btc-live-status{font-size:11px}#btc-live-analysis,.btc-live-forecast{padding:12px}}
+
+.btc-crosshair-price{white-space:pre-line!important;line-height:1.4!important;min-width:74px;max-width:150px;height:auto!important}

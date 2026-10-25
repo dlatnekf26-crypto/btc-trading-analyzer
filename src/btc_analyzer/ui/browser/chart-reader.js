@@ -29,7 +29,7 @@ const chartReader = (() => {
     for(const node of doc.querySelectorAll('.btc-chart-reader'))if(node.dataset.symbol===symbol){
       if(Number.isFinite(price)){
         const cached=cards.get(node),field=node.querySelector('[data-field="current"]');
-        if(cached?.quotePrice!==price||field?.textContent!==cached?.current){number(node,'current',price);cards.get(node).quotePrice=price;}
+        if(cached?.quotePrice!==price||field?.textContent!==cached?.current){number(node,'current',price);cards.get(node).quotePrice=price;cards.get(node).quoteSymbol=symbol;}
         if(node.dataset.lastQuoteStatus!==status)node.dataset.lastQuoteStatus=status;
         write(node.querySelector('[data-current-label]'),status.startsWith('장 마감')?'마지막 가격':'현재 가격');
       }else{
@@ -106,10 +106,14 @@ const chartReader = (() => {
     Object.assign(layer.querySelector('.btc-crosshair-x').style,{left:left+px+'px',top:first+'px',height:bottom-first+'px'});
     Object.assign(layer.querySelector('.btc-crosshair-y').style,{left:left+'px',top:top+py+'px',width:bounds.width+'px'});
     const p=layer.querySelector('.btc-crosshair-price');
-    Object.assign(p.style,{top:top+py-11+'px',left:Math.max(0,left+bounds.width-72)+'px'});
+    Object.assign(p.style,{top:top+py-11+'px',left:Math.max(0,left+bounds.width-118)+'px'});
     const panel=(point.plot.layout.meta.btcLive.panels??[]).find(p=>p.axis===point.yaxis._name);
     const digits=panel?.label==='RSI'?2:panel&&Math.abs(price)<1?6:reader(point.plot)?.dataset.decimals||2;
-    write(p,(panel?panel.label+' ':'')+money[digits].format(price));
+    const node=reader(point.plot),quote=cards.get(node),base=quote?.quoteSymbol===point.plot.layout.meta.btcLive.symbol?quote.quotePrice:null;
+    const pct=point.yaxis._name==='yaxis'&&Number.isFinite(base)&&base>0?(price/base-1)*100:null;
+    const reference=node?.dataset.lastQuoteStatus?.startsWith('장 마감')?'마지막가':'현재가';
+    write(p,(panel?panel.label+' ':'')+money[digits].format(price)+(pct===null?'':'\n'+reference+' 대비 '+(pct>=0?'+':'')+pct.toFixed(2)+'%'));
+    point.plot.dataset.cursorPercent=pct===null?'':String(pct);
     const t=layer.querySelector('.btc-crosshair-time');
     Object.assign(t.style,{top:bottom-19+'px',left:Math.max(left,Math.min(left+bounds.width-128,left+px-64))+'px'});
     write(t,view.label(x));

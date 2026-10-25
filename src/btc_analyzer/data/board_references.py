@@ -6,7 +6,7 @@ import math
 
 
 UTC = timezone.utc
-REFERENCE_KEYS = ("mood_us", "fx_extra")
+REFERENCE_KEYS = ("mood_us", "fx_extra", "caps")
 CNN_API = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
 CNN_SOURCE = "https://www.cnn.com/markets/fear-and-greed"
 MOOD_LEVELS = {
@@ -72,6 +72,10 @@ def fetch_reference(key, now):
     import json
     from btc_analyzer.data.market_context import _download
 
+    if key == "caps":
+        from btc_analyzer.data.market_caps import fetch_caps
+
+        return fetch_caps(now)
     if key == "fx_extra":
         return parse_won_rates(
             json.loads(_download("https://api.frankfurter.dev/v1/latest?base=EUR&symbols=KRW,JPY")), now

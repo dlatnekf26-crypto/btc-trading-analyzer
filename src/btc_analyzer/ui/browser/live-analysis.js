@@ -121,7 +121,7 @@ function makeLiveAnalysis(root) {
         }else{
           const ys=extra.map(r=>r[0]===k.at?b.features[column]:r[0]===b.seed.at?b.seed.features?.[column]??null:null);
           data.y=append(trace.y,ys);
-          if(column==='macd_hist')data['marker.color']=append(trace.colors,ys.map(y=>y>=0?'#10a878':'#e94b65'));
+          if(column==='macd_hist')data['marker.color']=append(trace.colors,ys.map((y,j)=>{const prev=j?ys[j-1]:trace.y?.at(-1);return Number.isFinite(prev)&&y>0&&prev<=0?'#8b5cf6':Number.isFinite(prev)&&y<0&&prev>=0?'#f59e0b':y>=0?'#10a878':'#e94b65';}));
         }
         indices.push(i);
         // Plotly treats undefined as leave unchanged, including mixed trace types.
