@@ -1,6 +1,7 @@
 """One small REST bridge; quote cards do not need repeated native reconstruction."""
 
 from html import escape
+from datetime import datetime, timezone, timedelta
 import json
 
 import streamlit as st
@@ -12,6 +13,15 @@ from btc_analyzer.data.quote_hours import cached_market_hours as market_hours
 def quote_display(value):
     extended = value.extended
     phase, boundary = market_hours(value.symbol)
+    if extended and extended.source == "KIS NXT":
+        from btc_analyzer.data.nxt_quotes import nxt_session, SEOUL
+
+        now = datetime.now(timezone.utc)
+        if (
+            extended.as_of.astimezone(SEOUL).date() == now.astimezone(SEOUL).date()
+            and nxt_session(now) == extended.session
+        ):
+            phase, boundary = extended.session, now + timedelta(seconds=15)
     return {
         "price": extended.price if extended else value.price,
         "asOf": int((extended.as_of if extended else value.as_of).timestamp() * 1000),
@@ -21,6 +31,7 @@ def quote_display(value):
         if value.change is not None
         else None,
         "session": extended.session if extended else "regular",
+        "source": extended.source if extended else "Yahoo Finance",
         "marketState": phase,
         "stateUntil": int(boundary.timestamp() * 1000) if boundary else 0,
     }

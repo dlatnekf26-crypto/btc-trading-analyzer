@@ -87,6 +87,7 @@
       }
       if(Number.isInteger(row.delay)&&row.delay>=-1&&row.delay<=1440)s.delay=row.delay;
       if(row.asOf<s.asOf)continue;
+      if(['KIS NXT','Yahoo Finance'].includes(row.source))s.source=row.source;
       // Equal-time REST metadata must not undo a stream tick's price.
       if(!s.stream||row.asOf>s.asOf){
         const change=validNumber(row.change)&&row.change>-100?row.change:null;
@@ -139,7 +140,7 @@
       if (bucket===s.bucket && s.points.length) s.points[s.points.length-1]=value.price;
       else s.points.push(value.price);
       Object.assign(s,{price:value.price,asOf:value.time,received:Date.now(),stream:true,
-        change,bucket,error:false,cached:false});
+        change,bucket,error:false,cached:false,source:'Yahoo Finance'});
       if(s.equity)s.session=session;
       s.points=s.points.slice(-60);
     }
@@ -192,7 +193,7 @@
       const connected=s.stream&&now-s.received<15000&&macroSocket?.readyState===1;
       const age=Math.max(0,Math.floor((now-s.asOf)/1000));
       const closed=s.marketState==='closed'&&now<s.stateUntil;
-      const statusKey=[closed,connected,s.cached,s.error,age>7200,age<=15,s.asOf,s.delay,s.session].join('|');
+      const statusKey=[closed,connected,s.cached,s.error,age>7200,age<=15,s.asOf,s.delay,s.session,s.source].join('|');
       if (s.statusKey!==statusKey) {
         const tone=s.cached||s.error||age>7200?'stale':connected&&age<=15&&s.delay===0?'stream':'delayed';
         s.tone=tone;
@@ -200,7 +201,7 @@
         s.badgeText=s.phase||(connected?'스트림':tone==='stale'?'마지막 시세':'공개 조회');
         const last=closed?(s.session==='post'?'장후 마지막 거래가':s.session==='pre'?'장전 마지막 거래가':'마지막 거래가'):null;
         const source=s.cached?'최근 수신 · '+(last||'마지막 값'):s.error?'갱신 지연 · '+(last||'마지막 값'):last||(connected?'스트림 수신':age>7200?'마지막 거래':'공개 조회');
-        s.statusText=(s.phase?s.phase+' · ':'')+source+' · '+dayFormat.format(new Date(s.asOf))+' '+clock(s.asOf)+' KST · '+(s.delay>=0?'지연 '+s.delay+'분':'지연 미확인');
+        s.statusText=(s.phase?s.phase+' · ':'')+(s.source==='KIS NXT'?'KIS NXT · ':'')+source+' · '+dayFormat.format(new Date(s.asOf))+' '+clock(s.asOf)+' KST · '+(s.delay>=0?'지연 '+s.delay+'분':'지연 미확인');
         s.statusKey=statusKey;
       }
       if (el.dataset.status!==s.tone) el.dataset.status=s.tone;

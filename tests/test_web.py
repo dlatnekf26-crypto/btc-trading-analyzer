@@ -193,7 +193,7 @@ def test_live_analysis_failure_keeps_independent_quote_widget(monkeypatch, tmp_p
     assert any("Candle API unavailable" in item.value for item in app.error)
     assert len(app.get("iframe")) == 1
     assert "시세 카드의 실시간 연결은 독립적으로" in app.info[0].value
-    assert not app.get("plotly_chart")
+    assert len(app.get("plotly_chart")) == 1  # Independent selected chart survives strategy failure.
     assert not app.warning
 
 

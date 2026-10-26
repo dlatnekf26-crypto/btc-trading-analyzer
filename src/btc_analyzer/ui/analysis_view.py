@@ -49,8 +49,44 @@ def dashboard(asset_code: str) -> None:
     sequence = st.session_state.get("market_refresh_sequence", 0)
     refresh = sequence != st.session_state.get("market_refresh_consumed", 0)
     st.session_state["market_refresh_consumed"] = sequence
+    available_cutoff = pd.Timestamp.now(tz="UTC")
+    if st.session_state.get("dashboard_tab") not in (None, "시장 개요", "미래 예측"):
+        st.session_state["dashboard_tab"] = "시장 개요"
+    prediction_active = st.session_state.get("dashboard_tab") == "미래 예측"
+
+    tabs = st.tabs(
+        ["시장 개요", "미래 예측"],
+        key="dashboard_tab",
+        on_change="rerun",
+    )
+    if tabs[0].open:
+        with tabs[0]:
+            from btc_analyzer.ui.market_view import render_market_chart
+
+            render_market_chart(
+                cfg=cfg,
+                display_timezone=display_timezone,
+                average_lines=average_lines,
+                asset_code=asset_code,
+                cache_path=str(cache_path),
+            )
+    if tabs[1].open:
+        with tabs[1]:
+            from btc_analyzer.ui.history_view import render_history_view
+
+            render_history_view(
+                cache_path=str(cache_path),
+                exchange=exchange,
+                symbol=symbol,
+                cutoff=available_cutoff,
+                demo=False,
+                demo_frames={},
+                research_timeframe=timeframe,
+                timezone=display_timezone,
+                refresh=refresh,
+            )
+
     try:
-        available_cutoff = pd.Timestamp.now(tz="UTC")
         collection_end = candle_boundary(available_cutoff, "1h")
         start = collection_end.normalize() - pd.Timedelta(days=30)
         args = (str(cache_path), exchange, symbol, timeframe, start, collection_end)
@@ -70,10 +106,6 @@ def dashboard(asset_code: str) -> None:
 
     from btc_analyzer.ui.live_analysis import render_live_analysis
 
-    if st.session_state.get("dashboard_tab") not in (None, "시장 개요", "미래 예측"):
-        st.session_state["dashboard_tab"] = "시장 개요"
-    prediction_active = st.session_state.get("dashboard_tab") == "미래 예측"
-
     def render_current_analysis():
         with st.expander("종합 판단 · 매수·매도와 가격 근거", expanded=False):
             render_live_analysis(enriched, cfg.indicators, asset.stream_symbol)
@@ -84,22 +116,8 @@ def dashboard(asset_code: str) -> None:
             if not prediction_active:
                 st.button("미래 예측 보기 →", type="primary", on_click=open_history_comparison)
 
-    tabs = st.tabs(
-        ["시장 개요", "미래 예측"],
-        key="dashboard_tab",
-        on_change="rerun",
-    )
     if tabs[0].open:
         with tabs[0]:
-            from btc_analyzer.ui.market_view import render_market_chart
-
-            render_market_chart(
-                cfg=cfg,
-                display_timezone=display_timezone,
-                average_lines=average_lines,
-                asset_code=asset_code,
-                cache_path=str(cache_path),
-            )
             render_current_analysis()
             from btc_analyzer.ui.market_insights import render_market_insights
 
@@ -107,22 +125,6 @@ def dashboard(asset_code: str) -> None:
             with st.expander("종합 판단의 전체 근거"):
                 for reason in combined.reasons:
                     st.write(f"• {reason}")
-    if tabs[1].open:
-        with tabs[1]:
-            from btc_analyzer.ui.history_view import render_history_view
-
-            render_history_view(
-                cache_path=str(cache_path),
-                exchange=exchange,
-                symbol=symbol,
-                cutoff=available_cutoff,
-                demo=False,
-                demo_frames={},
-                research_timeframe=timeframe,
-                timezone=display_timezone,
-                refresh=refresh,
-            )
-
     if not tabs[0].open:
         render_current_analysis()
 

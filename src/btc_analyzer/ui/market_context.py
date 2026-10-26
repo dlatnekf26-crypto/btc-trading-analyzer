@@ -1,6 +1,9 @@
 """Independent native macro/news fragment; crypto sockets are never recreated."""
 
 from datetime import datetime, timedelta
+from dataclasses import replace
+import os
+from hashlib import sha256
 from html import escape
 from zoneinfo import ZoneInfo
 
@@ -37,8 +40,61 @@ def context_service():
     return cached_context_service(__checkout_signature__)
 
 
+def _nxt_credentials():
+    from streamlit.errors import StreamlitSecretNotFoundError
+
+    key, secret = os.getenv("KIS_APP_KEY", ""), os.getenv("KIS_APP_SECRET", "")
+    try:
+        key, secret = key or st.secrets.get("KIS_APP_KEY", ""), secret or st.secrets.get("KIS_APP_SECRET", "")
+    except (FileNotFoundError, StreamlitSecretNotFoundError):
+        pass
+    return (
+        (key, secret)
+        if all(isinstance(v, str) and v and not any(c in v for c in "\r\n") for v in (key, secret))
+        else None
+    )
+
+
+@st.cache_resource(show_spinner=False, max_entries=1, on_release=lambda service: service.close())
+def nxt_service(version, fingerprint, _key, _secret):
+    from btc_analyzer.data.nxt_quotes import NXTClient, CODES
+
+    return MarketContextService(fetcher=NXTClient(_key, _secret).fetch, keys=tuple(CODES))
+
+
 def current_context():
-    return context_service().snapshot()
+    context = context_service().snapshot()
+    credentials = _nxt_credentials()
+    if not credentials:
+        return context
+    from btc_analyzer.data.extended_quotes import ExtendedQuote
+
+    identity = sha256((credentials[0] + ":" + credentials[1]).encode()).hexdigest()
+    extra = nxt_service(__checkout_signature__, identity, *credentials).snapshot()
+    now = datetime.now(UTC)
+    nxt = {feed.key: feed for feed in extra.feeds}
+    feeds = []
+    for feed in context.feeds:
+        nxt_feed = nxt.get("nxt_" + feed.key)
+        quote = nxt_feed.value if nxt_feed else None
+        value = feed.value
+        if (
+            isinstance(value, MacroQuote)
+            and isinstance(quote, ExtendedQuote)
+            and timedelta(0) <= now - quote.as_of <= timedelta(days=7)
+            and quote.as_of > (value.extended.as_of if value.extended else value.as_of)
+        ):
+            feed = replace(
+                feed,
+                value=replace(
+                    value,
+                    extended=quote,
+                    delay_minutes=None,
+                    fetched_at=nxt_feed.updated_at or value.fetched_at,
+                ),
+            )
+        feeds.append(feed)
+    return replace(context, feeds=tuple(feeds))
 
 
 def sparkline(points):

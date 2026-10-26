@@ -130,3 +130,13 @@ def test_minute_failure_uses_validated_daily_metadata_and_rate_limits_are_respec
     with pytest.raises(requests.HTTPError):
         market_context.fetch_feed("aapl", NOW)
     assert len(calls) == 1
+
+
+def test_historical_post_session_is_retained_when_current_period_moves_to_next_day():
+    payload = quote_payload()
+    meta = payload["chart"]["result"][0]["meta"]
+    previous = deepcopy(meta["currentTradingPeriod"]["post"])
+    meta["tradingPeriods"] = {"post": [[previous]]}
+    meta["currentTradingPeriod"]["post"] = {k: v + 86400 for k, v in previous.items()}
+    quote = parse_quote(payload, "AAPL", NOW)
+    assert quote.extended.price == 102
