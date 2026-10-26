@@ -13,6 +13,7 @@ from btc_analyzer.analysis.direction_explanation import explain_direction
 from btc_analyzer.analysis.price_explanation import explain_price
 from btc_analyzer.ui.charts import READ_CHART_CONFIG, bind_asset
 from btc_analyzer.ui.chart_reader import CHART_ACTIONS
+from btc_analyzer.indicators.averages import market_averages
 from btc_analyzer.ui.market_context import current_context
 from btc_analyzer.data.market_context import UTC
 from btc_analyzer.ui.direction_view import direction_cards, direction_headline, direction_reason_card
@@ -225,10 +226,7 @@ def render_prediction(
             )
 
         asset = MARKETS[asset_code]
-        fields = (
-            ("ema_20", "EMA 20"),
-            ("ema_50", "EMA 50"),
-            ("ema_200", "EMA 200"),
+        fields = tuple((key, key.upper().replace("_", " ")) for key in market_averages(asset_code)) + (
             ("bb_upper", "볼린저 상단"),
             ("bb_middle", "볼린저 중심"),
             ("bb_lower", "볼린저 하단"),

@@ -4,6 +4,7 @@ from html import escape
 import math
 
 from btc_analyzer.assets import MARKETS, SESSION_MARKETS, price_text
+from btc_analyzer.indicators.averages import AVERAGE_COLORS
 
 FIELDS = {
     "rsi": "RSI 14",
@@ -17,6 +18,9 @@ FIELDS = {
     "ema_20": "EMA 20",
     "ema_50": "EMA 50",
     "ema_200": "EMA 200",
+    "sma_20": "SMA 20",
+    "sma_60": "SMA 60",
+    "sma_120": "SMA 120",
     "bb_upper": "볼린저 상단",
     "bb_middle": "볼린저 중심",
     "bb_lower": "볼린저 하단",
@@ -56,9 +60,7 @@ def reader_html(frame, timeframe, asset_code, averages, bands):
         for key in keys
     )
     colors = {
-        "ema_20": "#dd9b24",
-        "ema_50": "#3182f6",
-        "ema_200": "#8c65da",
+        **AVERAGE_COLORS,
         "bb_middle": "#819bbd",
         "ichimoku_tenkan": "#3182f6",
         "ichimoku_kijun": "#dd9b24",

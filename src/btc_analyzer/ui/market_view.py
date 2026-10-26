@@ -14,6 +14,7 @@ from btc_analyzer.ui.chart_reader import reader_html
 from btc_analyzer.market_clock import bar_closes
 from btc_analyzer.ui.canvas_chart import canvas_market
 from btc_analyzer.ui.chart_timeline import compact_timeline
+from btc_analyzer.indicators.averages import market_averages
 
 
 @st.cache_data(ttl=3600, max_entries=24, show_spinner=False, hash_funcs=MARKET_HASH_FUNCS)
@@ -67,7 +68,7 @@ def market_chart_spec(
     overlays = {}
     bands_seen = iter(("bb_upper", "bb_middle", "bb_lower"))
     for index, trace in enumerate(fig.data):
-        if trace.name.startswith("EMA "):
+        if trace.name.startswith(("EMA ", "SMA ")):
             overlays[str(index)] = trace.name.lower().replace(" ", "_")
         elif trace.name in ("RSI", "MACD", "MACD 시그널", "MACD 히스토그램"):
             overlays[str(index)] = {
@@ -118,10 +119,11 @@ def render_price_chart(
     asset_code,
     *,
     timezone="Asia/Seoul",
-    averages=("ema_20", "ema_50", "ema_200"),
+    averages=None,
     displacement=26,
 ):
     """One bounded chart/reader path for crypto, stocks, indices and commodities."""
+    averages = market_averages(asset_code) if averages is None else averages
     unit = EXCHANGE_HISTORY[asset_code].unit if asset_code in EXCHANGE_HISTORY else "USDT"
     shown = features.tail(CHART_CANDLES)
     st.markdown(

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import pandas as pd
 import plotly.graph_objects as go
 from btc_analyzer.assets import MARKETS
+from btc_analyzer.indicators.averages import AVERAGE_COLORS
 
 
 from plotly.subplots import make_subplots
@@ -188,7 +189,6 @@ def price_chart(
     )
     if ichimoku:
         add_ichimoku(fig, df, frame, timezone, ichimoku_detail)
-    average_colors = {"ema_20": "#dd9b24", "ema_50": "#3182f6", "ema_200": "#8c65da"}
     for key in averages:
         if key in frame and frame[key].notna().any():
             fig.add_trace(
@@ -196,7 +196,7 @@ def price_chart(
                     x=x,
                     y=frame[key],
                     name=key.upper().replace("_", " "),
-                    line={"width": 1.5, "color": average_colors.get(key, "#91a8c8")},
+                    line={"width": 1.5, "color": AVERAGE_COLORS.get(key, "#91a8c8")},
                 ),
                 row=1,
                 col=1,

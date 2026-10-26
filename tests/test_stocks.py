@@ -174,6 +174,16 @@ def test_stock_cards_open_shared_chart_and_forecast_with_correct_units(code, off
     spec = json.loads(app.get("plotly_chart")[0].proto.spec)
     assert spec["layout"]["meta"]["btcLive"]["symbol"] == SESSION_MARKETS[code].symbol
     assert len(spec["layout"]["meta"]["btcLive"]["panels"]) == 2
+    averages = (
+        ("sma_20", "sma_60", "sma_120")
+        if EXCHANGE_HISTORY[code].calendar == "KRX"
+        else ("ema_20", "ema_50", "ema_200")
+    )
+    reader = next(item.value for item in app.markdown if 'id="btc-chart-reader"' in item.value)
+    assert all(f'data-field="{key}"' in reader for key in averages)
+    assert set(spec["layout"]["meta"]["btcLive"]["overlays"].values()).intersection(
+        {"ema_20", "ema_50", "ema_200", "sma_20", "sma_60", "sma_120"}
+    ) == {key for key in averages if any(t["name"] == key.upper().replace("_", " ") for t in spec["data"])}
     app.session_state["dashboard_tab"] = "미래 예측"
     app.run(timeout=60)
     assert not app.exception and not app.error
@@ -181,6 +191,11 @@ def test_stock_cards_open_shared_chart_and_forecast_with_correct_units(code, off
     readers = [item.value for item in app.markdown if 'id="btc-forecast-reader"' in item.value]
     if has_forecast:
         assert any(EXCHANGE_HISTORY[code].unit in value for value in readers)
+        assert all(f'data-field="{key}"' in readers[0] for key in averages)
+        forecast = json.loads(app.get("plotly_chart")[0].proto.spec)
+        assert {"예상 " + key.upper().replace("_", " ") for key in averages} <= {
+            t["name"] for t in forecast["data"]
+        }
     else:
         assert any("가중 유효 사례가 2.5개 이상이어야 예측합니다" in item.value for item in app.info)
         assert not readers  # Insufficient evidence must not create a forecast price.

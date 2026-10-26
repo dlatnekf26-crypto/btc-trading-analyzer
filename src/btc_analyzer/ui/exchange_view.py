@@ -8,6 +8,7 @@ from btc_analyzer.config import AppConfig, CHART_TIMEFRAMES
 from btc_analyzer.assets import SESSION_MARKETS, EXCHANGE_HISTORY
 from btc_analyzer.data.exchange_history import fetch_history, aggregate
 from btc_analyzer.indicators.core import indicators
+from btc_analyzer.indicators.averages import market_averages
 from btc_analyzer.market_clock import bar_closes
 from btc_analyzer.strategy.composite import FRAME_LABELS
 from btc_analyzer.ui.market_view import render_price_chart
@@ -86,17 +87,19 @@ def render_exchange_market(market):
                 )
                 close_at = bar_closes(raw, raw.index[-1], tf)
                 row = features.iloc[-1]
-                ready = pd.notna(row.ema_50) and pd.notna(row.rsi)
+                fast_key, slow_key, _ = market_averages(market)
+                fast, slow = row[fast_key], row[slow_key]
+                ready = pd.notna(slow) and pd.notna(row.rsi)
                 trend = (
                     "상승 추세 우위"
-                    if ready and row.close > row.ema_20 > row.ema_50
+                    if ready and row.close > fast > slow
                     else "하락 추세 우위"
-                    if ready and row.close < row.ema_20 < row.ema_50
+                    if ready and row.close < fast < slow
                     else "방향 확인 중"
                 )
                 st.markdown(f"**{FRAME_LABELS[tf]} · {trend}**")
                 st.caption(
-                    f"확정 {close_at.tz_convert('Asia/Seoul'):%m.%d %H:%M} KST · RSI {row.rsi:.1f} · EMA20 대비 {(row.close / row.ema_20 - 1):+.1%}"
+                    f"확정 {close_at.tz_convert('Asia/Seoul'):%m.%d %H:%M} KST · RSI {row.rsi:.1f} · {fast_key.upper().replace('_', ' ')} 대비 {(row.close / fast - 1):+.1%}"
                     if ready
                     else "지표에 필요한 연속 이력이 부족합니다."
                 )

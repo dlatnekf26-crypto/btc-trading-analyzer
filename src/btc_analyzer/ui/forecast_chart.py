@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from btc_analyzer.analysis.forecast import ForecastReport, forecast_dates
-from btc_analyzer.analysis.projected_indicators import project_indicators, PROJECTION_FIELDS
+from btc_analyzer.analysis.projected_indicators import project_indicators, projection_fields
 from btc_analyzer.candles import candle_close
 from btc_analyzer.ui.charts import style_chart
 from btc_analyzer.ui.direction_view import COLORS
@@ -349,9 +349,13 @@ def prediction_chart(
             "bb_middle": "예상 볼린저 중심",
             "bb_lower": "예상 볼린저 하단",
         }
-        for field, color in zip(PROJECTION_FIELDS, colors):
+        for field, color in zip(projection_fields(indicator_seed), colors):
             overlays[str(len(fig.data))] = field
-            label = "예상 EMA " + field.split("_")[1] if field.startswith("ema") else labels[field]
+            label = (
+                "예상 " + field.upper().replace("_", " ")
+                if field.startswith(("ema_", "sma_"))
+                else labels[field]
+            )
             fig.add_trace(
                 go.Scatter(
                     x=future,
