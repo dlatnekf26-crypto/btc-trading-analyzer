@@ -57,8 +57,15 @@
   let snapshotRaw=null,lastMacroSave=0;
   const macroCacheKey='market-last-quotes-v1';
   const quoteTime=t=>Number.isSafeInteger(t)&&t>0&&t<=Date.now()+5000&&Date.now()-t<=7*86400000;
+  const referenceDates=Object.fromEntries(['USD','KRW','JPY'].map(c=>[c,new Intl.DateTimeFormat('en-CA',{timeZone:{USD:'America/New_York',KRW:'Asia/Seoul',JPY:'Asia/Tokyo'}[c]})]));
+  function referenceChange(s,price,session,at=s.asOf) {
+    const extended=s.equity&&['pre','post','extended'].includes(session);
+    if(!extended&&(!validNumber(s.regularAsOf)||referenceDates[s.currency]?.format(at)!==referenceDates[s.currency]?.format(s.regularAsOf)))return null;
+    const base=extended?s.regularPrice:validNumber(s.regularPrice)&&validNumber(s.regularChange)&&s.regularChange>-100?s.regularPrice/(1+s.regularChange/100):null;
+    return validNumber(base)&&base>0?(price/base-1)*100:null;
+  }
   function readMacroRows(rows,cached=false){
-    if(!Array.isArray(rows)||rows.length>32)return;
+    if(!Array.isArray(rows)||rows.length>macroSymbols.length)return;
     for(const row of rows){
       if(!row||typeof row!=='object')continue;
       const s=macros[row.symbol];if(!s)continue;
@@ -73,8 +80,9 @@
       if(validNumber(row.regularPrice)&&row.regularPrice>0&&quoteTime(row.regularAsOf)&&row.regularAsOf>=(s.regularAsOf||0)){
         s.regularPrice=row.regularPrice;s.regularAsOf=row.regularAsOf;
         for(const key of ['regularChange','high','low','volume'])s[key]=validNumber(row[key])?row[key]:null;
-        if(s.equity&&['pre','post','extended'].includes(s.session)&&s.price!==null){
-          const change=(s.price/s.regularPrice-1)*100;s.dirty ||= change!==s.change;s.change=change;
+        if(s.price!==null){
+          const change=referenceChange(s,s.price,s.session);
+          if(change!==null){s.dirty ||= change!==s.change;s.change=change;}
         }
       }
       if(Number.isInteger(row.delay)&&row.delay>=-1&&row.delay<=1440)s.delay=row.delay;
@@ -124,8 +132,8 @@
       if (value.time<s.asOf) return;
       const bucket=Math.floor(value.time/60000);
       const session={0:'pre',1:'regular',2:'post',3:'extended'}[value.marketHours]??'stream';
-      const change=s.equity&&['pre','post','extended'].includes(session)&&validNumber(s.regularPrice)?
-        (value.price/s.regularPrice-1)*100:validNumber(value.change)&&value.change>-100?value.change:null;
+      const calculated=referenceChange(s,value.price,session,value.time);
+      const change=s.equity&&['pre','post','extended'].includes(session)&&calculated!==null?calculated:validNumber(value.change)&&value.change>-100?value.change:calculated;
       s.dirty ||= s.price!==value.price || s.change!==change || !s.stream;
       s.graphDirty ||= s.price!==value.price || bucket!==s.bucket;
       if (bucket===s.bucket && s.points.length) s.points[s.points.length-1]=value.price;
