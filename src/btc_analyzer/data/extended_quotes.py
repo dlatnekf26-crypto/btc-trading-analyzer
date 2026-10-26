@@ -24,6 +24,36 @@ def extended_quote(result, regular_at, now):
     ):
         return None
     periods = meta.get("currentTradingPeriod") or {}
+    periods = periods if isinstance(periods, dict) else {}
+    historical = meta.get("tradingPeriods") or {}
+    historical = historical if isinstance(historical, dict) else {}
+    regular_stamp, now_stamp = regular_at.timestamp(), now.timestamp()
+    sessions = {}
+    for session in ("pre", "post"):
+        intervals = [periods.get(session)]
+        days = historical.get(session)
+        if isinstance(days, list):
+            for day in days[:16]:
+                if isinstance(day, list):
+                    intervals.extend(day[:4])
+        valid = []
+        for period in intervals:
+            if not isinstance(period, dict):
+                continue
+            start, end = period.get("start"), period.get("end")
+            if (
+                all(
+                    isinstance(n, (int, float)) and not isinstance(n, bool) and math.isfinite(n)
+                    for n in (start, end)
+                )
+                and 0 < end - start <= 86400
+                and end > regular_stamp
+                and start <= now_stamp
+            ):
+                valid.append((start, end))
+        sessions[session] = valid
+    if not any(sessions.values()):
+        return None
     candidates = []
 
     def add(price, stamp, session):
@@ -32,22 +62,10 @@ def extended_quote(result, regular_at, now):
             isinstance(n, (int, float)) and not isinstance(n, bool) and math.isfinite(n) for n in numbers
         ):
             return
-        if price <= 0 or not regular_at.timestamp() < stamp <= now.timestamp():
+        if price <= 0 or not regular_stamp < stamp <= now_stamp:
             return
-        intervals = [periods.get(session) or {}]
-        historical = meta.get("tradingPeriods") or {}
-        if isinstance(historical, dict):
-            for day in historical.get(session, [])[:16]:
-                if isinstance(day, list):
-                    intervals.extend(p for p in day[:4] if isinstance(p, dict))
-        for period in intervals:
-            start, end = period.get("start"), period.get("end")
-            if not all(
-                isinstance(n, (int, float)) and not isinstance(n, bool) and math.isfinite(n)
-                for n in (start, end)
-            ):
-                continue
-            if 0 < end - start <= 86400 and start <= stamp < end:
+        for start, end in sessions[session]:
+            if start <= stamp < end:
                 candidates.append(
                     ExtendedQuote(float(price), datetime.fromtimestamp(stamp, timezone.utc), session)
                 )
@@ -58,7 +76,11 @@ def extended_quote(result, regular_at, now):
         add(meta.get(stem + "Price"), meta.get(stem + "Time"), session)
     if meta.get("dataGranularity") in ("1m", "2m", "5m", "15m"):
         closes = result.get("indicators", {}).get("quote", [{}])[0].get("close") or []
-        for stamp, price in reversed(list(zip(result.get("timestamp") or [], closes))):
+        stamps = result.get("timestamp") or []
+        for i in range(min(len(stamps), len(closes)) - 1, -1, -1):
+            stamp, price = stamps[i], closes[i]
+            if isinstance(stamp, (int, float)) and stamp <= regular_stamp:
+                continue
             before = len(candidates)
             for session in ("pre", "post"):
                 add(price, stamp, session)

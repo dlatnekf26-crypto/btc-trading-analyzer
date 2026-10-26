@@ -140,3 +140,24 @@ def test_historical_post_session_is_retained_when_current_period_moves_to_next_d
     meta["currentTradingPeriod"]["post"] = {k: v + 86400 for k, v in previous.items()}
     quote = parse_quote(payload, "AAPL", NOW)
     assert quote.extended.price == 102
+
+
+@pytest.mark.parametrize("bad", [None, [], "unavailable", 12, {"post": None}, {"post": [None, "bad"]}])
+def test_malformed_optional_sessions_keep_regular_quote_and_valid_history(bad):
+    payload = quote_payload()
+    meta = payload["chart"]["result"][0]["meta"]
+    valid_post = deepcopy(meta["currentTradingPeriod"]["post"])
+    meta.update(currentTradingPeriod=bad, tradingPeriods=bad)
+    quote = parse_quote(payload, "AAPL", NOW)
+    assert quote.price == 100 and quote.extended is None
+    meta["tradingPeriods"] = {"post": [[None, valid_post]]}
+    assert parse_quote(payload, "AAPL", NOW).extended.price == 102
+
+
+def test_uneven_minute_arrays_do_not_pair_different_candles():
+    payload = quote_payload()
+    result = payload["chart"]["result"][0]
+    result["indicators"]["quote"][0]["close"].pop()
+    quote = parse_quote(payload, "AAPL", NOW)
+    assert quote.extended.price == 101
+    assert quote.extended.as_of.timestamp() == result["timestamp"][1]

@@ -104,8 +104,10 @@ def market_chart_spec(
     # Plotly's date axes use display wall time. Integer milliseconds avoid
     # repeating long ISO/timezone strings in every overlay; source cutoffs stay UTC.
     for trace in fig.data:
+        dates = pd.DatetimeIndex(trace.x).as_unit("ns")
         trace.x = [
-            None if t is None else int(pd.Timestamp(t).tz_localize(None).value // 1_000_000) for t in trace.x
+            None if missing else int(value)
+            for value, missing in zip(dates.tz_localize(None).asi8 // 1_000_000, dates.isna())
         ]
     fig.update_xaxes(type="date")
     spec = fig.to_dict()
