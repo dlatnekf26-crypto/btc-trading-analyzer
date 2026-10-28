@@ -32,8 +32,14 @@ def test_landing_never_collects_candles_or_forecasts(monkeypatch):
 
     assert len(app.button) == 22  # Five stocks per country, plus coins/indices/macros.
     assert {button.key for button in app.button} <= {"open_" + code for code in MARKETS}
+    assert not any('class="board-fx' in item.value for item in app.markdown)
+    app.session_state["board_context_open"] = True
+    app.run()
+    assert any('class="board-fx' in item.value for item in app.markdown)
+    app.session_state["board_context_open"] = False
     app.run()
     assert not app.exception and not app.get("plotly_chart")
+    assert not any('class="board-fx' in item.value for item in app.markdown)
 
 
 @pytest.mark.parametrize("market", ["BTC", "ETH", "SOL", "XRP", "NQ", "KOSPI"])

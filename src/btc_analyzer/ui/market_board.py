@@ -318,12 +318,29 @@ def render_board_fx():
 
 
 def matching_markets(codes, query):
-    query = query.strip().casefold()
-    return tuple(
-        code
-        for code in codes
-        if not query or query in f"{code} {MARKETS[code].name} {MARKETS[code].symbol}".casefold()
-    )
+    def compact(value):
+        return "".join(value.casefold().split())
+
+    query = compact(query)
+    aliases = {
+        "SAMSUNG": "삼전 samsung electronics",
+        "SKHYNIX": "하닉 sk hynix",
+        "NVDA": "엔비디아 nvidia",
+        "GOOGL": "구글 google alphabet",
+        "MSFT": "마소 microsoft",
+    }
+
+    def searchable(code):
+        asset = MARKETS[code]
+        initials = "".join(
+            "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ"[(ord(char) - 0xAC00) // 588]
+            if 0xAC00 <= ord(char) <= 0xD7A3
+            else char
+            for char in asset.name
+        )
+        return compact(f"{code} {asset.name} {asset.symbol} {initials} {aliases.get(code, '')}")
+
+    return tuple(code for code in codes if not query or query in searchable(code))
 
 
 def render_search_results(query, on_open):
@@ -359,7 +376,7 @@ def render_board(on_open):
     )
     query = st.text_input(
         "종목 검색",
-        placeholder="종목 이름 · 티커 검색",
+        placeholder="이름·티커·초성 검색 · 예: 삼성, AAPL, ㅅㅅ",
         key="board_search",
         label_visibility="collapsed",
         type="search",
@@ -369,13 +386,22 @@ def render_board(on_open):
     if query.strip():
         render_search_results(query.strip(), on_open)
         return
+    from btc_analyzer.ui.quick_access import render_quick_access
+
+    render_quick_access(on_open)
     st.markdown(
         '<div class="board-topline"><div class="board-pill"><i></i>코인 24시간 거래</div>'
         "<span>가격은 실시간으로 · 판단은 근거와 함께</span></div>",
         unsafe_allow_html=True,
     )
-    render_stock_references()
-    render_board_fx()
+    with st.expander(
+        "시장 참고지표 · 공포·탐욕 / 환율 / 김치프리미엄",
+        key="board_context_open",
+        on_change="rerun",
+    ):
+        if st.session_state.get("board_context_open"):
+            render_stock_references()
+            render_board_fx()
     category = st.segmented_control(
         "시장 구분",
         ("전체", "국내", "미국", "코인", "지수·원자재"),

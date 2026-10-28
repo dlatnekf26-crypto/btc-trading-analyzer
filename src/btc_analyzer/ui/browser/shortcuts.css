@@ -1,0 +1,11 @@
+.shortcuts{font-family:inherit;color:#333d4b;margin:4px 0 12px}
+.shortcut-heading{display:flex;align-items:center;justify-content:space-between;margin:0 0 10px;font-size:14px;font-weight:700}
+.shortcut-note{font-size:12px;line-height:1.6;color:#6b7684;margin:6px 0}
+.shortcut-list{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+button{font:inherit;cursor:pointer;touch-action:manipulation;min-height:44px;border:1px solid #e8edf4;background:#f7f9fc;border-radius:12px;color:#333d4b;padding:10px 14px;transition:background .12s}
+button:hover{background:#edf3ff}button:focus-visible{outline:2px solid #3182f6;outline-offset:2px}
+.shortcut-favorite{background:#edf4ff;border-color:#dceaff;color:#2468cb}
+.shortcut-favorite[aria-pressed=true]{background:#e7f0ff}
+.shortcut-edit{min-height:44px;background:transparent;border:0;color:#6b7684;font-size:12px;padding:8px}
+.shortcut-heading small{font-weight:400;color:#8b95a1;font-size:11px}
+@media(prefers-reduced-motion:reduce){button{transition:none}}

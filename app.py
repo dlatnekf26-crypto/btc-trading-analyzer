@@ -78,6 +78,9 @@ def market_detail(code):
     if selected != code:
         st.query_params.update({"market": selected, "view": "chart"})
         st.rerun(scope="app")
+    from btc_analyzer.ui.quick_access import render_quick_access
+
+    render_quick_access(current=code)
     render_market_analysis(code)
 
 
