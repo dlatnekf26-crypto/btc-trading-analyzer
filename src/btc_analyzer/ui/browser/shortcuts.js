@@ -26,7 +26,7 @@ export default function(component) {
     if(state.favorites.includes(code))state.favorites=state.favorites.filter(x=>x!==code);
     else if(state.favorites.length<12)state.favorites.push(code);
     else {root.querySelector('[role=status]').textContent='관심종목은 12개까지 저장할 수 있어요.';return;}
-    save();
+    save();draw();
   }
   function list(codes,removable=false){
     const row=element('div','','shortcut-list');
@@ -55,12 +55,14 @@ export default function(component) {
     const status=element('p',stored?'':'저장 공간을 사용할 수 없어 현재 화면에서만 유지돼요.','shortcut-note');
     status.setAttribute('role','status');root.append(status);
   }
-  if(current&&Object.hasOwn(names,current)){
+  if(current&&Object.hasOwn(names,current)&&state.recent[0]!==current){
     state.recent=[current,...state.recent.filter(x=>x!==current)].slice(0,6);save();
   }
   function sync(event){
     if(event.type==='storage'&&event.key!==key&&event.key!==null)return;
-    state=read();draw();
+    const before=JSON.stringify([state,stored]);
+    state=read();
+    if(JSON.stringify([state,stored])!==before)draw();
   }
   window.addEventListener('storage',sync);window.addEventListener('market-shortcuts-change',sync);
   draw();

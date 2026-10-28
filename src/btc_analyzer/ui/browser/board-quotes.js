@@ -51,15 +51,17 @@
       }else if(macro){
         const original=parentDoc.getElementById('macro-'+macro.id);
         if(!original)continue;
+        if(fields.change&&macro.change!==null)write(fields.change.dataset,'direction',macro.change>=0?'up':'down');
+        if(original===node)continue; // The macro feed already updated this exact card.
+        const sourceFields=fieldsFor(original);
         // Preserve the macro bridge's text; its observer restores native reruns.
         for(const key of ['price','change','status']){
-          const source=original.querySelector('[data-quote-field="'+key+'"]');
+          const source=sourceFields[key];
           if(source&&source!==fields[key]){
             setField(fields,key,source.textContent);
           }
         }
         write(node.dataset,'status',original.dataset.status||'stale');
-        if(fields.change&&macro.change!==null)write(fields.change.dataset,'direction',macro.change>=0?'up':'down');
       }
     }
     const premiumNode=parentDoc.querySelector('[data-reference="premium"]');
