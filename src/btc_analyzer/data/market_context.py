@@ -497,6 +497,29 @@ def fetch_feed(key: str, now: datetime):
     return parse_news(_download("https://news.google.com/rss/search?" + params), now)
 
 
+def initial_feed_keys():
+    """Fetch visible stock rows before collapsed rows on a cold quote board."""
+    groups = [
+        [
+            asset.card_id.removeprefix("macro-")
+            for code, asset in STOCK_MARKETS.items()
+            if EXCHANGE_HISTORY[code].calendar == calendar
+        ][:5]
+        for calendar in ("KRX", "NYSE")
+    ]
+    visible = [key for pair in zip(*groups) for key in pair]
+    other_markets = [
+        asset.card_id.removeprefix("macro-")
+        for code, asset in SESSION_MARKETS.items()
+        if code not in STOCK_MARKETS
+    ]
+    return tuple(
+        dict.fromkeys(
+            ("fx", *visible, *other_markets, *SYMBOLS, "news_ko", "news_en", "fear", *REFERENCE_KEYS)
+        )
+    )
+
+
 class MarketContextService:
     """Shared resources: one in-flight request per feed, independent last-good results."""
 
@@ -514,12 +537,7 @@ class MarketContextService:
         self._executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="market-context")
         # Slow news/capitalization requests cannot occupy quote workers.
         self._reference_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="market-reference")
-        self._states = {
-            key: FeedState(key)
-            for key in (
-                keys if keys is not None else (*SYMBOLS, "news_ko", "news_en", "fear", *REFERENCE_KEYS)
-            )
-        }
+        self._states = {key: FeedState(key) for key in (keys if keys is not None else initial_feed_keys())}
         self._refresh_intervals = refresh_intervals or {}
         self._next = dict.fromkeys(self._states, datetime.min.replace(tzinfo=UTC))
         self._failures = dict.fromkeys(self._states, 0)

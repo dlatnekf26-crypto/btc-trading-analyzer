@@ -2,13 +2,13 @@
 
 import json
 
-from btc_analyzer.ui.browser_assets import quotes_document
+from btc_analyzer.ui.browser_assets import quotes_document, browser_asset
 
 import streamlit as st
 import streamlit.components.v1 as components
 from btc_analyzer.assets import ASSETS, MARKETS, SESSION_MARKETS, EXCHANGE_HISTORY
 
-from btc_analyzer.ui.live_analysis import LIVE_ANALYSIS_CSS
+LIVE_ANALYSIS_CSS = "<style>" + browser_asset("live-analysis.css") + "</style>"
 
 LIVE_PRICES_HTML = quotes_document()
 

@@ -4,7 +4,7 @@ from html import escape
 import json
 
 import numpy as np
-from btc_analyzer.ui.browser_assets import browser_asset, live_analysis_js
+from btc_analyzer.ui.browser_assets import live_analysis_js
 
 
 import streamlit as st
@@ -108,9 +108,6 @@ def render_chart_seed(frame, timeframe, cfg, symbol):
         f'<span id="btc-chart-seed" data-symbol="{escape(symbol, quote=True)}" data-seeds="{payload}" hidden></span>',
         unsafe_allow_html=True,
     )
-
-
-LIVE_ANALYSIS_CSS = "<style>" + browser_asset("live-analysis.css") + "</style>"
 
 
 LIVE_ANALYSIS_JS = live_analysis_js()

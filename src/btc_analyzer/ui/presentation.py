@@ -11,7 +11,7 @@ import math
 
 if TYPE_CHECKING:
     from btc_analyzer.strategy.signal_engine import Analysis
-from btc_analyzer.strategy.composite import CompositeSignal, FRAME_LABELS, FRAME_WEIGHTS
+    from btc_analyzer.strategy.composite import CompositeSignal
 
 
 CSS = "<style>" + browser_asset("theme.css") + "</style>"
@@ -145,6 +145,8 @@ def summary_cards(analysis: Analysis) -> str:
 
 def composite_cards(signal: CompositeSignal) -> str:
     """Display five-horizon judgment; data coverage is never a success probability."""
+    from btc_analyzer.strategy.composite import FRAME_LABELS, FRAME_WEIGHTS
+
     cards = [
         ("중장기 방향", f"{signal.score.overall:.1f}<small> / 100</small>", "일봉·주봉·월봉 85%"),
         (
