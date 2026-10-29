@@ -26,13 +26,29 @@ export default function(component) {
     if(state.favorites.includes(code))state.favorites=state.favorites.filter(x=>x!==code);
     else if(state.favorites.length<12)state.favorites.push(code);
     else {root.querySelector('[role=status]').textContent='관심종목은 12개까지 저장할 수 있어요.';return;}
+    if(!state.favorites.length)editing=false;
+    save();draw();
+  }
+  function moveFirst(code){
+    state.favorites=[code,...state.favorites.filter(x=>x!==code)];
     save();draw();
   }
   function list(codes,removable=false){
     const row=element('div','','shortcut-list');
     for(const code of codes){
-      const b=button(names[code]+(removable?' ×':''),()=>removable?toggle(code):setTriggerValue('open',code));
-      b.setAttribute('aria-label',names[code]+(removable?' 관심종목에서 삭제':' 차트 열기'));row.append(b);
+      const b=button(names[code],()=>setTriggerValue('open',code));
+      b.setAttribute('aria-label',names[code]+' 차트 열기');
+      if(removable){
+        const group=element('div','','shortcut-item');
+        group.append(b);
+        if(code!==codes[0]){
+          const first=button('맨 앞',()=>moveFirst(code),'shortcut-action');
+          first.setAttribute('aria-label',names[code]+' 맨 앞으로 이동');group.append(first);
+        }
+        const remove=button('×',()=>toggle(code),'shortcut-action');
+        remove.setAttribute('aria-label',names[code]+' 관심종목에서 삭제');group.append(remove);
+        row.append(group);
+      }else row.append(b);
     }
     root.append(row);
   }
@@ -50,7 +66,13 @@ export default function(component) {
       if(state.favorites.length)list(state.favorites,editing);
       else root.append(element('p','차트에서 ☆를 누르면 여기에 모아볼 수 있어요.','shortcut-note'));
       const recent=state.recent.filter(x=>!state.favorites.includes(x));
-      if(recent.length){root.append(element('div','최근 본 종목','shortcut-heading'));list(recent);}
+      if(state.recent.length){
+        const heading=element('div','최근 본 종목','shortcut-heading');
+        heading.append(button('기록 지우기',()=>{state.recent=[];save();draw();},'shortcut-edit'));
+        root.append(heading);
+        if(recent.length)list(recent);
+        else root.append(element('p','최근 본 종목이 모두 관심종목에 있어요.','shortcut-note'));
+      }
     }
     const status=element('p',stored?'':'저장 공간을 사용할 수 없어 현재 화면에서만 유지돼요.','shortcut-note');
     status.setAttribute('role','status');root.append(status);

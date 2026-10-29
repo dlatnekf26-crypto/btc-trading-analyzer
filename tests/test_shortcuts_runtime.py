@@ -38,6 +38,24 @@ saved=JSON.stringify({favorites:[],recent:['ETH','BTC']});
 window.dispatchEvent({type:'storage',key:'market-shortcuts-v1'});
 assert.equal(root.children[0].attrs['aria-pressed'],'false');
 cleanup();assert.equal(listeners.size,0);
+// Home editing preserves chart navigation and saves the selected order.
+component.data.current=null;
+saved=JSON.stringify({favorites:['BTC','ETH'],recent:['BTC','ETH']});
+let opened=null;component.setTriggerValue=(key,code)=>{opened=code;};
+const stop=mount(component);
+const all=node=>[node,...node.children.flatMap(all)];
+const byText=text=>all(root).find(n=>n.textContent===text);
+const byLabel=label=>all(root).find(n=>n.attrs['aria-label']===label);
+byText('편집').onclick();
+byLabel('이더리움 맨 앞으로 이동').onclick();
+assert.deepEqual(JSON.parse(saved).favorites,['ETH','BTC']);
+byLabel('이더리움 차트 열기').onclick();assert.equal(opened,'ETH');
+byText('기록 지우기').onclick();
+assert.deepEqual(JSON.parse(saved),{favorites:['ETH','BTC'],recent:[]});
+byLabel('이더리움 관심종목에서 삭제').onclick();
+byLabel('비트코인 관심종목에서 삭제').onclick();
+assert.deepEqual(JSON.parse(saved).favorites,[]);
+stop();assert.equal(listeners.size,0);
 """
     )
     subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True, timeout=10)

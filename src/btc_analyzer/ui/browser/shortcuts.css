@@ -9,3 +9,10 @@ button:hover{background:#edf3ff}button:focus-visible{outline:2px solid #3182f6;o
 .shortcut-edit{min-height:44px;background:transparent;border:0;color:#6b7684;font-size:12px;padding:8px}
 .shortcut-heading small{font-weight:400;color:#8b95a1;font-size:11px}
 @media(prefers-reduced-motion:reduce){button{transition:none}}
+
+.shortcut-item{display:flex;align-items:center;max-width:100%;border:1px solid #e8edf4;border-radius:12px;background:#f7f9fc;overflow:hidden}
+.shortcut-item button{border:0;background:transparent;border-radius:0}
+.shortcut-item button:first-child{min-width:0;overflow-wrap:anywhere;text-align:left}
+.shortcut-item .shortcut-action{flex-shrink:0;color:#2468cb;padding:10px;min-width:44px;font-size:12px;border-left:1px solid #e8edf4}
+.shortcut-item button:hover{background:#edf3ff}
+.shortcut-item button:focus-visible{outline-offset:-3px}
