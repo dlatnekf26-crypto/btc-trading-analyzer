@@ -13,7 +13,7 @@ from btc_analyzer.ui.live_prices import live_prices_html
 
 
 def test_asset_identity_news_routing_and_small_price_precision():
-    assert len({a.symbol for a in ASSETS.values()}) == 4
+    assert len({a.symbol for a in ASSETS.values()}) == 16
     assert asset_news("Solana ETF inflows surge") == ("SOL",)
     assert asset_news("Ethereum ETF inflows create ripple effects") == ("ETH",)
     from btc_analyzer.data.market_context import crypto_relevance
@@ -22,7 +22,7 @@ def test_asset_identity_news_routing_and_small_price_precision():
     assert price_text(0.000031) == "0.000031"
     assert asset_news("XRP and Ethereum markets rise") == ("ETH", "XRP")
     assert asset_news("Crypto markets react to Fed rate cut") == tuple(ASSETS)
-    assert asset_news("Dogecoin ETF approved") == ()
+    assert asset_news("Dogecoin ETF approved") == ("DOGE",)
     assert price_text(1.1532) == "1.1532" and price_text(100000) == "100,000.00"
     assert len({live_prices_html(code) for code in ASSETS}) == 1
 

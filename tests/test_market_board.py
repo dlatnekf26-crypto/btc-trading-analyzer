@@ -30,7 +30,7 @@ def test_landing_never_collects_candles_or_forecasts(monkeypatch):
     assert not app.tabs and not app.get("plotly_chart")
     from btc_analyzer.assets import MARKETS
 
-    assert len(app.button) == 22  # Five stocks per country, plus coins/indices/macros.
+    assert len(app.button) == 25  # Five stocks per country, plus coins/indices/macros.
     assert {button.key for button in app.button} <= {"open_" + code for code in MARKETS}
     assert not any('class="board-fx' in item.value for item in app.markdown)
     app.session_state["board_context_open"] = True
@@ -99,6 +99,8 @@ def test_new_catalog_asset_appears_after_the_first_four_cards(monkeypatch):
     monkeypatch.setitem(MARKETS, "ADA", fifth)
     app = AppTest.from_file(ROOT / "web_app.py", default_timeout=30).run()
     assert not app.exception and not app.error
+    app.session_state["board_more_BTC"] = True
+    app.run()
     assert app.button(key="open_ADA").label == "에이다 차트 열기"
     assert sum(item.value.count('data-quote-symbol="ADAUSDT"') for item in app.markdown) == 1
     assert not app.get("plotly_chart")
@@ -118,13 +120,15 @@ def test_collapsed_stocks_are_not_rendered_and_search_finds_them():
     assert not any(button.key == "open_SAMSUNG_SDI" for button in app.button)
     app.session_state["board_more_SAMSUNG"] = True
     app.run()
-    assert len(app.button) == 37
+    assert len(app.button) == 35
+    app.session_state["board_more_SAMSUNG"] = True
+    app.selectbox(key="board_more_SAMSUNG_page").select(1).run()
     assert app.button(key="open_SAMSUNG_SDI")
     app.session_state["board_more_SAMSUNG"] = False
     app.run()
-    assert len(app.button) == 22
+    assert len(app.button) == 25
     app.text_input(key="board_search").set_value("삼성").run()
-    assert len(app.button) == 5
+    assert len(app.button) == 7
     assert not any('class="board-fx' in row.value for row in app.markdown)
     app.button(key="open_SAMSUNG_SDI").click().run()
     assert not app.exception and app.query_params["market"] == "SAMSUNG_SDI"

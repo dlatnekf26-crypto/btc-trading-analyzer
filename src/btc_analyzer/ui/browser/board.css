@@ -136,3 +136,5 @@
 .board-match{color:#3182f6}
 .board-asset{padding-top:15px!important;padding-bottom:15px!important;min-height:82px}
 @media(max-width:640px){.board-asset{min-height:78px;padding-top:13px!important;padding-bottom:13px!important}.board-search-identity{gap:12px;padding:12px 4px}.board-search-identity strong{font-size:16px}}
+
+.board-catalog-summary{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:4px 0 18px}.board-catalog-summary>span{background:#f1f6ff;border:1px solid #e7effc;border-radius:12px;padding:9px 12px;font-size:12px;color:#526580}.board-catalog-summary b{color:#2468cb;font-size:15px;margin-right:3px}.board-catalog-summary small{font-size:11px;color:#8b95a1;margin-left:auto}@media(max-width:640px){.board-catalog-summary small{width:100%;margin:2px 0 0}}

@@ -534,7 +534,24 @@ class MarketContextService:
     ):
         self._fetcher, self._clock = fetcher, clock
         self._lock = RLock()
-        self._executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="market-context")
+        # Keep collapsed stocks from delaying primary quotes as the catalog grows.
+        self._background_keys = set()
+        if keys is None and workers > 1:
+            for calendar in ("KRX", "NYSE"):
+                stocks = [
+                    asset.card_id.removeprefix("macro-")
+                    for code, asset in STOCK_MARKETS.items()
+                    if EXCHANGE_HISTORY[code].calendar == calendar
+                ]
+                self._background_keys.update(stocks[5:])
+        self._background_executor = (
+            ThreadPoolExecutor(max_workers=1, thread_name_prefix="market-catalog")
+            if self._background_keys
+            else None
+        )
+        self._executor = ThreadPoolExecutor(
+            max_workers=workers - bool(self._background_keys), thread_name_prefix="market-context"
+        )
         # Slow news/capitalization requests cannot occupy quote workers.
         self._reference_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="market-reference")
         self._states = {key: FeedState(key) for key in (keys if keys is not None else initial_feed_keys())}
@@ -549,7 +566,13 @@ class MarketContextService:
             for key, state in tuple(self._states.items()):
                 if not self._closed and not state.loading and now >= self._next[key]:
                     self._states[key] = FeedState(key, state.value, state.updated_at, state.error, True)
-                    executor = self._executor if key in SYMBOLS else self._reference_executor
+                    executor = (
+                        self._background_executor
+                        if key in self._background_keys
+                        else self._executor
+                        if key in SYMBOLS
+                        else self._reference_executor
+                    )
                     future = executor.submit(self._fetcher, key, now)
                     future.add_done_callback(lambda result, key=key: self._complete(key, result))
             return MarketContext(tuple(self._states.values()))
@@ -595,5 +618,7 @@ class MarketContextService:
     def close(self):
         with self._lock:
             self._closed = True
+        if self._background_executor:
+            self._background_executor.shutdown(wait=False, cancel_futures=True)
         self._executor.shutdown(wait=False, cancel_futures=True)
         self._reference_executor.shutdown(wait=False, cancel_futures=True)

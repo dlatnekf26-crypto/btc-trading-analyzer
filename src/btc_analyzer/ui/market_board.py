@@ -66,7 +66,8 @@ def asset_identity(code, query=""):
         if query
         else escape(MARKETS[code].name)
     )
-    color = COLORS.get(code, "#377de0")
+    palette = ("#377de0", "#14a889", "#8663cc", "#d49123", "#d86591")
+    color = COLORS.get(code, palette[sum(map(ord, code)) % len(palette)])
     icon = ICONS.get(code, escape(code[:1]))
     return (
         f'<span class="board-icon" style="--asset-color:{color}">{icon}</span>'
@@ -388,6 +389,14 @@ def render_board(on_open):
         return
     from btc_analyzer.ui.quick_access import render_quick_access
 
+    st.markdown(
+        '<div class="board-catalog-summary">'
+        f"<span><b>{len(STOCK_MARKETS)}</b> 주식</span>"
+        f"<span><b>{len(ASSETS)}</b> 코인</span>"
+        f"<span><b>{len(SESSION_MARKETS) - len(STOCK_MARKETS)}</b> 지수·금리·원자재</span>"
+        "<small>시장별 주요 5개 · 전체 종목 검색</small></div>",
+        unsafe_allow_html=True,
+    )
     render_quick_access(on_open)
     st.markdown(
         '<div class="board-topline"><div class="board-pill"><i></i>코인 24시간 거래</div>'
@@ -421,11 +430,19 @@ def render_board(on_open):
         (
             "미국 주식",
             tuple(code for code in STOCK_MARKETS if EXCHANGE_HISTORY[code].calendar == "NYSE"),
-            "NASDAQ · USD · 장전·장후 포함 · 야간 미제공",
+            "미국 거래소 · USD · 장전·장후 포함 · 야간 미제공",
         ),
         ("암호화폐", tuple(ASSETS), "Binance · 24시간 등락률"),
-        ("지수 · 선물", ("SP500", "NQ", "KOSPI", "NIKKEI"), "미국 대표 · 기술주 · 국내 · 일본"),
-        ("금리 · 원자재", ("TNX", "TYX", "OIL", "GOLD"), "미국채 10년 · 30년 · 유가 · 금"),
+        (
+            "지수 · 선물",
+            ("SP500", "NQ", "KOSPI", "DOW", "NASDAQ", "NIKKEI", "KOSDAQ", "RUSSELL"),
+            "미국 대표 · 기술주 · 국내 · 일본",
+        ),
+        (
+            "금리 · 원자재",
+            ("TNX", "TYX", "OIL", "GOLD", "SILVER", "COPPER", "NATGAS"),
+            "미국채 10년 · 30년 · 유가 · 금",
+        ),
     ):
         group = (
             "국내"
@@ -465,7 +482,19 @@ def render_session_cards(on_open, codes):
         key = "board_more_" + codes[0]
         with st.expander(f"나머지 {len(ordered) - 5}개 종목 펼쳐보기", key=key, on_change="rerun"):
             if st.session_state.get(key):
-                render_quote_rows(on_open, ordered[5:], context)
+                remainder = ordered[5:]
+                pages = (len(remainder) + 9) // 10
+                page = (
+                    st.selectbox(
+                        "더 많은 종목",
+                        range(pages),
+                        format_func=lambda i: f"{i + 1} / {pages} 페이지 · 10개씩 보기",
+                        key=key + "_page",
+                    )
+                    if pages > 1
+                    else 0
+                )
+                render_quote_rows(on_open, remainder[page * 10 : (page + 1) * 10], context)
 
 
 def render_quote_rows(on_open, codes, context):

@@ -7,7 +7,7 @@ import json
 import math
 from urllib.parse import quote, urlencode
 
-from btc_analyzer.assets import STOCK_MARKETS, EXCHANGE_HISTORY
+from btc_analyzer.assets import STOCK_MARKETS, EXCHANGE_HISTORY, COIN_IDS
 
 
 @dataclass(frozen=True)
@@ -65,10 +65,10 @@ def fetch_caps(now):
     try:
         rows = json.loads(
             _download(
-                "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=bitcoin,ethereum,solana,ripple"
+                "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=" + ",".join(COIN_IDS)
             )
         )
-        ids = {"bitcoin": "BTC", "ethereum": "ETH", "solana": "SOL", "ripple": "XRP"}
+        ids = COIN_IDS
         if not isinstance(rows, list):
             raise ValueError("Invalid coin capitalization response")
         for row in rows:

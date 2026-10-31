@@ -27,13 +27,48 @@ class Asset:
 ASSETS = {
     asset.code: asset
     for asset in (
-        Asset("BTC", "비트코인", "binance", 2, date(2017, 8, 17), r"\bBTC\b|bitcoin|비트코인"),
+        Asset(
+            "BTC", "비트코인", "binance", 2, date(2017, 8, 17), r"\bBTC\b|bitcoin(?!\s+cash)|비트코인(?!캐시)"
+        ),
         Asset("ETH", "이더리움", "ethereum", 2, date(2017, 8, 17), r"\bETH\b|ethereum|이더리움"),
         Asset("SOL", "솔라나", "solana", 2, date(2020, 8, 11), r"\bSOL\b|solana|솔라나"),
         Asset("XRP", "리플", "ripple", 4, date(2018, 5, 4), r"\bXRP\b|ripple(?!\s+effects?\b)|리플"),
+        Asset("BNB", "비앤비", "coin-bnb", 4, date(2017, 11, 6), r"\bBNB\b|binancecoin|비앤비"),
+        Asset("DOGE", "도지코인", "coin-doge", 5, date(2019, 7, 5), r"\bDOGE\b|dogecoin|도지코인"),
+        Asset("ADA", "에이다", "coin-ada", 4, date(2018, 4, 17), r"\bADA\b|cardano|에이다"),
+        Asset("AVAX", "아발란체", "coin-avax", 3, date(2020, 9, 22), r"\bAVAX\b|avalanche|아발란체"),
+        Asset("LINK", "체인링크", "coin-link", 3, date(2019, 1, 16), r"\bLINK\b|chainlink|체인링크"),
+        Asset("DOT", "폴카닷", "coin-dot", 4, date(2020, 8, 18), r"\bDOT\b|polkadot|폴카닷"),
+        Asset("LTC", "라이트코인", "coin-ltc", 2, date(2017, 12, 13), r"\bLTC\b|litecoin|라이트코인"),
+        Asset("BCH", "비트코인캐시", "coin-bch", 2, date(2019, 11, 28), r"\bBCH\b|bitcoin cash|비트코인캐시"),
+        Asset("TRX", "트론", "coin-trx", 5, date(2018, 6, 11), r"\bTRX\b|tron|트론"),
+        Asset("SUI", "수이", "coin-sui", 4, date(2023, 5, 3), r"\bSUI\b|sui|수이"),
+        Asset(
+            "NEAR", "니어프로토콜", "coin-near", 4, date(2020, 10, 14), r"\bNEAR\b|near protocol|니어프로토콜"
+        ),
+        Asset("UNI", "유니스왑", "coin-uni", 4, date(2020, 9, 17), r"\bUNI\b|uniswap|유니스왑"),
     )
 }
 
+
+COIN_IDS = {
+    "bitcoin": "BTC",
+    "ethereum": "ETH",
+    "solana": "SOL",
+    "ripple": "XRP",
+    "binancecoin": "BNB",
+    "dogecoin": "DOGE",
+    "cardano": "ADA",
+    "avalanche-2": "AVAX",
+    "chainlink": "LINK",
+    "polkadot": "DOT",
+    "litecoin": "LTC",
+    "bitcoin-cash": "BCH",
+    "tron": "TRX",
+    "sui": "SUI",
+    "near": "NEAR",
+    "uniswap": "UNI",
+}
 
 STOCK_MARKETS = {
     asset.code: asset
@@ -78,15 +113,72 @@ STOCK_MARKETS = {
         Asset("COIN", "코인베이스", "macro-coin", 2, date(2021, 4, 14), "", "COIN"),
         Asset("COST", "코스트코", "macro-cost", 2, date(1985, 12, 5), "", "COST"),
         Asset("ADBE", "어도비", "macro-adbe", 2, date(1986, 8, 13), "", "ADBE"),
+        Asset("LG_ELECTRONICS", "LG전자", "macro-lgelectronics", 0, date(2002, 4, 22), "", "066570.KS"),
+        Asset("SAMSUNG_CT", "삼성물산", "macro-samsungct", 0, date(2014, 12, 18), "", "028260.KS"),
+        Asset("SAMSUNG_FIRE", "삼성화재", "macro-samsungfire", 0, date(1975, 6, 30), "", "000810.KS"),
+        Asset("HANA", "하나금융지주", "macro-hana", 0, date(2005, 12, 12), "", "086790.KS"),
+        Asset("WOORI", "우리금융지주", "macro-woori", 0, date(2019, 2, 13), "", "316140.KS"),
+        Asset("KT", "KT", "macro-kt", 0, date(1998, 12, 23), "", "030200.KS"),
+        Asset("SK_TELECOM", "SK텔레콤", "macro-sktelecom", 0, date(1989, 11, 7), "", "017670.KS"),
+        Asset("KEPCO", "한국전력", "macro-kepco", 0, date(1989, 8, 10), "", "015760.KS"),
+        Asset(
+            "DOOSAN_ENERGY", "두산에너빌리티", "macro-doosanenergy", 0, date(2000, 10, 25), "", "034020.KS"
+        ),
+        Asset("HANWHA_OCEAN", "한화오션", "macro-hanwhaocean", 0, date(2001, 2, 2), "", "042660.KS"),
+        Asset("HD_KSOE", "HD한국조선해양", "macro-hdksoe", 0, date(1999, 8, 24), "", "009540.KS"),
+        Asset("HYUNDAI_ROTEM", "현대로템", "macro-hyundairotem", 0, date(2013, 10, 30), "", "064350.KS"),
+        Asset("KOREA_AERO", "한국항공우주", "macro-koreaaero", 0, date(2011, 6, 30), "", "047810.KS"),
+        Asset("LIG_NEX1", "LIG넥스원", "macro-lignex1", 0, date(2015, 10, 2), "", "079550.KS"),
+        Asset("HANMI_SEMI", "한미반도체", "macro-hanmisemi", 0, date(2005, 7, 22), "", "042700.KS"),
+        Asset(
+            "HYUNDAI_ELECTRIC",
+            "HD현대일렉트릭",
+            "macro-hyundaielectric",
+            0,
+            date(2017, 5, 10),
+            "",
+            "267260.KS",
+        ),
+        Asset("HMM", "HMM", "macro-hmm", 0, date(1995, 10, 5), "", "011200.KS"),
+        Asset("KOREAN_AIR", "대한항공", "macro-koreanair", 0, date(1966, 3, 18), "", "003490.KS"),
+        Asset("AMORE", "아모레퍼시픽", "macro-amore", 0, date(2006, 6, 29), "", "090430.KS"),
+        Asset("KTG", "KT&G", "macro-ktg", 0, date(1999, 10, 8), "", "033780.KS"),
+        Asset("TSM", "TSMC", "macro-tsm", 2, date(1997, 10, 8), "", "TSM"),
+        Asset("ORCL", "오라클", "macro-orcl", 2, date(1986, 3, 12), "", "ORCL"),
+        Asset("CRM", "세일즈포스", "macro-crm", 2, date(2004, 6, 23), "", "CRM"),
+        Asset("JPM", "JP모건 체이스", "macro-jpm", 2, date(1980, 3, 17), "", "JPM"),
+        Asset("BAC", "뱅크오브아메리카", "macro-bac", 2, date(1980, 3, 17), "", "BAC"),
+        Asset("V", "비자", "macro-v", 2, date(2008, 3, 19), "", "V"),
+        Asset("MA", "마스터카드", "macro-ma", 2, date(2006, 5, 25), "", "MA"),
+        Asset("WMT", "월마트", "macro-wmt", 2, date(1972, 8, 25), "", "WMT"),
+        Asset("LLY", "일라이 릴리", "macro-lly", 2, date(1972, 6, 1), "", "LLY"),
+        Asset("UNH", "유나이티드헬스", "macro-unh", 2, date(1984, 10, 17), "", "UNH"),
+        Asset("JNJ", "존슨앤드존슨", "macro-jnj", 2, date(1962, 1, 2), "", "JNJ"),
+        Asset("XOM", "엑슨모빌", "macro-xom", 2, date(1962, 1, 2), "", "XOM"),
+        Asset("CVX", "셰브론", "macro-cvx", 2, date(1962, 1, 2), "", "CVX"),
+        Asset("KO", "코카콜라", "macro-ko", 2, date(1962, 1, 2), "", "KO"),
+        Asset("PEP", "펩시코", "macro-pep", 2, date(1972, 6, 1), "", "PEP"),
+        Asset("DIS", "월트디즈니", "macro-dis", 2, date(1962, 1, 2), "", "DIS"),
+        Asset("UBER", "우버", "macro-uber", 2, date(2019, 5, 10), "", "UBER"),
+        Asset("SHOP", "쇼피파이", "macro-shop", 2, date(2015, 5, 21), "", "SHOP"),
+        Asset("HOOD", "로빈후드", "macro-hood", 2, date(2021, 7, 29), "", "HOOD"),
+        Asset("SOFI", "소파이", "macro-sofi", 2, date(2021, 6, 1), "", "SOFI"),
     )
 }
 INDEX_MARKETS = {
+    "KOSDAQ": Asset("KOSDAQ", "코스닥", "macro-kosdaq", 2, date(2000, 1, 1), "", "^KQ11"),
+    "NASDAQ": Asset("NASDAQ", "나스닥 종합", "macro-nasdaq", 2, date(2000, 1, 1), "", "^IXIC"),
+    "RUSSELL": Asset("RUSSELL", "러셀2000", "macro-russell", 2, date(2000, 1, 1), "", "^RUT"),
+    "DOW": Asset("DOW", "다우존스", "macro-dow", 2, date(2000, 1, 1), "", "^DJI"),
     "NIKKEI": Asset("NIKKEI", "니케이225", "macro-nikkei", 2, date(1984, 1, 4), "", "^N225"),
     "NQ": Asset("NQ", "나스닥100 선물", "macro-nq", 2, date(1999, 6, 21), "", "NQ=F"),
     "KOSPI": Asset("KOSPI", "코스피", "macro-kospi", 2, date(1999, 1, 1), "", "^KS11"),
     "SP500": Asset("SP500", "S&P 500", "macro-sp500", 2, date(1957, 3, 4), "", "^GSPC"),
 }
 MACRO_MARKETS = {
+    "NATGAS": Asset("NATGAS", "천연가스 선물", "macro-natgas", 3, date(2000, 8, 30), "", "NG=F"),
+    "COPPER": Asset("COPPER", "구리 선물", "macro-copper", 3, date(2000, 8, 30), "", "HG=F"),
+    "SILVER": Asset("SILVER", "은 선물", "macro-silver", 3, date(2000, 8, 30), "", "SI=F"),
     "GOLD": Asset("GOLD", "금 선물", "macro-gold", 2, date(2000, 8, 30), "", "GC=F"),
     "OIL": Asset("OIL", "WTI 원유 선물", "macro-oil", 2, date(2000, 8, 23), "", "CL=F"),
     "TNX": Asset("TNX", "미국채 10년 금리", "macro-tnx", 3, date(1962, 1, 2), "", "^TNX"),
@@ -108,6 +200,37 @@ class ExchangeHistory:
 
 
 EXCHANGE_HISTORY = {
+    "DOW": ExchangeHistory("USD", "America/New_York", "US", "다우존스 현물지수", "NYSE", "INDEX"),
+    "RUSSELL": ExchangeHistory("USD", "America/New_York", "US", "러셀2000 현물지수", "NYSE", "INDEX"),
+    "NASDAQ": ExchangeHistory("USD", "America/New_York", "US", "나스닥 종합 현물지수", "NYSE", "INDEX"),
+    "KOSDAQ": ExchangeHistory("KRW", "Asia/Seoul", "KRX", "코스닥 현물지수", "KRX", "INDEX"),
+    "SILVER": ExchangeHistory(
+        "USD",
+        "America/New_York",
+        "COMEX",
+        "은 연속 선물",
+        "CMEGlobex_EnergyAndMetals",
+        "FUTURE",
+        "USD/트로이온스",
+    ),
+    "COPPER": ExchangeHistory(
+        "USD",
+        "America/New_York",
+        "COMEX",
+        "구리 연속 선물",
+        "CMEGlobex_EnergyAndMetals",
+        "FUTURE",
+        "USD/파운드",
+    ),
+    "NATGAS": ExchangeHistory(
+        "USD",
+        "America/New_York",
+        "NYMEX",
+        "천연가스 연속 선물",
+        "CMEGlobex_EnergyAndMetals",
+        "FUTURE",
+        "USD/MMBtu",
+    ),
     "NIKKEI": ExchangeHistory("JPY", "Asia/Tokyo", "JPX", "니케이225 현물지수", "JPX", "INDEX"),
     "GOLD": ExchangeHistory(
         "USD",
@@ -137,7 +260,13 @@ EXCHANGE_HISTORY = {
     },
     **{
         code: ExchangeHistory(
-            "USD", "America/New_York", "NASDAQ", "NASDAQ 주식 · 분봉 장전/장후 포함", "NYSE", "EQUITY", "USD"
+            "USD",
+            "America/New_York",
+            "미국 거래소",
+            "미국 주식 · 분봉 장전/장후 포함",
+            "NYSE",
+            "EQUITY",
+            "USD",
         )
         for code, asset in STOCK_MARKETS.items()
         if not asset.symbol.endswith(".KS")

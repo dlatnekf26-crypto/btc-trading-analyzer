@@ -11,13 +11,13 @@ def test_large_snapshot_rebases_a_newer_live_tick_and_preserves_session_referenc
     fragment = source[source.index("  const macros=") : source.index("  try{readMacroRows")]
     program = (
         """
-const SESSION_ASSETS=Array.from({length:48},(_,i)=>['S'+i,'S'+i,'s'+i,'USD','USD',2]);
+const SESSION_ASSETS=Array.from({length:95},(_,i)=>['S'+i,'S'+i,'s'+i,'USD','USD',2]);
 const validNumber=n=>typeof n==='number'&&Number.isFinite(n);
 const window={parent:{document:null}};
 """
         + fragment
         + """
-const at=Date.UTC(2026,9,23,18),s=macros.S0;
+const at=Date.now()-10000,s=macros.S0;
 Object.assign(s,{stream:true,price:110,asOf:at+1000,session:'regular'});
 readMacroRows(SESSION_ASSETS.map((a,i)=>({symbol:'S'+i,price:100,asOf:at,
  regularPrice:100,regularAsOf:at,regularChange:0,change:0})));
